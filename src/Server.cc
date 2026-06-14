@@ -50,6 +50,23 @@ namespace bbai {
       views.push_back(std::make_unique<View>(*this, toplevel));
     });
 
+    // Decoration policy: request SSD (we draw the Blackbox frame), honor CSD
+    // holdouts. The decoration object can arrive after the View, so route it to
+    // the matching View by its toplevel back-pointer.
+    xdg_decoration = wlr_xdg_decoration_manager_v1_create(display);
+    new_toplevel_decoration.connect(&xdg_decoration->events.new_toplevel_decoration,
+      [this](void *data) {
+        auto *deco = static_cast<wlr_xdg_toplevel_decoration_v1 *>(data);
+        for (auto &v : views)
+          if (v->toplevel() == deco->toplevel) { v->attachDecoration(deco); break; }
+      });
+
+    // KDE server-decoration hedge (obsolete protocol): advertise default SERVER
+    // so older GTK/Qt builds that probe it suppress their own CSD chrome.
+    wlr_server_decoration_manager *kde = wlr_server_decoration_manager_create(display);
+    wlr_server_decoration_manager_set_default_mode(
+      kde, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
       if (!active_output)                       // M1: a single output
@@ -73,6 +90,7 @@ namespace bbai {
     // are empty.
     new_output.disconnect();
     new_xdg_toplevel.disconnect();
+    new_toplevel_decoration.disconnect();
     views.clear();
     if (display) {
       wl_display_destroy_clients(display);

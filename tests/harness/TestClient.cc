@@ -2,6 +2,7 @@
 
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
+#include "xdg-decoration-unstable-v1-client-protocol.h"
 
 #include <cstring>
 #include <poll.h>
@@ -16,12 +17,15 @@ namespace bbai::test {
     wl_compositor *compositor = nullptr;
     xdg_wm_base *wm_base = nullptr;
     wl_shm *shm = nullptr;
+    zxdg_decoration_manager_v1 *deco_mgr = nullptr;
     wl_surface *surface = nullptr;
     xdg_surface *xdgsurf = nullptr;
     xdg_toplevel *toplevel = nullptr;
+    zxdg_toplevel_decoration_v1 *decoration = nullptr;
     wl_buffer *buffer = nullptr;
     uint32_t argb = 0;
     int w = 0, h = 0;
+    TestClient::Deco deco = TestClient::Deco::None;
     bool created = false;
   };
 
@@ -69,6 +73,14 @@ namespace bbai::test {
     xdg_surface_add_listener(c->xdgsurf, &s_xdg_surface_listener, c);
     c->toplevel = xdg_surface_get_toplevel(c->xdgsurf);
     xdg_toplevel_set_title(c->toplevel, "bbai-test");
+    if (c->deco != TestClient::Deco::None && c->deco_mgr) {
+      c->decoration =
+        zxdg_decoration_manager_v1_get_toplevel_decoration(c->deco_mgr, c->toplevel);
+      zxdg_toplevel_decoration_v1_set_mode(
+        c->decoration, c->deco == TestClient::Deco::RequestSSD
+                         ? ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
+                         : ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
+    }
     wl_surface_commit(c->surface);  // no buffer yet -> drives the initial configure
   }
 
@@ -85,16 +97,21 @@ namespace bbai::test {
     } else if (std::strcmp(iface, wl_shm_interface.name) == 0) {
       c->shm = static_cast<wl_shm *>(
         wl_registry_bind(reg, name, &wl_shm_interface, 1));
+    } else if (std::strcmp(iface, zxdg_decoration_manager_v1_interface.name) == 0) {
+      c->deco_mgr = static_cast<zxdg_decoration_manager_v1 *>(
+        wl_registry_bind(reg, name, &zxdg_decoration_manager_v1_interface, 1));
     }
   }
   static void reg_global_remove(void *, wl_registry *, uint32_t) {}
   static const wl_registry_listener s_registry_listener = { reg_global, reg_global_remove };
 
-  TestClient::TestClient(const std::string &socket, uint32_t argb, int w, int h) {
+  TestClient::TestClient(const std::string &socket, uint32_t argb, int w, int h,
+                         Deco deco) {
     impl = new Impl();
     impl->argb = argb;
     impl->w = w;
     impl->h = h;
+    impl->deco = deco;
     impl->display = wl_display_connect(socket.c_str());
     if (!impl->display) return;
     impl->registry = wl_display_get_registry(impl->display);
@@ -104,6 +121,7 @@ namespace bbai::test {
 
   TestClient::~TestClient() {
     if (impl->display) {
+      if (impl->decoration) zxdg_toplevel_decoration_v1_destroy(impl->decoration);
       if (impl->toplevel) xdg_toplevel_destroy(impl->toplevel);
       if (impl->xdgsurf) xdg_surface_destroy(impl->xdgsurf);
       if (impl->surface) wl_surface_destroy(impl->surface);
@@ -122,6 +140,7 @@ namespace bbai::test {
 
   void TestClient::closeWindow() {
     if (!impl->display) return;
+    if (impl->decoration) { zxdg_toplevel_decoration_v1_destroy(impl->decoration); impl->decoration = nullptr; }
     if (impl->toplevel) { xdg_toplevel_destroy(impl->toplevel); impl->toplevel = nullptr; }
     if (impl->xdgsurf)  { xdg_surface_destroy(impl->xdgsurf);   impl->xdgsurf = nullptr; }
     if (impl->surface)  { wl_surface_destroy(impl->surface);    impl->surface = nullptr; }

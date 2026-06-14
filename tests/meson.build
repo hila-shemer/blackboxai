@@ -63,3 +63,9 @@ frame_exe = executable('frame-test', files('system/frame_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('frame', frame_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M3 decoration policy: request SSD by default, honor a CSD holdout.
+decoration_exe = executable('decoration-test', files('system/decoration_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('decoration', decoration_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
