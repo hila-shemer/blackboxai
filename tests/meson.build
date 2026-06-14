@@ -107,3 +107,9 @@ toolbar_exe = executable('toolbar-test', files('system/toolbar_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('toolbar', toolbar_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M4 keybindings: Mod4 actions via the deviceless key injector.
+keybinding_exe = executable('keybinding-test', files('system/keybinding_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('keybinding', keybinding_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
