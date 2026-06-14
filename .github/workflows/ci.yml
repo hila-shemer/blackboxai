@@ -13,7 +13,7 @@ jobs:
         run: >
           dnf install -y meson ninja-build gcc-c++ gcovr pkgconf-pkg-config
           wlroots-devel wayland-devel wayland-protocols-devel pixman-devel
-          libdrm-devel libxkbcommon-devel libpng-devel sed git
+          libdrm-devel libxkbcommon-devel libpng-devel fcft-devel sed git
 
       - name: build
         run: meson setup build -Db_coverage=true -Dbuildtype=debug && ninja -C build
