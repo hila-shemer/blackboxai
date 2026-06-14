@@ -20,6 +20,7 @@ unit_sources = files(
   'unit/toolbar_geom_test.cc',
   'unit/keycode_test.cc',
   'unit/keybinding_test.cc',
+  'unit/menu_geometry_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
