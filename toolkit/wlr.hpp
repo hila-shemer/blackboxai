@@ -49,6 +49,11 @@ extern "C" {
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
 
+// Keysym constants (XKB_KEY_*) for the M4 keybinding table + menu navigation.
+// wlr_keyboard.h already pulls <xkbcommon/xkbcommon.h> (the xkb_* functions);
+// this adds the symbol names.
+#include <xkbcommon/xkbcommon-keysyms.h>
+
 } // extern "C"
 
 #endif // BLACKBOXAI_WLR_HPP
