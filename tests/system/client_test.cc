@@ -1,3 +1,9 @@
+// A real client toplevel maps, is composited (now with its M3 decoration frame),
+// and is cleanly torn down when closed. The pixel-exact frame appearance is
+// owned by frame_test.cc + the m3-frame-ssd golden; this test focuses on the
+// lifecycle: content visible at the decorated offset, then close -> unmap ->
+// destroy -> removeView. Runs under the isolated fontconfig (decorated window
+// carries title text).
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 #include "HeadlessFixture.hh"
@@ -9,7 +15,7 @@
 
 using namespace bbai;
 
-TEST_CASE("a real client toplevel is composited over the gradient background") {
+TEST_CASE("a real client maps decorated and tears down cleanly on close") {
     setenv("WLR_BACKENDS", "headless", 1);
     setenv("WLR_RENDERER", "pixman", 1);
 
@@ -17,11 +23,10 @@ TEST_CASE("a real client toplevel is composited over the gradient background") {
     REQUIRE(server.ok());
     REQUIRE_FALSE(server.socketName().empty());
 
-    // Let the output come up.
     for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
         server.dispatch();
 
-    // Opaque red, 200x150 (matches View's fixed configure/placement at 160,120).
+    // Opaque red, 200x150 content (View configures + places it at (160,120)).
     test::TestClient client(server.socketName(), 0xFFFF0000u, 200, 150);
     REQUIRE(client.ok());
 
@@ -43,16 +48,14 @@ TEST_CASE("a real client toplevel is composited over the gradient background") {
     auto rgb = [&](int x, int y) {
         return f.pixels[static_cast<size_t>(y) * f.w + x] & 0x00FFFFFFu;
     };
-    // Window spans x[160,360) y[120,270); its centre must be the client's red.
-    CHECK(rgb(260, 195) == 0x00FF0000u);
-    // Just inside the top-left corner is red too.
-    CHECK(rgb(162, 122) == 0x00FF0000u);
+    // Decorated: the red client content sits at (161,143); its centre is red.
+    CHECK(rgb(261, 218) == 0x00FF0000u);
+    // The old undecorated top-left (162,122) is now titlebar, not red.
+    CHECK(rgb(162, 122) != 0x00FF0000u);
     // A point well outside the window is the gradient, not red.
     CHECK(rgb(40, 40) != 0x00FF0000u);
 
-    CHECK(test::compareGolden(f, "tests/golden/m2-client-red-window.png", 2, 0));
-
-    // Closing the window must remove the View (exercises unmap/destroy/removeView).
+    // Closing the window must remove the View (unmap/destroy/removeView path).
     client.closeWindow();
     auto gone = [&] { return server.viewsForTest().empty(); };
     for (int i = 0; i < 200 && !gone(); ++i) {

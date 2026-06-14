@@ -17,14 +17,18 @@ unit_exe = executable('unit-tests', unit_sources,
   dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
 test('unit', unit_exe, suite : 'unit')
 
-# Text renderer determinism test — its own executable so it can run under an
-# isolated fontconfig (FONTCONFIG_FILE + cwd = source root, so the conf's
-# prefix="cwd" <dir> resolves to the bundled font).
+# Isolated fontconfig: tests that render title text point FONTCONFIG_FILE here
+# and run with cwd = source root, so the conf's prefix="cwd" <dir> (holding only
+# the bundled LiberationMono) resolves every family to that one font.
+fontconfig_conf = meson.project_source_root() / 'tests' / 'fixtures' / 'fonts.conf'
+
+# Text renderer determinism test — its own executable so it can run under the
+# isolated fontconfig.
 text_test_exe = executable('text-test', files('unit/text_test.cc'),
   dependencies : [doctest_dep, bttext_dep])
 test('text', text_test_exe, suite : 'unit',
   workdir : meson.project_source_root(),
-  env : ['FONTCONFIG_FILE=' + (meson.project_source_root() / 'tests' / 'fixtures' / 'fonts.conf')])
+  env : ['FONTCONFIG_FILE=' + fontconfig_conf])
 
 # Reusable headless capture + golden harness, plus the in-process test client.
 # HeadlessFixture.cc is server-side (bbai_dep) and TestClient.cc is client-side
@@ -40,6 +44,9 @@ harness_dep = declare_dependency(link_with : harness_lib,
 
 # System (L1/L2/L3) suite.
 test_env = ['WLR_BACKENDS=headless', 'WLR_RENDERER=pixman']
+# Tests whose captured frame contains a decorated window (title text) add the
+# isolated fontconfig so the rendered glyphs are host-independent.
+text_env = test_env + ['FONTCONFIG_FILE=' + fontconfig_conf]
 
 system_exe = executable('system-tests', files('system/background_test.cc'),
   dependencies : [harness_dep, doctest_dep])
@@ -49,4 +56,10 @@ test('background', system_exe, suite : 'system',
 client_exe = executable('client-test', files('system/client_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('client', client_exe, suite : 'system',
-  workdir : meson.project_source_root(), env : test_env)
+  workdir : meson.project_source_root(), env : text_env)
+
+# M3 decoration frame: a mapped SSD client gets a pixel-accurate Blackbox frame.
+frame_exe = executable('frame-test', files('system/frame_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('frame', frame_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)

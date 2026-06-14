@@ -6,7 +6,7 @@
 
 namespace bbai {
 
-  Server::Server(bool hl) : headless(hl) {
+  Server::Server(bool hl) : headless(hl), title_font("monospace", 16) {
     wlr_log_init(WLR_ERROR, nullptr);
 
     display = wl_display_create();
