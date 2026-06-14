@@ -38,6 +38,7 @@ wlr_dep = declare_dependency(
   sources      : wlr_scene_compat)
 
 subdir('toolkit')
+subdir('src')
 if get_option('tests')
   subdir('tests')
 endif
