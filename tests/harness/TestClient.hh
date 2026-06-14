@@ -33,6 +33,7 @@ namespace bbai::test {
     void flush();        // push queued client requests to the compositor
     void pump();         // non-blocking: read+dispatch server events, advance state
     void closeWindow();  // destroy the toplevel/surface (server should drop the View)
+    void destroyDecorationForTest();  // destroy ONLY the decoration object (keep the toplevel)
 
     struct Impl;    // opaque; defined in TestClient.cc
 

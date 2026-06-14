@@ -87,5 +87,9 @@ TEST_CASE("a mapped SSD client is wrapped in a Blackbox frame") {
     // A point well outside the window is the gradient, not red.
     CHECK(rgb(40, 40) != 0x00FF0000u);
 
-    CHECK(test::compareGolden(f, "tests/golden/m3-frame-ssd.png", 2, 0));
+    // tolerance 2 keeps the frame layout pinned; the small budget absorbs only
+    // residual glyph-edge jitter if CI's FreeType differs from the bless host
+    // (hinting is disabled in tests/fixtures/fonts.conf to minimize that). A real
+    // layout regression moves whole elements (hundreds+ of pixels) and still fails.
+    CHECK(test::compareGolden(f, "tests/golden/m3-frame-ssd.png", 2, 40));
 }

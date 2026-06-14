@@ -69,7 +69,10 @@ namespace bt {
         reinterpret_cast<const uint8_t *>(pixman_image_get_data(g->pix));
 
       if (g->is_color_glyph) {
-        // pix is premultiplied a8r8g8b8: blend src-over directly (no text color).
+        // Color (emoji/CBDT) glyphs: pix is premultiplied a8r8g8b8, blended
+        // src-over directly (no text color). The bundled monospace font has no
+        // color glyphs, so M3 titles never reach this path and it is unverified
+        // by tests; a window title containing an emoji would exercise it.
         const int pxstride = stride / 4;
         const uint32_t *px = reinterpret_cast<const uint32_t *>(data);
         for (int yy = 0; yy < g->height; ++yy) {

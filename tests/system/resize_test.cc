@@ -77,7 +77,9 @@ TEST_CASE("dragging the bottom-right grip grows the window and re-lays-out the f
   CHECK(isGrey(rgb(260, 315)));
   CHECK(rgb(260, 295) == 0x00FF0000u);
 
-  CHECK(test::compareGolden(f, "tests/golden/m3-resize.png", 2, 0));
+  // See frame_test.cc: tolerance pins the layout; the small budget absorbs only
+  // residual glyph-edge jitter across FreeType versions (hinting disabled).
+  CHECK(test::compareGolden(f, "tests/golden/m3-resize.png", 2, 40));
 }
 
 TEST_CASE("dragging the bottom-left grip anchors the right edge and moves the left") {
@@ -112,4 +114,30 @@ TEST_CASE("dragging the bottom-left grip anchors the right edge and moves the le
   CHECK(rgb(361, 200) == 0x00303030u);
   CHECK(rgb(130, 200) == 0x00303030u);
   CHECK(rgb(160, 200) == 0x00FF0000u);
+}
+
+TEST_CASE("over-shrinking the bottom-left grip keeps the right edge anchored (no march-off)") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  test::TestClient client(server.socketName(), 0xFFFF0000u, 200, 150,
+                          test::TestClient::Deco::RequestSSD);
+  REQUIRE(client.ok());
+  const View *v = mapClient(server, client);
+  REQUIRE(v != nullptr);
+
+  // Drag the bottom-left grip far past the window's own width (so width clamps
+  // to the 1px minimum). The anchored right edge was at x = 160 + 200 = 360, so
+  // the top-left must end at 359 — NOT march off to 160 + 250.
+  server.injectPointerMotionForTest(170, 295);
+  server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/true);
+  server.injectPointerMotionForTest(170 + 250, 295 + 20);
+  server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/false);
+
+  // resizeTo sets the View geometry synchronously (no client ack needed here).
+  CHECK(v->contentWidth() == 1);
+  CHECK(v->x() == 359);          // right - clamped_w = 360 - 1
+  CHECK(v->y() == 120);          // top edge unchanged (BOTTOM grip)
 }

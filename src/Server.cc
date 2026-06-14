@@ -89,8 +89,10 @@ namespace bbai {
         wlr_keyboard *kb = wlr_keyboard_from_input_device(dev);
         xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
         xkb_keymap *km = xkb_keymap_new_from_names(ctx, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
-        wlr_keyboard_set_keymap(kb, km);
-        xkb_keymap_unref(km);
+        if (km) {                       // a broken/missing xkb config returns NULL
+          wlr_keyboard_set_keymap(kb, km);
+          xkb_keymap_unref(km);
+        }
         xkb_context_unref(ctx);
         wlr_seat_set_keyboard(seat, kb);
       }
@@ -243,19 +245,39 @@ namespace bbai {
 
   void Server::processResize() {
     const double dx = cursor->x - grab_x, dy = cursor->y - grab_y;
+    const int right  = grab_geo_x + grab_geo_w;  // anchored when dragging LEFT
+    const int bottom = grab_geo_y + grab_geo_h;  // anchored when dragging TOP
     int x = grab_geo_x, y = grab_geo_y, w = grab_geo_w, h = grab_geo_h;
-    if (resize_edges & WLR_EDGE_LEFT)   { x = grab_geo_x + static_cast<int>(dx); w = grab_geo_w - static_cast<int>(dx); }
-    if (resize_edges & WLR_EDGE_RIGHT)  {                                        w = grab_geo_w + static_cast<int>(dx); }
-    if (resize_edges & WLR_EDGE_TOP)    { y = grab_geo_y + static_cast<int>(dy); h = grab_geo_h - static_cast<int>(dy); }
-    if (resize_edges & WLR_EDGE_BOTTOM) {                                        h = grab_geo_h + static_cast<int>(dy); }
+    if (resize_edges & WLR_EDGE_LEFT)   w = grab_geo_w - static_cast<int>(dx);
+    if (resize_edges & WLR_EDGE_RIGHT)  w = grab_geo_w + static_cast<int>(dx);
+    if (resize_edges & WLR_EDGE_TOP)    h = grab_geo_h - static_cast<int>(dy);
+    if (resize_edges & WLR_EDGE_BOTTOM) h = grab_geo_h + static_cast<int>(dy);
     if (w < 1) w = 1;
     if (h < 1) h = 1;
+    // Re-derive the moving edge AFTER clamping so the opposite edge stays
+    // anchored even when the size hits the 1px minimum (otherwise the window
+    // would slide past the anchor on an over-shrink drag).
+    if (resize_edges & WLR_EDGE_LEFT) x = right - w;
+    if (resize_edges & WLR_EDGE_TOP)  y = bottom - h;
     grabbed_view->resizeTo(x, y, w, h);
   }
 
   void Server::onPointerMotion(uint32_t time) {
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
     if (cursor_mode == CursorMode::Resize) { processResize(); return; }
+
+    // Implicit pointer grab: while a button is held over a client surface, keep
+    // delivering motion to that surface even as the cursor crosses our chrome or
+    // leaves the window (so client drag-select / scrollbar drags don't lose the
+    // release). wlroots' default grab does NOT focus-lock, so we do it here.
+    if (seat->pointer_state.button_count > 0 && focused_view &&
+        seat->pointer_state.focused_surface == focused_view->toplevel()->base->surface) {
+      const int ox = focused_view->x() + (focused_view->drawsFrame() ? frame::clientX() : 0);
+      const int oy = focused_view->y() + (focused_view->drawsFrame() ? frame::clientY() : 0);
+      wlr_seat_pointer_notify_motion(seat, time, cursor->x - ox, cursor->y - oy);
+      return;
+    }
+
     double sx = 0, sy = 0;
     wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
     View *v = viewFromNode(n);

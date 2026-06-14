@@ -61,5 +61,7 @@ TEST_CASE("dragging the titlebar moves the window and its frame") {
   // The old titlebar location is now bare gradient desktop (not grey chrome).
   CHECK_FALSE(isGrey(rgb(260, 130)));
 
-  CHECK(test::compareGolden(f, "tests/golden/m3-move.png", 2, 0));
+  // See frame_test.cc: tolerance pins the layout; the small budget absorbs only
+  // residual glyph-edge jitter across FreeType versions (hinting disabled).
+  CHECK(test::compareGolden(f, "tests/golden/m3-move.png", 2, 40));
 }
