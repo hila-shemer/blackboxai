@@ -15,6 +15,7 @@ unit_sources = files(
   'unit/frame_geometry_test.cc',
   'unit/stackinglist_test.cc',
   'unit/workspace_test.cc',
+  'unit/clock_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
