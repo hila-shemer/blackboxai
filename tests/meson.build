@@ -93,3 +93,9 @@ resize_exe = executable('resize-test', files('system/resize_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('resize', resize_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M4 clock/timer seam: deterministic virtual clock + timer registry.
+clock_seam_exe = executable('clock-seam-test', files('system/clock_seam_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('clock_seam', clock_seam_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)

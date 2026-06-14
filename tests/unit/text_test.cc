@@ -41,6 +41,10 @@ TEST_CASE("TextRenderer loads the bundled font with pinned metrics") {
   CHECK(tr.descent() == kDescent);
   CHECK(tr.height()  == kHeight);
   CHECK(tr.textWidth(U"Ag1") == kAg1Width);
+  // The rendered line must fit the 19px label/section rect used by the frame
+  // (Frame.hh kLabelHeight) and the toolbar (Toolbar.geom kLabelHeight) — the
+  // real invariant behind those geometry constants (NOT font->height()==15).
+  CHECK(tr.height() <= 19);
 }
 
 TEST_CASE("drawText blends a deterministic, byte-stable raster") {

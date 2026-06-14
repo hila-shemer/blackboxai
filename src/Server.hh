@@ -9,6 +9,8 @@
 #include "listener.hpp"
 #include "Resource.hh"
 #include "Text.hh"
+#include "Clock.hh"
+#include "Timer.hh"
 #include "Decoration.hh"   // bbai::Part
 
 #include <memory>
@@ -46,6 +48,14 @@ namespace bbai {
     View *viewAtForTest(double lx, double ly);
     Part partAtForTest(double lx, double ly);
     wlr_surface *focusedPointerSurfaceForTest() const;
+
+    // Clock/timer test levers (headless uses a VirtualClock + manual fireDue, so
+    // the ticking clock is deterministic). advanceClockForTest advances the
+    // virtual wall+monotonic clock and fires any timers that came due.
+    void advanceClockForTest(int64_t seconds);
+    int64_t wallSecondsForTest() const;
+    bt::Clock &clock() { return *clock_; }
+    TimerRegistry &timerRegistry() { return *timer_registry_; }
 
     // test-only accessors (M1 has a single output)
     Output *activeOutputForTest() const { return active_output; }
@@ -102,6 +112,8 @@ namespace bbai {
     Output *active_output = nullptr;            // M1: single output
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
     bt::TextRenderer title_font;                // titlebar label font (M3)
+    std::unique_ptr<bt::Clock> clock_;          // wall/monotonic time (M4)
+    std::unique_ptr<TimerRegistry> timer_registry_;
 
     // interactive grab state
     CursorMode cursor_mode = CursorMode::Passthrough;
