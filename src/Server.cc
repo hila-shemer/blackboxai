@@ -2,6 +2,7 @@
 #include "Output.hh"
 #include "View.hh"
 #include "Toolbar.hh"
+#include "Keyboard.hh"
 #include "Frame.hh"
 
 #include <algorithm>
@@ -95,6 +96,8 @@ namespace bbai {
           xkb_keymap_unref(km);
         }
         xkb_context_unref(ctx);
+        wlr_keyboard_set_repeat_info(kb, 25, 600);
+        keyboards_.push_back(std::make_unique<Keyboard>(*this, kb));
         wlr_seat_set_keyboard(seat, kb);
       }
     });
@@ -161,6 +164,7 @@ namespace bbai {
     cursor_motion_absolute.disconnect();
     cursor_button.disconnect();
     cursor_frame.disconnect();
+    keyboards_.clear();       // drops key/modifiers listeners before the backend finish
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
@@ -360,6 +364,84 @@ namespace bbai {
 
   wlr_surface *Server::focusedPointerSurfaceForTest() const {
     return seat ? seat->pointer_state.focused_surface : nullptr;
+  }
+
+  // --- keyboard: bindings + focus forwarding ------------------------------------
+
+  void Server::onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode,
+                     wl_keyboard_key_state state) {
+    const xkb_keysym_t *syms = nullptr;
+    const int nsyms = xkb_state_key_get_syms(kb->xkb_state, evdevToXkb(keycode), &syms);
+    const uint32_t mods = wlr_keyboard_get_modifiers(kb);
+
+    if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+      // (menu-modal key handling is added in B8.)
+      for (int i = 0; i < nsyms; ++i) {
+        if (dispatchBinding(mods, syms[i])) {
+          swallowed_keycodes_.insert(keycode);  // also swallow the matching release
+          return;
+        }
+      }
+    } else if (swallowed_keycodes_.erase(keycode) > 0) {
+      return;  // the press was a binding; don't deliver an orphan release
+    }
+    wlr_seat_set_keyboard(seat, kb);
+    wlr_seat_keyboard_notify_key(seat, time, keycode, state);
+  }
+
+  void Server::onModifiers(wlr_keyboard *kb) {
+    wlr_seat_set_keyboard(seat, kb);
+    wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
+  }
+
+  void Server::removeKeyboard(Keyboard *k) {
+    auto it = std::find_if(keyboards_.begin(), keyboards_.end(),
+                           [k](const std::unique_ptr<Keyboard> &p) { return p.get() == k; });
+    if (it != keyboards_.end()) keyboards_.erase(it);
+  }
+
+  bool Server::dispatchBinding(uint32_t mods, xkb_keysym_t sym) {
+    Action a = keybindings_.dispatch(mods, sym);
+    if (a.kind == Action::None) return false;
+    last_action_ = a;
+    executeAction(a);
+    return true;
+  }
+
+  void Server::executeAction(const Action &a) {
+    switch (a.kind) {
+    case Action::WorkspaceNext: cycleWorkspace(+1); break;
+    case Action::WorkspacePrev: cycleWorkspace(-1); break;
+    case Action::WorkspaceTo:
+      if (a.arg >= 0 && static_cast<unsigned>(a.arg) < workspaces_.count())
+        setCurrentWorkspace(static_cast<unsigned>(a.arg));
+      break;
+    case Action::CloseWindow:
+      if (focused_view) wlr_xdg_toplevel_send_close(focused_view->toplevel());
+      break;
+    case Action::OpenMenu:  break;  // B8: openRootMenu at the cursor
+    case Action::CycleNext: break;  // B5: cycle focus within the workspace
+    case Action::CyclePrev: break;
+    case Action::None:      break;
+    }
+  }
+
+  void Server::cycleWorkspace(int delta) {
+    const unsigned n = workspaces_.count();
+    if (n == 0) return;
+    const unsigned cur = workspaces_.current();
+    setCurrentWorkspace((cur + (delta > 0 ? 1u : n - 1u)) % n);
+  }
+
+  void Server::setCurrentWorkspace(unsigned i) {
+    if (i >= workspaces_.count() || i == workspaces_.current()) return;
+    workspaces_.setCurrent(i);
+    if (toolbar_) toolbar_->redrawWorkspaceLabel();
+    // view show/hide + focus restore are added in B5.
+  }
+
+  void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
+    if (pressed) dispatchBinding(mods, sym);
   }
 
   void Server::advanceClockForTest(int64_t seconds) {

@@ -13,8 +13,20 @@
 
 namespace bbai {
 
+  class Server;
+
   // evdev keycode -> XKB keycode for xkb_state_key_get_syms etc.
   inline uint32_t evdevToXkb(uint32_t evdev_keycode) { return evdev_keycode + 8; }
+
+  // RAII per-device keyboard: wires key/modifiers/destroy into the Server, torn
+  // down (listeners disconnected) when the device dies. Real devices only —
+  // never created under the headless test backend.
+  struct Keyboard {
+    Keyboard(Server &server, wlr_keyboard *kb);
+    Server &server;
+    wlr_keyboard *kb;
+    bt::Listener key, modifiers, destroy;
+  };
 
 } // namespace bbai
 
