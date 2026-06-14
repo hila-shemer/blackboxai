@@ -99,3 +99,9 @@ clock_seam_exe = executable('clock-seam-test', files('system/clock_seam_test.cc'
   dependencies : [harness_dep, doctest_dep])
 test('clock_seam', clock_seam_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
+
+# M4 toolbar: bottom-center chrome + ticking clock (two goldens).
+toolbar_exe = executable('toolbar-test', files('system/toolbar_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('toolbar', toolbar_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)

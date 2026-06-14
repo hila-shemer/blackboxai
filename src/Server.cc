@@ -1,6 +1,7 @@
 #include "Server.hh"
 #include "Output.hh"
 #include "View.hh"
+#include "Toolbar.hh"
 #include "Frame.hh"
 
 #include <algorithm>
@@ -130,8 +131,11 @@ namespace bbai {
 
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
-      if (!active_output)                       // M1: a single output
+      if (!active_output) {                     // M1: a single output
         active_output = new Output(*this, wlr_out);
+        // The toolbar spans this output; create it now that the mode is set.
+        toolbar_ = std::make_unique<Toolbar>(*this, wlr_out->width, wlr_out->height);
+      }
     });
 
     if (const char *sock = wl_display_add_socket_auto(display))
@@ -158,6 +162,7 @@ namespace bbai {
     cursor_button.disconnect();
     cursor_frame.disconnect();
     views.clear();
+    toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
     if (cursor) wlr_cursor_destroy(cursor);
     if (xcursor_mgr) wlr_xcursor_manager_destroy(xcursor_mgr);

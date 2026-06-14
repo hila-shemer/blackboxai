@@ -48,6 +48,10 @@ namespace bt {
     fcft_font *font_ = nullptr;
   };
 
+  // Minimal UTF-8 -> UTF-32 for window titles / labels; malformed bytes pass
+  // through as their raw value so rendering never throws. (null -> empty)
+  std::u32string decodeUtf8(const char *s);
+
 } // namespace bt
 
 #endif // BLACKBOXAI_TEXT_HH
