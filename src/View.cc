@@ -14,7 +14,6 @@ namespace bbai {
     // (inside the border, below the titlebar). wlroots owns this subtree and
     // auto-destroys it when the xdg surface dies.
     surface_tree = wlr_scene_xdg_surface_create(frame_tree, tl->base);
-    wlr_scene_node_set_position(&surface_tree->node, frame::clientX(), frame::clientY());
 
     deco = std::make_unique<Decoration>(frame_tree, server.titleFont());
     wlr_scene_node_set_position(&frame_tree->node, pos_x, pos_y);
@@ -22,10 +21,12 @@ namespace bbai {
     wlr_surface *surface = tl->base->surface;
 
     commit_.connect(&surface->events.commit, [this](void *) {
-      // First commit after creation wants the initial configure; reply with the
-      // fixed M3 content size.
-      if (xdg_toplevel->base->initial_commit)
+      // First commit after creation wants the initial configure; schedule the
+      // decoration mode and the fixed M3 content size into one atomic configure.
+      if (xdg_toplevel->base->initial_commit) {
+        chooseDecorationMode();
         wlr_xdg_toplevel_set_size(xdg_toplevel, cw, ch);
+      }
     });
     map_.connect(&surface->events.map, [this](void *) {
       mapped = true;
@@ -49,13 +50,59 @@ namespace bbai {
   }
 
   void View::relayout() {
-    deco->rebuild(cw, ch, /*focused=*/true, xdg_toplevel->title);
+    if (draw_frame) {
+      wlr_scene_node_set_position(&surface_tree->node, frame::clientX(), frame::clientY());
+      deco->rebuild(cw, ch, /*focused=*/true, xdg_toplevel->title);
+    } else {
+      // CSD holdout: no chrome, client surface at the View origin; we still own
+      // the scene tree and manage geometry.
+      wlr_scene_node_set_position(&surface_tree->node, 0, 0);
+      deco->clear();
+    }
   }
 
   void View::setPosition(int x, int y) {
     pos_x = x;
     pos_y = y;
     wlr_scene_node_set_position(&frame_tree->node, x, y);
+  }
+
+  void View::attachDecoration(wlr_xdg_toplevel_decoration_v1 *d) {
+    decoration = d;
+    deco_request_mode_.connect(&d->events.request_mode, [this](void *) {
+      chooseDecorationMode();
+      if (mapped) relayout();
+    });
+    deco_destroy_.connect(&d->events.destroy, [this](void *) {
+      // The decoration object is going away; drop our listeners and forget it.
+      // Keep the current draw_frame (don't surprise-redecorate a CSD client).
+      deco_request_mode_.disconnect();
+      deco_destroy_.disconnect();
+      decoration = nullptr;
+    });
+    chooseDecorationMode();
+    if (mapped) relayout();
+  }
+
+  void View::chooseDecorationMode() {
+    if (!decoration) {            // no negotiation channel -> our default is SSD
+      draw_frame = true;
+      return;
+    }
+    const auto req = decoration->requested_mode;
+    const auto chosen = (req == WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE)
+        ? WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE   // honor the CSD holdout
+        : WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE;  // NONE/SERVER -> SSD
+    draw_frame = (chosen == WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+    // set_mode schedules an xdg configure, which asserts unless the surface is
+    // initialized. A decoration can arrive before the first commit; in that case
+    // skip here — the initial_commit handler re-runs this once initialized.
+    if (xdg_toplevel->base->initialized)
+      wlr_xdg_toplevel_decoration_v1_set_mode(decoration, chosen);
+  }
+
+  int View::decorationMode() const {
+    return decoration ? static_cast<int>(decoration->current.mode) : -1;
   }
 
 } // namespace bbai

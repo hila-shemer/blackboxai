@@ -8,6 +8,7 @@ protos_dir = wayland_protos.get_variable(pkgconfig : 'pkgdatadir')
 client_protocols = [
   protos_dir / 'stable' / 'xdg-shell' / 'xdg-shell.xml',
   protos_dir / 'staging' / 'single-pixel-buffer' / 'single-pixel-buffer-v1.xml',
+  protos_dir / 'unstable' / 'xdg-decoration' / 'xdg-decoration-unstable-v1.xml',
 ]
 
 client_proto_targets = []

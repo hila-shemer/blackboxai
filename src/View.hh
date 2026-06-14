@@ -34,18 +34,30 @@ namespace bbai {
     // The frame scene tree (its node.data is this View) — for tests / hit-test.
     wlr_scene_tree *sceneTree() const { return frame_tree; }
 
+    // xdg-decoration: a decoration object for this toplevel appeared. Decide and
+    // schedule its mode (request SSD / honor CSD holdout).
+    void attachDecoration(wlr_xdg_toplevel_decoration_v1 *deco);
+    bool drawsFrame() const { return draw_frame; }
+    // The decoration mode the client has acked (0 NONE / 1 CLIENT_SIDE /
+    // 2 SERVER_SIDE), or -1 if there is no decoration object.
+    int decorationMode() const;
+
   private:
-    void relayout();  // (re)build decorations for the current size + focus
+    void relayout();             // (re)build decorations for the current size + focus
+    void chooseDecorationMode(); // the SSD/CSD rule; safe to call repeatedly
 
     Server &server;
     wlr_xdg_toplevel *xdg_toplevel;
     wlr_scene_tree *frame_tree = nullptr;    // owned (under layer_window)
     wlr_scene_tree *surface_tree = nullptr;  // xdg surface subtree (wlroots-owned)
     std::unique_ptr<Decoration> deco;
+    wlr_xdg_toplevel_decoration_v1 *decoration = nullptr;
     int pos_x = 160, pos_y = 120;
     int cw = 200, ch = 150;   // content size (fixed in M3 until resize lands)
     bool mapped = false;
+    bool draw_frame = true;   // default SSD; a CLIENT_SIDE request flips this off
     bt::Listener map_, unmap_, commit_, destroy_;
+    bt::Listener deco_request_mode_, deco_destroy_;
   };
 
 } // namespace bbai
