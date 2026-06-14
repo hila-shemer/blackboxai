@@ -76,3 +76,33 @@ TEST_CASE("workspace switch hides/shows views, restores focus, updates the label
   CHECK(centre() == 0x00FF0000u);                 // only A (red)
   CHECK(test::compareGolden(test::captureFrame(server), "tests/golden/m4-ws1.png", 2, 40));
 }
+
+TEST_CASE("switching to a populated workspace with no remembered focus picks the topmost") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  // Move to empty ws1, then map two clients there WITHOUT clicking, so ws1 never
+  // records a focused view.
+  server.setCurrentWorkspace(1);
+  CHECK(server.focusedViewForTest() == nullptr);
+
+  test::TestClient a(server.socketName(), 0xFFFF0000u, 200, 150);   // lower
+  test::TestClient b(server.socketName(), 0xFF00FF00u, 200, 150);   // top
+  REQUIRE(a.ok()); REQUIRE(b.ok());
+  for (int i = 0; i < 800 && server.viewsForTest().size() < 2; ++i)
+    { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
+  for (int i = 0; i < 40; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
+  REQUIRE(server.viewsForTest().size() == 2);
+  View *vb = server.viewsForTest()[1].get();      // topmost (later-mapped) on ws1
+  REQUIRE(server.focusedViewForTest() == nullptr); // mapping does not auto-focus
+
+  // Leave and return: ws1 has views but no remembered focus -> focus the topmost.
+  server.setCurrentWorkspace(0);
+  server.setCurrentWorkspace(1);
+  CHECK(server.focusedViewForTest() == vb);
+}

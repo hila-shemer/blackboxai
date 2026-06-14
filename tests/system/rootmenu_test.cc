@@ -4,6 +4,7 @@
 #include <doctest/doctest.h>
 #include "HeadlessFixture.hh"
 #include "Server.hh"
+#include "Menu.geom.hh"
 
 #include <cstdlib>
 #include <linux/input-event-codes.h>  // BTN_LEFT / BTN_RIGHT
@@ -91,4 +92,70 @@ TEST_CASE("menu keyboard navigation: Down/Up skip separators, Return activates")
   server.injectKeyForTest(XKB_KEY_Return, 0, true);
   CHECK_FALSE(server.menuOpenForTest());
   CHECK(server.currentWorkspaceForTest() == 1);
+}
+
+TEST_CASE("a press inside the menu but not on an item keeps it open") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+  REQUIRE(server.titleFont()->height() == 18);   // geometry below assumes the bundled font
+
+  const int ox = 400, oy = 200;
+  server.injectPointerMotionForTest(ox, oy);
+  server.injectPointerButtonForTest(BTN_RIGHT, true);   // menu opens with top-left at (ox,oy)
+  REQUIRE(server.menuOpenForTest());
+
+  // A press on the title bar maps to no item; the menu must NOT dismiss.
+  server.injectPointerMotionForTest(ox + 5, oy + 2);
+  server.injectPointerButtonForTest(BTN_LEFT, true);
+  CHECK(server.menuOpenForTest());
+
+  // A press on the separator row (index 2) is also "inside but not an item".
+  const int sep_y = oy + menu::titleHeight(18) + menu::kFrameMargin
+                  + 2 * menu::itemHeight(18, false) + 1;
+  server.injectPointerMotionForTest(ox + 30, sep_y);
+  server.injectPointerButtonForTest(BTN_LEFT, true);
+  CHECK(server.menuOpenForTest());
+}
+
+TEST_CASE("an arbitrary key while the menu is modal is swallowed and leaves it open") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  server.injectPointerMotionForTest(400, 200);
+  server.injectPointerButtonForTest(BTN_RIGHT, true);
+  REQUIRE(server.menuOpenForTest());
+
+  server.injectKeyForTest(XKB_KEY_Down, 0, true);   // highlight item 0
+  REQUIRE(server.activeMenuItemForTest() == 0);
+  server.injectKeyForTest(XKB_KEY_a, 0, true);       // a non-navigation key
+  CHECK(server.menuOpenForTest());                   // swallowed, not dismissed
+  CHECK(server.activeMenuItemForTest() == 0);        // selection unchanged
+}
+
+TEST_CASE("the highlighted menu row renders (hilite golden)") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  server.injectPointerMotionForTest(400, 300);
+  server.injectPointerButtonForTest(BTN_RIGHT, true);
+  REQUIRE(server.menuOpenForTest());
+
+  server.injectKeyForTest(XKB_KEY_Down, 0, true);   // make the first row active (highlighted)
+  REQUIRE(server.activeMenuItemForTest() == 0);
+  CHECK(test::compareGolden(test::captureFrame(server), "tests/golden/m4-rootmenu-hilite.png", 2, 80));
 }

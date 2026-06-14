@@ -12,6 +12,7 @@
 #include "View.hh"
 
 #include <cstdlib>
+#include <linux/input-event-codes.h>  // BTN_LEFT
 
 using namespace bbai;
 
@@ -64,4 +65,71 @@ TEST_CASE("a real client maps decorated and tears down cleanly on close") {
         client.pump();
     }
     CHECK(gone());
+}
+
+TEST_CASE("closing the focused window refocuses the topmost survivor") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+        server.dispatch();
+
+    test::TestClient a(server.socketName(), 0xFFFF0000u, 200, 150);  // mapped first -> lower
+    test::TestClient b(server.socketName(), 0xFF00FF00u, 200, 150);  // mapped second -> top
+    REQUIRE(a.ok()); REQUIRE(b.ok());
+    auto mappedN = [&](size_t n) {
+        const auto &v = server.viewsForTest();
+        if (v.size() < n) return false;
+        for (size_t i = 0; i < n; ++i) if (!v[i]->isMapped()) return false;
+        return true;
+    };
+    for (int i = 0; i < 800 && !mappedN(2); ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
+    REQUIRE(mappedN(2));
+    for (int i = 0; i < 40; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
+
+    View *va = server.viewsForTest()[0].get();   // red, lower
+    View *vb = server.viewsForTest()[1].get();   // green, top
+
+    // Focus the topmost window (both overlap at (160,120); the click hits b).
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    REQUIRE(server.focusedViewForTest() == vb);
+
+    // Close the focused window -> focus must hand off to the survivor (not clear).
+    b.closeWindow();
+    for (int i = 0; i < 200 && server.viewsForTest().size() != 1; ++i)
+        { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
+    REQUIRE(server.viewsForTest().size() == 1);
+    CHECK(server.focusedViewForTest() == va);
+}
+
+TEST_CASE("closing the sole focused window clears focus") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+        server.dispatch();
+
+    test::TestClient a(server.socketName(), 0xFFFF0000u, 200, 150);
+    REQUIRE(a.ok());
+    auto mapped = [&] { const auto &v = server.viewsForTest(); return !v.empty() && v[0]->isMapped(); };
+    for (int i = 0; i < 500 && !mapped(); ++i) { a.flush(); server.dispatch(); a.pump(); }
+    REQUIRE(mapped());
+    for (int i = 0; i < 40; ++i) { a.flush(); server.dispatch(); a.pump(); }
+
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    REQUIRE(server.focusedViewForTest() == server.viewsForTest()[0].get());
+
+    a.closeWindow();
+    for (int i = 0; i < 200 && !server.viewsForTest().empty(); ++i)
+        { a.flush(); server.dispatch(); a.pump(); }
+    REQUIRE(server.viewsForTest().empty());
+    CHECK(server.focusedViewForTest() == nullptr);
 }

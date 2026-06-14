@@ -31,6 +31,7 @@ namespace bbai::test {
 
     bool ok() const;
     bool gotCloseRequest() const;  // the compositor sent xdg_toplevel.close
+    int pointerButtonEvents() const;  // count of wl_pointer.button events received
     void flush();        // push queued client requests to the compositor
     void pump();         // non-blocking: read+dispatch server events, advance state
     void closeWindow();  // destroy the toplevel/surface (server should drop the View)
