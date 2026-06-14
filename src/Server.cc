@@ -54,6 +54,7 @@ namespace bbai {
       views.push_back(std::make_unique<View>(*this, toplevel));
       View *v = views.back().get();
       v->setWorkspace(workspaces_.current());
+      v->setOnWorkspace(true);                   // new windows open on the current ws
       stacking_.insert(v);                       // top of its layer
     });
 
@@ -186,7 +187,8 @@ namespace bbai {
       resize_edges = 0;
     }
     if (focused_view == view) focused_view = nullptr;
-    stacking_.remove(view);   // drop from the Z-order before the View dies
+    workspaces_.clearFocused(view);   // drop from every workspace's focus memory
+    stacking_.remove(view);           // drop from the Z-order before the View dies
     auto it = std::find_if(views.begin(), views.end(),
                            [view](const std::unique_ptr<View> &v) { return v.get() == view; });
     if (it != views.end())
@@ -447,11 +449,52 @@ namespace bbai {
     setCurrentWorkspace((cur + (delta > 0 ? 1u : n - 1u)) % n);
   }
 
+  void Server::clearFocus() {
+    if (focused_view) wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+    focused_view = nullptr;
+    wlr_seat_keyboard_notify_clear_focus(seat);
+  }
+
+  View *Server::viewForHandle(void *handle) {
+    if (!handle) return nullptr;
+    for (auto &v : views)
+      if (v.get() == handle) return v.get();
+    return nullptr;
+  }
+
+  View *Server::topmostViewOnWorkspace(unsigned ws) {
+    for (auto it = stacking_.begin(); it != stacking_.end(); ++it) {
+      if (!*it) continue;                          // skip the layer sentinels
+      View *v = static_cast<View *>(*it);
+      if (v->workspace() == ws && v->isMapped()) return v;
+    }
+    return nullptr;
+  }
+
   void Server::setCurrentWorkspace(unsigned i) {
     if (i >= workspaces_.count() || i == workspaces_.current()) return;
+
+    // Remember the outgoing workspace's focus, then switch.
+    workspaces_.setFocused(workspaces_.current(), focused_view);
     workspaces_.setCurrent(i);
+
+    // Show the incoming workspace's views, hide the rest (O(1) per view, keeps
+    // intra-layer Z-order).
+    for (auto &v : views) v->setOnWorkspace(v->workspace() == i);
+
+    // Restore focus for the incoming workspace: its remembered view if still
+    // live + visible, else the topmost view on it, else nothing. Disabling a
+    // scene node does NOT clear wlr_seat focus, so this must be explicit.
+    View *restore = viewForHandle(workspaces_.focused(i));
+    if (restore && restore->workspace() == i && restore->isMapped()) {
+      focusView(restore);
+    } else if (View *top = topmostViewOnWorkspace(i)) {
+      focusView(top);
+    } else {
+      clearFocus();
+    }
+    onPointerMotion(nowMsec());   // refresh pointer focus off any hidden surface
     if (toolbar_) toolbar_->redrawWorkspaceLabel();
-    // view show/hide + focus restore are added in B5.
   }
 
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {

@@ -119,3 +119,9 @@ restack_exe = executable('restack-test', files('system/restack_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('restack', restack_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M4 workspace switching: show/hide + focus restore + label, two clients.
+ws_switch_exe = executable('workspace-switch-test', files('system/workspace_switch_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('workspace_switch', ws_switch_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
