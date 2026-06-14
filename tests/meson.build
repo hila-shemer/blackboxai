@@ -127,3 +127,13 @@ ws_switch_exe = executable('workspace-switch-test', files('system/workspace_swit
   dependencies : [harness_dep, doctest_dep])
 test('workspace_switch', ws_switch_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M4 root menu: modal chrome on overlay + dismiss + actions.
+rootmenu_exe = executable('rootmenu-test', files('system/rootmenu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('rootmenu', rootmenu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+menu_action_exe = executable('menu-action-test', files('system/menu_action_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('menu_action', menu_action_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
