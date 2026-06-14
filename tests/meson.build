@@ -75,3 +75,9 @@ hittest_exe = executable('hittest-test', files('system/hittest_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('hittest', hittest_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M3 interactive move: titlebar drag.
+move_exe = executable('move-test', files('system/move_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('move', move_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
