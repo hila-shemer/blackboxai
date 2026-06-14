@@ -28,6 +28,7 @@ namespace bbai::test {
     int pending_w = 0, pending_h = 0;  // size from the latest toplevel.configure
     TestClient::Deco deco = TestClient::Deco::None;
     bool created = false;
+    bool got_close = false;   // compositor requested xdg_toplevel.close
   };
 
   static wl_buffer *makeShmBuffer(TestClient::Impl *c) {
@@ -62,7 +63,9 @@ namespace bbai::test {
     auto *c = static_cast<TestClient::Impl *>(data);
     if (width > 0 && height > 0) { c->pending_w = width; c->pending_h = height; }
   }
-  static void tl_close(void *, xdg_toplevel *) {}
+  static void tl_close(void *data, xdg_toplevel *) {
+    static_cast<TestClient::Impl *>(data)->got_close = true;
+  }
   static const xdg_toplevel_listener s_xdg_toplevel_listener = {
     .configure = tl_configure, .close = tl_close };
 
@@ -152,6 +155,8 @@ namespace bbai::test {
   }
 
   bool TestClient::ok() const { return impl && impl->display; }
+
+  bool TestClient::gotCloseRequest() const { return impl && impl->got_close; }
 
   void TestClient::flush() {
     if (impl->display) wl_display_flush(impl->display);

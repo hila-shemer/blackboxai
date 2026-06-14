@@ -112,9 +112,13 @@ namespace bbai {
           xkb_keymap_unref(km);
         }
         xkb_context_unref(ctx);
-        wlr_keyboard_set_repeat_info(kb, 25, 600);
-        keyboards_.push_back(std::make_unique<Keyboard>(*this, kb));
-        wlr_seat_set_keyboard(seat, kb);
+        // Only wire a keyboard whose keymap actually compiled: without it
+        // kb->xkb_state is NULL and onKey's xkb lookup would crash.
+        if (kb->xkb_state) {
+          wlr_keyboard_set_repeat_info(kb, 25, 600);
+          keyboards_.push_back(std::make_unique<Keyboard>(*this, kb));
+          wlr_seat_set_keyboard(seat, kb);
+        }
       }
     });
 
@@ -203,13 +207,21 @@ namespace bbai {
       grabbed_view = nullptr;
       resize_edges = 0;
     }
-    if (focused_view == view) focused_view = nullptr;
+    const bool was_focused = (focused_view == view);
+    if (was_focused) focused_view = nullptr;
     workspaces_.clearFocused(view);   // drop from every workspace's focus memory
     stacking_.remove(view);           // drop from the Z-order before the View dies
     auto it = std::find_if(views.begin(), views.end(),
                            [view](const std::unique_ptr<View> &v) { return v.get() == view; });
     if (it != views.end())
-      views.erase(it);
+      views.erase(it);                // destroys the View; `view` is dangling after this
+
+    // If the closed window held focus, hand it to the topmost survivor on the
+    // current workspace (else clear it) — don't leave the desktop unfocused.
+    if (was_focused) {
+      if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+      else clearFocus();
+    }
   }
 
   void Server::raiseView(View *view) {
@@ -415,6 +427,7 @@ namespace bbai {
 
   void Server::onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode,
                      wl_keyboard_key_state state) {
+    if (!kb->xkb_state) return;   // defensive: a keymap-less device has no syms
     const xkb_keysym_t *syms = nullptr;
     const int nsyms = xkb_state_key_get_syms(kb->xkb_state, evdevToXkb(keycode), &syms);
     const uint32_t mods = wlr_keyboard_get_modifiers(kb);
@@ -440,6 +453,7 @@ namespace bbai {
   }
 
   void Server::onModifiers(wlr_keyboard *kb) {
+    if (active_menu_) return;   // modal: don't leak modifier state to the client
     wlr_seat_set_keyboard(seat, kb);
     wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
   }
@@ -559,6 +573,16 @@ namespace bbai {
 
   void Server::openRootMenu(double lx, double ly) {
     if (active_menu_) return;
+    // Abort any in-progress move/resize grab before going modal — otherwise the
+    // grab's terminating release is swallowed by the modal gate and the window
+    // would keep following the cursor after the menu closes.
+    if (cursor_mode != CursorMode::Passthrough) {
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
     active_menu_ = std::make_unique<Menu>(*this, rootmenu::title(),
                                           rootmenu::build(workspaces_));
     active_menu_->show(static_cast<int>(lx), static_cast<int>(ly));
@@ -583,6 +607,7 @@ namespace bbai {
   bool Server::handleMenuKey(xkb_keysym_t sym) {
     if (!active_menu_) return false;
     const int n = active_menu_->itemCount();
+    if (n <= 0) { if (sym == XKB_KEY_Escape) closeMenus(); return true; }  // guard %n
     const int a = active_menu_->activeIndex();
     switch (sym) {
     case XKB_KEY_Escape:
@@ -616,6 +641,8 @@ namespace bbai {
     switch (it.action) {
     case MenuItem::Act::Exec:            commandRunner().run(it.argv); break;
     case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(it.workspace); break;
+    // New/RemoveWorkspace are reachable once the Workspaces *submenu* lands (M5,
+    // with menu-file parsing); the M4 flat menu does not emit these items yet.
     case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
     case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
     case MenuItem::Act::Exit:            terminate(); break;

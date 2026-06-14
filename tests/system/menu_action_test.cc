@@ -59,6 +59,10 @@ TEST_CASE("clicking a workspace entry switches workspaces") {
     server.dispatch();
   CHECK(server.currentWorkspaceForTest() == 0);
 
+  // The click coordinates below assume the isolated bundled font (height 18); a
+  // font-isolation regression would otherwise silently click the wrong row.
+  REQUIRE(server.titleFont()->height() == 18);
+
   const int ox = 400, oy = 200;
   server.injectPointerMotionForTest(ox, oy);
   server.injectPointerButtonForTest(BTN_RIGHT, true);
