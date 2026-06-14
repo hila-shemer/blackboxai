@@ -118,6 +118,12 @@ namespace bbai {
           wlr_keyboard_set_repeat_info(kb, 25, 600);
           keyboards_.push_back(std::make_unique<Keyboard>(*this, kb));
           wlr_seat_set_keyboard(seat, kb);
+          // If a window was already focused before any keyboard existed (focusView
+          // only sends keyboard.enter when the seat has a keyboard), push focus to
+          // it now so a hot-plugged / late-enumerated keyboard delivers keys.
+          if (focused_view)
+            wlr_seat_keyboard_notify_enter(seat, focused_view->toplevel()->base->surface,
+                                           kb->keycodes, kb->num_keycodes, &kb->modifiers);
         }
       }
     });
@@ -591,6 +597,12 @@ namespace bbai {
 
   void Server::closeMenus() {
     active_menu_.reset();
+    // While modal, onModifiers swallowed every modifier change so the client
+    // wouldn't act on keys typed at the menu. Re-sync the seat now, or a modifier
+    // released during the menu (e.g. the Mod4 that opened it via Mod4+space) stays
+    // stuck-down in the still-focused client's view until its next transition.
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
     onPointerMotion(nowMsec());   // restore normal pointer focus
   }
 
