@@ -9,6 +9,7 @@ bbai_lib = static_library('bbai',
     'View.cc',
     'Decoration.cc',
     'StackingList.cc',
+    'Workspace.cc',
   ),
   include_directories : [src_inc],
   dependencies : [bt_dep, bttext_dep, wlr_dep])
