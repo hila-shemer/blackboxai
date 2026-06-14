@@ -105,12 +105,34 @@ gcovr -r . build --filter 'toolkit/' --filter 'src/' --fail-under-line=80   # co
 
 ## Documented coverage gaps (untestable headless — don't chase blindly)
 
-- The real-device `onKey` swallow/forward path and `new_input` keyboard branch
-  (headless fires no keyboard device; tests drive the keysym-level matcher).
+- The `onKey`/`onModifiers` **handler bodies** (xkb sym lookup, the keycode-based
+  `swallowed_keycodes_` swallow-release logic, forward-to-client) and the
+  `new_input` keyboard branch. Headless fires no keyboard device, and wlroots 0.19
+  exposes no public `wlr_keyboard_init` — constructing a standalone `wlr_keyboard`
+  to drive `onKey` would be exactly the heavy mock/emulation infra this project
+  avoids. What IS covered: the keysym-level binding matcher + actions
+  (`keybinding_test`), the `evdev+8`→keysym seam purely (`keycode_test`), and the
+  modal key-nav via `injectKeyForTest` (`rootmenu_test`). (Review finding #11:
+  acknowledged, scope narrowed — not chased with a `wlr_keyboard` fake.)
+- The `onModifiers` early-return + the `closeMenus` modifier re-sync
+  (`wlr_seat_keyboard_notify_modifiers`) are real-device only: headless leaves the
+  seat keyboard null, so the re-sync is a no-op there. The fix (review #2) is still
+  in — a released modifier must not stay stuck-down in a client after a modal menu.
+- The hot-plug keyboard focus push in `new_input` (review #9) — same real-device
+  reason; no headless keyboard hot-plug.
+- `viewForHandle`'s not-found return is defensive and unreachable via the public
+  API: `removeView` calls `workspaces_.clearFocused(view)` before destroying a
+  View, so no workspace can hand back a stale non-null handle (review #13).
 - The production `wl_event_loop` timer firing path (`TimerRegistry` arms a real
   source; tests drive `fireDue` via the VirtualClock). Pre-existing from Phase A.
 - `PosixCommandRunner` IS now covered by a real harmless spawn test (touches a
   temp file).
+
+Not a gap, but worth recording: a `wl_pointer.button` RELEASE for a button the
+seat never recorded as pressed is dropped by `wlr_seat` itself — so a menu
+dismissal cannot deliver an "orphan" release to a client (review #8 was confirmed
+by code-reading but is benign at the wlroots layer; proven by `menu_action_test`'s
+matched-pair-vs-dismiss button counts). No compositor-side swallow needed.
 
 ## Key references
 
