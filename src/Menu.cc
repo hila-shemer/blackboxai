@@ -139,6 +139,7 @@ namespace bbai {
   }
 
   int Menu::itemIndexAtGlobal(int gx, int gy) const {
+    if (gx < gx_ || gx >= gx_ + layout_.width) return -1;   // honor the menu's X extent
     return menu::itemAt(layout_, gy - gy_, metrics_);
   }
 

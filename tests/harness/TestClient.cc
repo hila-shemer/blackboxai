@@ -23,12 +23,15 @@ namespace bbai::test {
     xdg_toplevel *toplevel = nullptr;
     zxdg_toplevel_decoration_v1 *decoration = nullptr;
     wl_buffer *buffer = nullptr;
+    wl_seat *seat = nullptr;
+    wl_pointer *pointer = nullptr;
     uint32_t argb = 0;
     int w = 0, h = 0;
     int pending_w = 0, pending_h = 0;  // size from the latest toplevel.configure
     TestClient::Deco deco = TestClient::Deco::None;
     bool created = false;
-    bool got_close = false;   // compositor requested xdg_toplevel.close
+    bool got_close = false;       // compositor requested xdg_toplevel.close
+    int pointer_buttons = 0;      // count of wl_pointer.button events received
   };
 
   static wl_buffer *makeShmBuffer(TestClient::Impl *c) {
@@ -106,10 +109,39 @@ namespace bbai::test {
     wl_surface_commit(c->surface);  // no buffer yet -> drives the initial configure
   }
 
+  // wl_pointer: a v1 client, so only enter/leave/motion/button/axis can arrive.
+  // We only care about button events (to prove the client gets NO orphan release
+  // after a modal-menu dismissal); the rest are no-ops so libwayland never calls
+  // a null listener slot.
+  static void ptr_enter(void *, wl_pointer *, uint32_t, wl_surface *, wl_fixed_t, wl_fixed_t) {}
+  static void ptr_leave(void *, wl_pointer *, uint32_t, wl_surface *) {}
+  static void ptr_motion(void *, wl_pointer *, uint32_t, wl_fixed_t, wl_fixed_t) {}
+  static void ptr_button(void *data, wl_pointer *, uint32_t, uint32_t, uint32_t, uint32_t) {
+    static_cast<TestClient::Impl *>(data)->pointer_buttons++;
+  }
+  static void ptr_axis(void *, wl_pointer *, uint32_t, uint32_t, wl_fixed_t) {}
+  static const wl_pointer_listener s_pointer_listener = {
+    .enter = ptr_enter, .leave = ptr_leave, .motion = ptr_motion,
+    .button = ptr_button, .axis = ptr_axis };
+
+  static void seat_caps(void *data, wl_seat *seat, uint32_t caps) {
+    auto *c = static_cast<TestClient::Impl *>(data);
+    if ((caps & WL_SEAT_CAPABILITY_POINTER) && !c->pointer) {
+      c->pointer = wl_seat_get_pointer(seat);
+      wl_pointer_add_listener(c->pointer, &s_pointer_listener, c);
+    }
+  }
+  static void seat_name(void *, wl_seat *, const char *) {}
+  static const wl_seat_listener s_seat_listener = { .capabilities = seat_caps, .name = seat_name };
+
   static void reg_global(void *data, wl_registry *reg, uint32_t name,
                          const char *iface, uint32_t) {
     auto *c = static_cast<TestClient::Impl *>(data);
-    if (std::strcmp(iface, wl_compositor_interface.name) == 0) {
+    if (std::strcmp(iface, wl_seat_interface.name) == 0) {
+      c->seat = static_cast<wl_seat *>(
+        wl_registry_bind(reg, name, &wl_seat_interface, 1));
+      wl_seat_add_listener(c->seat, &s_seat_listener, c);
+    } else if (std::strcmp(iface, wl_compositor_interface.name) == 0) {
       c->compositor = static_cast<wl_compositor *>(
         wl_registry_bind(reg, name, &wl_compositor_interface, 4));
     } else if (std::strcmp(iface, xdg_wm_base_interface.name) == 0) {
@@ -143,6 +175,8 @@ namespace bbai::test {
 
   TestClient::~TestClient() {
     if (impl->display) {
+      if (impl->pointer) wl_pointer_destroy(impl->pointer);
+      if (impl->seat) wl_seat_destroy(impl->seat);
       if (impl->decoration) zxdg_toplevel_decoration_v1_destroy(impl->decoration);
       if (impl->toplevel) xdg_toplevel_destroy(impl->toplevel);
       if (impl->xdgsurf) xdg_surface_destroy(impl->xdgsurf);
@@ -157,6 +191,8 @@ namespace bbai::test {
   bool TestClient::ok() const { return impl && impl->display; }
 
   bool TestClient::gotCloseRequest() const { return impl && impl->got_close; }
+
+  int TestClient::pointerButtonEvents() const { return impl ? impl->pointer_buttons : 0; }
 
   void TestClient::flush() {
     if (impl->display) wl_display_flush(impl->display);
