@@ -2,10 +2,23 @@
 #include "Output.hh"
 #include "View.hh"
 #include "Toolbar.hh"
+#include "Keyboard.hh"
+#include "Menu.hh"
+#include "Rootmenu.hh"
 #include "Frame.hh"
 
 #include <algorithm>
-#include <linux/input-event-codes.h>   // BTN_LEFT
+#include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
+
+namespace {
+  // Is `node` somewhere under the given scene layer tree?
+  bool isUnder(wlr_scene_node *node, wlr_scene_tree *layer) {
+    if (!node) return false;
+    for (wlr_scene_tree *t = node->parent; t; t = t->node.parent)
+      if (t == layer) return true;
+    return false;
+  }
+}
 
 namespace bbai {
 
@@ -51,6 +64,10 @@ namespace bbai {
     new_xdg_toplevel.connect(&xdg_shell->events.new_toplevel, [this](void *data) {
       auto *toplevel = static_cast<wlr_xdg_toplevel *>(data);
       views.push_back(std::make_unique<View>(*this, toplevel));
+      View *v = views.back().get();
+      v->setWorkspace(workspaces_.current());
+      v->setOnWorkspace(true);                   // new windows open on the current ws
+      stacking_.insert(v);                       // top of its layer
     });
 
     // Decoration policy: request SSD (we draw the Blackbox frame), honor CSD
@@ -95,7 +112,19 @@ namespace bbai {
           xkb_keymap_unref(km);
         }
         xkb_context_unref(ctx);
-        wlr_seat_set_keyboard(seat, kb);
+        // Only wire a keyboard whose keymap actually compiled: without it
+        // kb->xkb_state is NULL and onKey's xkb lookup would crash.
+        if (kb->xkb_state) {
+          wlr_keyboard_set_repeat_info(kb, 25, 600);
+          keyboards_.push_back(std::make_unique<Keyboard>(*this, kb));
+          wlr_seat_set_keyboard(seat, kb);
+          // If a window was already focused before any keyboard existed (focusView
+          // only sends keyboard.enter when the seat has a keyboard), push focus to
+          // it now so a hot-plugged / late-enumerated keyboard delivers keys.
+          if (focused_view)
+            wlr_seat_keyboard_notify_enter(seat, focused_view->toplevel()->base->surface,
+                                           kb->keycodes, kb->num_keycodes, &kb->modifiers);
+        }
       }
     });
 
@@ -141,6 +170,10 @@ namespace bbai {
     if (const char *sock = wl_display_add_socket_auto(display))
       socket_name = sock;
 
+    // Exec runner for menu actions (spawned children inherit our WAYLAND_DISPLAY).
+    default_runner_ = std::make_unique<PosixCommandRunner>(socket_name);
+    command_runner_ = default_runner_.get();
+
     wlr_backend_start(backend);
 
     // The headless backend never emits new_output on its own; ask it for the
@@ -161,6 +194,8 @@ namespace bbai {
     cursor_motion_absolute.disconnect();
     cursor_button.disconnect();
     cursor_frame.disconnect();
+    keyboards_.clear();       // drops key/modifiers listeners before the backend finish
+    active_menu_.reset();     // destroys its overlay scene tree
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
@@ -178,11 +213,31 @@ namespace bbai {
       grabbed_view = nullptr;
       resize_edges = 0;
     }
-    if (focused_view == view) focused_view = nullptr;
+    const bool was_focused = (focused_view == view);
+    if (was_focused) focused_view = nullptr;
+    workspaces_.clearFocused(view);   // drop from every workspace's focus memory
+    stacking_.remove(view);           // drop from the Z-order before the View dies
     auto it = std::find_if(views.begin(), views.end(),
                            [view](const std::unique_ptr<View> &v) { return v.get() == view; });
     if (it != views.end())
-      views.erase(it);
+      views.erase(it);                // destroys the View; `view` is dangling after this
+
+    // If the closed window held focus, hand it to the topmost survivor on the
+    // current workspace (else clear it) — don't leave the desktop unfocused.
+    if (was_focused) {
+      if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+      else clearFocus();
+    }
+  }
+
+  void Server::raiseView(View *view) {
+    stacking_.raise(view);
+    wlr_scene_node_raise_to_top(&view->sceneTree()->node);
+  }
+
+  void Server::lowerView(View *view) {
+    stacking_.lower(view);
+    wlr_scene_node_lower_to_bottom(&view->sceneTree()->node);
   }
 
   void Server::run() { wl_display_run(display); }
@@ -279,6 +334,11 @@ namespace bbai {
   }
 
   void Server::onPointerMotion(uint32_t time) {
+    if (active_menu_) {  // modal: hover highlights the item under the cursor
+      active_menu_->setActive(active_menu_->itemIndexAtGlobal(
+        static_cast<int>(cursor->x), static_cast<int>(cursor->y)));
+      return;
+    }
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
     if (cursor_mode == CursorMode::Resize) { processResize(); return; }
 
@@ -308,6 +368,8 @@ namespace bbai {
 
   void Server::onPointerButton(uint32_t time, uint32_t button,
                                wl_pointer_button_state state) {
+    if (active_menu_) { handleMenuButton(button, state); return; }  // modal gate
+
     if (state == WL_POINTER_BUTTON_STATE_RELEASED && cursor_mode != CursorMode::Passthrough) {
       if (cursor_mode == CursorMode::Resize)
         wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
@@ -318,6 +380,11 @@ namespace bbai {
     }
 
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+      // Right-click on the bare desktop opens the modal root menu.
+      if (button == BTN_RIGHT && overDesktop(cursor->x, cursor->y)) {
+        openRootMenu(cursor->x, cursor->y);
+        return;
+      }
       double sx = 0, sy = 0;
       wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
       if (View *v = viewFromNode(n)) {
@@ -360,6 +427,240 @@ namespace bbai {
 
   wlr_surface *Server::focusedPointerSurfaceForTest() const {
     return seat ? seat->pointer_state.focused_surface : nullptr;
+  }
+
+  // --- keyboard: bindings + focus forwarding ------------------------------------
+
+  void Server::onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode,
+                     wl_keyboard_key_state state) {
+    if (!kb->xkb_state) return;   // defensive: a keymap-less device has no syms
+    const xkb_keysym_t *syms = nullptr;
+    const int nsyms = xkb_state_key_get_syms(kb->xkb_state, evdevToXkb(keycode), &syms);
+    const uint32_t mods = wlr_keyboard_get_modifiers(kb);
+
+    if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+      if (active_menu_) {  // modal: keys drive the menu, never the client
+        for (int i = 0; i < nsyms; ++i)
+          if (handleMenuKey(syms[i])) break;
+        swallowed_keycodes_.insert(keycode);
+        return;
+      }
+      for (int i = 0; i < nsyms; ++i) {
+        if (dispatchBinding(mods, syms[i])) {
+          swallowed_keycodes_.insert(keycode);  // also swallow the matching release
+          return;
+        }
+      }
+    } else if (swallowed_keycodes_.erase(keycode) > 0) {
+      return;  // the press was a binding; don't deliver an orphan release
+    }
+    wlr_seat_set_keyboard(seat, kb);
+    wlr_seat_keyboard_notify_key(seat, time, keycode, state);
+  }
+
+  void Server::onModifiers(wlr_keyboard *kb) {
+    if (active_menu_) return;   // modal: don't leak modifier state to the client
+    wlr_seat_set_keyboard(seat, kb);
+    wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
+  }
+
+  void Server::removeKeyboard(Keyboard *k) {
+    auto it = std::find_if(keyboards_.begin(), keyboards_.end(),
+                           [k](const std::unique_ptr<Keyboard> &p) { return p.get() == k; });
+    if (it != keyboards_.end()) keyboards_.erase(it);
+  }
+
+  bool Server::dispatchBinding(uint32_t mods, xkb_keysym_t sym) {
+    Action a = keybindings_.dispatch(mods, sym);
+    if (a.kind == Action::None) return false;
+    last_action_ = a;
+    executeAction(a);
+    return true;
+  }
+
+  void Server::executeAction(const Action &a) {
+    switch (a.kind) {
+    case Action::WorkspaceNext: cycleWorkspace(+1); break;
+    case Action::WorkspacePrev: cycleWorkspace(-1); break;
+    case Action::WorkspaceTo:
+      if (a.arg >= 0 && static_cast<unsigned>(a.arg) < workspaces_.count())
+        setCurrentWorkspace(static_cast<unsigned>(a.arg));
+      break;
+    case Action::CloseWindow:
+      if (focused_view) wlr_xdg_toplevel_send_close(focused_view->toplevel());
+      break;
+    case Action::OpenMenu:  openRootMenu(cursor->x, cursor->y); break;
+    case Action::CycleNext: break;  // cycle focus within the workspace (future)
+    case Action::CyclePrev: break;
+    case Action::None:      break;
+    }
+  }
+
+  void Server::cycleWorkspace(int delta) {
+    const unsigned n = workspaces_.count();
+    if (n == 0) return;
+    const unsigned cur = workspaces_.current();
+    setCurrentWorkspace((cur + (delta > 0 ? 1u : n - 1u)) % n);
+  }
+
+  void Server::clearFocus() {
+    if (focused_view) wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+    focused_view = nullptr;
+    wlr_seat_keyboard_notify_clear_focus(seat);
+  }
+
+  View *Server::viewForHandle(void *handle) {
+    if (!handle) return nullptr;
+    for (auto &v : views)
+      if (v.get() == handle) return v.get();
+    return nullptr;
+  }
+
+  View *Server::topmostViewOnWorkspace(unsigned ws) {
+    for (auto it = stacking_.begin(); it != stacking_.end(); ++it) {
+      if (!*it) continue;                          // skip the layer sentinels
+      View *v = static_cast<View *>(*it);
+      if (v->workspace() == ws && v->isMapped()) return v;
+    }
+    return nullptr;
+  }
+
+  void Server::setCurrentWorkspace(unsigned i) {
+    if (i >= workspaces_.count() || i == workspaces_.current()) return;
+
+    // Remember the outgoing workspace's focus, then switch.
+    workspaces_.setFocused(workspaces_.current(), focused_view);
+    workspaces_.setCurrent(i);
+
+    // Show the incoming workspace's views, hide the rest (O(1) per view, keeps
+    // intra-layer Z-order).
+    for (auto &v : views) v->setOnWorkspace(v->workspace() == i);
+
+    // Restore focus for the incoming workspace: its remembered view if still
+    // live + visible, else the topmost view on it, else nothing. Disabling a
+    // scene node does NOT clear wlr_seat focus, so this must be explicit.
+    View *restore = viewForHandle(workspaces_.focused(i));
+    if (restore && restore->workspace() == i && restore->isMapped()) {
+      focusView(restore);
+    } else if (View *top = topmostViewOnWorkspace(i)) {
+      focusView(top);
+    } else {
+      clearFocus();
+    }
+    onPointerMotion(nowMsec());   // refresh pointer focus off any hidden surface
+    if (toolbar_) toolbar_->redrawWorkspaceLabel();
+  }
+
+  void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
+    if (active_menu_) { if (pressed) handleMenuKey(sym); return; }
+    if (pressed) dispatchBinding(mods, sym);
+  }
+
+  // --- modal root menu ----------------------------------------------------------
+
+  void Server::activeOutputSize(int &w, int &h) const {
+    if (wlr_scene_output *so = activeSceneOutputForTest()) {
+      w = so->output->width; h = so->output->height;
+    } else { w = 1280; h = 720; }
+  }
+
+  int Server::activeMenuItemForTest() const {
+    return active_menu_ ? active_menu_->activeIndex() : -1;
+  }
+
+  bool Server::overDesktop(double lx, double ly) {
+    double sx = 0, sy = 0;
+    wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, lx, ly, &sx, &sy);
+    if (!n) return true;                                       // nothing -> desktop
+    if (viewFromNode(n)) return false;                         // a client window
+    if (isUnder(n, layer_top) || isUnder(n, layer_overlay)) return false;  // chrome
+    return true;                                               // background texture
+  }
+
+  void Server::openRootMenu(double lx, double ly) {
+    if (active_menu_) return;
+    // Abort any in-progress move/resize grab before going modal — otherwise the
+    // grab's terminating release is swallowed by the modal gate and the window
+    // would keep following the cursor after the menu closes.
+    if (cursor_mode != CursorMode::Passthrough) {
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+    active_menu_ = std::make_unique<Menu>(*this, rootmenu::title(),
+                                          rootmenu::build(workspaces_));
+    active_menu_->show(static_cast<int>(lx), static_cast<int>(ly));
+    wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
+  }
+
+  void Server::closeMenus() {
+    active_menu_.reset();
+    // While modal, onModifiers swallowed every modifier change so the client
+    // wouldn't act on keys typed at the menu. Re-sync the seat now, or a modifier
+    // released during the menu (e.g. the Mod4 that opened it via Mod4+space) stays
+    // stuck-down in the still-focused client's view until its next transition.
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
+    onPointerMotion(nowMsec());   // restore normal pointer focus
+  }
+
+  void Server::handleMenuButton(uint32_t, wl_pointer_button_state state) {
+    if (state != WL_POINTER_BUTTON_STATE_PRESSED) return;  // activate on press
+    const int idx = active_menu_->itemIndexAtGlobal(static_cast<int>(cursor->x),
+                                                    static_cast<int>(cursor->y));
+    if (idx >= 0) { itemClicked(idx); return; }
+    if (!active_menu_->containsGlobal(static_cast<int>(cursor->x),
+                                     static_cast<int>(cursor->y)))
+      closeMenus();   // a press outside the menu dismisses it
+  }
+
+  bool Server::handleMenuKey(xkb_keysym_t sym) {
+    if (!active_menu_) return false;
+    const int n = active_menu_->itemCount();
+    if (n <= 0) { if (sym == XKB_KEY_Escape) closeMenus(); return true; }  // guard %n
+    const int a = active_menu_->activeIndex();
+    switch (sym) {
+    case XKB_KEY_Escape:
+      closeMenus();
+      return true;
+    case XKB_KEY_Down:
+      for (int k = 1; k <= n; ++k) {
+        const int j = ((a < 0 ? -1 : a) + k) % n;
+        if (active_menu_->item(j).selectable()) { active_menu_->setActive(j); break; }
+      }
+      return true;
+    case XKB_KEY_Up:
+      for (int k = 1; k <= n; ++k) {
+        const int j = (((a < 0 ? 0 : a) - k) % n + n) % n;
+        if (active_menu_->item(j).selectable()) { active_menu_->setActive(j); break; }
+      }
+      return true;
+    case XKB_KEY_Return:
+    case XKB_KEY_space:
+      if (a >= 0 && active_menu_->item(a).selectable()) itemClicked(a);
+      return true;
+    default:
+      return true;   // swallow every key while the menu is modal
+    }
+  }
+
+  void Server::itemClicked(int index) {
+    if (!active_menu_) return;
+    const MenuItem it = active_menu_->item(index);  // copy before closeMenus destroys the menu
+    closeMenus();
+    switch (it.action) {
+    case MenuItem::Act::Exec:            commandRunner().run(it.argv); break;
+    case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(it.workspace); break;
+    // New/RemoveWorkspace are reachable once the Workspaces *submenu* lands (M5,
+    // with menu-file parsing); the M4 flat menu does not emit these items yet.
+    case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
+    case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
+    case MenuItem::Act::Exit:            terminate(); break;
+    case MenuItem::Act::Restart:         break;  // stub in M4
+    case MenuItem::Act::None:            break;
+    }
   }
 
   void Server::advanceClockForTest(int64_t seconds) {

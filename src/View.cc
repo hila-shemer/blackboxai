@@ -79,6 +79,12 @@ namespace bbai {
     wlr_scene_node_set_position(&frame_tree->node, x, y);
   }
 
+  void View::setOnWorkspace(bool on) {
+    wlr_scene_node_set_enabled(&frame_tree->node, on);
+  }
+
+  bool View::visible() const { return frame_tree->node.enabled; }
+
   void View::resizeTo(int x, int y, int w, int h) {
     cw = w;
     ch = h;
