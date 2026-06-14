@@ -83,3 +83,27 @@ TEST_CASE("a client insisting on client-side decorations is honored — no chrom
   // Outside the window is still the gradient.
   CHECK(rgb(40, 40) != 0x0000FF00u);
 }
+
+TEST_CASE("destroying only the decoration object leaves the View intact") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  test::TestClient client(server.socketName(), 0xFF00FF00u, 200, 150,
+                          test::TestClient::Deco::RequestSSD);
+  const View *v = bootAndMap(server, client);
+  REQUIRE(v != nullptr);
+  REQUIRE(v->drawsFrame());
+  REQUIRE(v->decorationMode() == kModeServerSide);
+
+  // The client destroys ONLY the zxdg_toplevel_decoration_v1 (legal per protocol),
+  // keeping the toplevel. The View must survive and forget the decoration; our
+  // default policy keeps drawing the SSD frame.
+  client.destroyDecorationForTest();
+  for (int i = 0; i < 60; ++i) { client.flush(); server.dispatch(); client.pump(); }
+
+  REQUIRE_FALSE(server.viewsForTest().empty());
+  CHECK(v->decorationMode() == -1);   // no decoration object anymore
+  CHECK(v->drawsFrame());             // still decorated (compositor default)
+  CHECK(v->isMapped());
+}

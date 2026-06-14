@@ -167,6 +167,14 @@ namespace bbai::test {
     wl_display_flush(impl->display);
   }
 
+  void TestClient::destroyDecorationForTest() {
+    if (impl->decoration) {
+      zxdg_toplevel_decoration_v1_destroy(impl->decoration);
+      impl->decoration = nullptr;
+      wl_display_flush(impl->display);
+    }
+  }
+
   void TestClient::pump() {
     if (!impl->display) return;
 

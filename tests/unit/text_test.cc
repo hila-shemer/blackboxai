@@ -20,7 +20,7 @@ namespace {
   constexpr int kAscent    = 14;
   constexpr int kDescent   = 5;
   constexpr int kHeight    = 18;
-  constexpr int kAg1Width  = 30;  // 3 monospace glyphs * advance 10
+  constexpr int kAg1Width  = 27;  // 3 monospace glyphs * advance 9 (unhinted)
 
   uint64_t fnv1a(const std::vector<uint32_t> &buf) {
     uint64_t h = 1469598103934665603ULL;
@@ -60,9 +60,10 @@ TEST_CASE("drawText blends a deterministic, byte-stable raster") {
   CHECK(nonWhite > 0);
 
   // Authoritative pin: the exact blended raster of black "Ag1" at pixelsize=16
-  // over white. Stable across isolated runs; re-bless only on a deliberate
-  // freetype/font change.
-  constexpr uint64_t kAg1Checksum = 7738476215517073716ULL;
+  // over white, unhinted (tests/fixtures/fonts.conf disables hinting for
+  // cross-FreeType stability). Stable across isolated runs; re-bless only on a
+  // deliberate FreeType/font change.
+  constexpr uint64_t kAg1Checksum = 10956587441623912002ULL;
   CHECK(fnv1a(buf) == kAg1Checksum);
 }
 
