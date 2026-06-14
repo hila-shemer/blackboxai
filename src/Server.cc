@@ -1,5 +1,8 @@
 #include "Server.hh"
 #include "Output.hh"
+#include "View.hh"
+
+#include <algorithm>
 
 namespace bbai {
 
@@ -22,6 +25,9 @@ namespace bbai {
     allocator = wlr_allocator_autocreate(backend, renderer);
 
     wlr_compositor_create(display, 5, renderer);
+    wlr_subcompositor_create(display);
+    wlr_data_device_manager_create(display);
+    wlr_single_pixel_buffer_manager_v1_create(display);
 
     scene = wlr_scene_create();
     output_layout = wlr_output_layout_create(display);
@@ -38,11 +44,20 @@ namespace bbai {
                          "BlackboxAI.desktop.color:   #204060\n"
                          "BlackboxAI.desktop.colorTo: #6080a0\n");
 
+    xdg_shell = wlr_xdg_shell_create(display, 6);
+    new_xdg_toplevel.connect(&xdg_shell->events.new_toplevel, [this](void *data) {
+      auto *toplevel = static_cast<wlr_xdg_toplevel *>(data);
+      views.push_back(std::make_unique<View>(*this, toplevel));
+    });
+
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
       if (!active_output)                       // M1: a single output
         active_output = new Output(*this, wlr_out);
     });
+
+    if (const char *sock = wl_display_add_socket_auto(display))
+      socket_name = sock;
 
     wlr_backend_start(backend);
 
@@ -53,14 +68,23 @@ namespace bbai {
   }
 
   Server::~Server() {
-    // Stop listening on the backend before it is torn down: wlr_backend_finish
-    // asserts its new_output signal has no listeners left. Member destructors
-    // run after this body, so disconnect explicitly first.
+    // Tear down our scene-tracking objects before the wlroots stack: their
+    // listeners point into backend/surface signals that wlr_*_finish asserts
+    // are empty.
     new_output.disconnect();
+    new_xdg_toplevel.disconnect();
+    views.clear();
     if (display) {
       wl_display_destroy_clients(display);
       wl_display_destroy(display);  // fires display_destroy -> backend finish
     }
+  }
+
+  void Server::removeView(View *view) {
+    auto it = std::find_if(views.begin(), views.end(),
+                           [view](const std::unique_ptr<View> &v) { return v.get() == view; });
+    if (it != views.end())
+      views.erase(it);
   }
 
   void Server::run() { wl_display_run(display); }
