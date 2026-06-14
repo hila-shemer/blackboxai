@@ -26,7 +26,11 @@ namespace bbai {
       if (xdg_toplevel->base->initial_commit) {
         chooseDecorationMode();
         wlr_xdg_toplevel_set_size(xdg_toplevel, cw, ch);
+        return;
       }
+      // A later commit at a new size (interactive resize) re-lays-out the frame.
+      if (mapped && (cw != laid_w || ch != laid_h || draw_frame != laid_frame))
+        relayout();
     });
     map_.connect(&surface->events.map, [this](void *) {
       mapped = true;
@@ -59,6 +63,9 @@ namespace bbai {
       wlr_scene_node_set_position(&surface_tree->node, 0, 0);
       deco->clear();
     }
+    laid_w = cw;
+    laid_h = ch;
+    laid_frame = draw_frame;
   }
 
   void View::setPosition(int x, int y) {
