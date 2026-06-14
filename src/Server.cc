@@ -148,6 +148,10 @@ namespace bbai {
     if (const char *sock = wl_display_add_socket_auto(display))
       socket_name = sock;
 
+    // Exec runner for menu actions (spawned children inherit our WAYLAND_DISPLAY).
+    default_runner_ = std::make_unique<PosixCommandRunner>(socket_name);
+    command_runner_ = default_runner_.get();
+
     wlr_backend_start(backend);
 
     // The headless backend never emits new_output on its own; ask it for the

@@ -14,6 +14,7 @@
 #include "Workspace.hh"
 #include "Keybindings.hh"
 #include "StackingList.hh"
+#include "CommandRunner.hh"
 #include "Decoration.hh"   // bbai::Part
 
 #include <memory>
@@ -54,6 +55,9 @@ namespace bbai {
     // Switch to workspace i (model + toolbar label in B3; view show/hide + focus
     // restore added in B5). No-op if i is out of range or already current.
     void setCurrentWorkspace(unsigned i);
+
+    CommandRunner &commandRunner() { return *command_runner_; }
+    void setCommandRunnerForTest(CommandRunner *r) { command_runner_ = r; }
 
     // --- test-only input injection + hit-test introspection (headless has no
     // real input devices, so tests drive the SAME onPointer* handlers the real
@@ -151,6 +155,8 @@ namespace bbai {
     WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
     std::unique_ptr<Toolbar> toolbar_;          // top-layer chrome (M4)
     Keybindings keybindings_;                   // M4 built-in keybinding table
+    std::unique_ptr<CommandRunner> default_runner_;  // owns the production runner
+    CommandRunner *command_runner_ = nullptr;        // -> default or a test fake
     std::vector<std::unique_ptr<Keyboard>> keyboards_;
     std::set<uint32_t> swallowed_keycodes_;     // bound presses whose release we also swallow
     Action last_action_;                        // last fired binding (test introspection)
