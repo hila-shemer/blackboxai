@@ -77,6 +77,7 @@ namespace bbai {
     void injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed);
     int lastActionForTest() const { return last_action_.kind; }
     unsigned currentWorkspaceForTest() const { return workspaces_.current(); }
+    View *focusedViewForTest() const { return focused_view; }
 
     // test-only accessors (M1 has a single output)
     Output *activeOutputForTest() const { return active_output; }
@@ -127,6 +128,9 @@ namespace bbai {
     void processMove();
     void processResize();
     void focusView(View *v);
+    void clearFocus();                              // deactivate + clear keyboard focus
+    View *viewForHandle(void *handle);              // a live View matching the stored focus handle
+    View *topmostViewOnWorkspace(unsigned ws);
     View *viewFromNode(wlr_scene_node *node);
     Part partAt(View *v, double lx, double ly);
     uint32_t nowMsec() { return next_time++; }
