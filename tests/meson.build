@@ -10,9 +10,10 @@ unit_sources = files(
   'unit/image_render_test.cc',
   'unit/listener_test.cc',
   'unit/databuffer_test.cc',
+  'unit/text_boundary_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
-  dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep])
+  dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
 test('unit', unit_exe, suite : 'unit')
 
 # Reusable headless capture + golden harness, plus the in-process test client.
