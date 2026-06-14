@@ -113,3 +113,9 @@ keybinding_exe = executable('keybinding-test', files('system/keybinding_test.cc'
   dependencies : [harness_dep, doctest_dep])
 test('keybinding', keybinding_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
+
+# M4 restacking: View is a StackEntity; raise/lower + show/hide.
+restack_exe = executable('restack-test', files('system/restack_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('restack', restack_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)

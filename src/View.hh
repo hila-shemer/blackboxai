@@ -10,6 +10,7 @@
 #include "wlr.hpp"
 #include "listener.hpp"
 #include "Decoration.hh"
+#include "StackingList.hh"
 
 #include <memory>
 
@@ -17,10 +18,12 @@ namespace bbai {
 
   class Server;
 
-  class View {
+  class View : public StackEntity {
   public:
     View(Server &server, wlr_xdg_toplevel *toplevel);
     ~View();
+
+    void *windowID() const override { return const_cast<View *>(this); }
 
     wlr_xdg_toplevel *toplevel() const { return xdg_toplevel; }
     bool isMapped() const { return mapped; }
@@ -36,6 +39,13 @@ namespace bbai {
     void resizeTo(int x, int y, int w, int h);
     // The frame scene tree (its node.data is this View) — for tests / hit-test.
     wlr_scene_tree *sceneTree() const { return frame_tree; }
+
+    // Which workspace this window belongs to (M4).
+    unsigned workspace() const { return workspace_; }
+    void setWorkspace(unsigned w) { workspace_ = w; }
+    // Show/hide the whole frame (workspace switch) without losing stacking order.
+    void setOnWorkspace(bool on);
+    bool visible() const;
 
     // xdg-decoration: a decoration object for this toplevel appeared. Decide and
     // schedule its mode (request SSD / honor CSD holdout).
@@ -55,6 +65,7 @@ namespace bbai {
     wlr_scene_tree *surface_tree = nullptr;  // xdg surface subtree (wlroots-owned)
     std::unique_ptr<Decoration> deco;
     wlr_xdg_toplevel_decoration_v1 *decoration = nullptr;
+    unsigned workspace_ = 0;  // owning workspace (M4)
     int pos_x = 160, pos_y = 120;
     int cw = 200, ch = 150;   // requested content size
     int laid_w = -1, laid_h = -1;  // size the decorations were last built for

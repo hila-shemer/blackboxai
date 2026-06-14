@@ -52,6 +52,9 @@ namespace bbai {
     new_xdg_toplevel.connect(&xdg_shell->events.new_toplevel, [this](void *data) {
       auto *toplevel = static_cast<wlr_xdg_toplevel *>(data);
       views.push_back(std::make_unique<View>(*this, toplevel));
+      View *v = views.back().get();
+      v->setWorkspace(workspaces_.current());
+      stacking_.insert(v);                       // top of its layer
     });
 
     // Decoration policy: request SSD (we draw the Blackbox frame), honor CSD
@@ -183,10 +186,21 @@ namespace bbai {
       resize_edges = 0;
     }
     if (focused_view == view) focused_view = nullptr;
+    stacking_.remove(view);   // drop from the Z-order before the View dies
     auto it = std::find_if(views.begin(), views.end(),
                            [view](const std::unique_ptr<View> &v) { return v.get() == view; });
     if (it != views.end())
       views.erase(it);
+  }
+
+  void Server::raiseView(View *view) {
+    stacking_.raise(view);
+    wlr_scene_node_raise_to_top(&view->sceneTree()->node);
+  }
+
+  void Server::lowerView(View *view) {
+    stacking_.lower(view);
+    wlr_scene_node_lower_to_bottom(&view->sceneTree()->node);
   }
 
   void Server::run() { wl_display_run(display); }
