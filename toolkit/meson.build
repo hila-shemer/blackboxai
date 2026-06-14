@@ -1,5 +1,13 @@
-# The ported bt:: toolkit. Sources are appended as each unit lands (Tasks 2-6).
-# Until the first real source exists this exposes only the include dir so the
-# top-level build resolves.
+# The ported bt:: toolkit — pure CPU code (no wlroots/X link). The boundary
+# headers wlr.hpp/listener.hpp live here too but are header-only (consumers add
+# wlroots_dep themselves).
 bt_inc = include_directories('.')
-bt_dep = declare_dependency(include_directories : bt_inc)
+bt_lib = static_library('bt',
+  files(
+    'Color.cc',
+    'Resource.cc',
+    'Texture.cc',
+    'Image.cc',
+  ),
+  include_directories : bt_inc)
+bt_dep = declare_dependency(link_with : bt_lib, include_directories : bt_inc)

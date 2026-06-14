@@ -11,6 +11,32 @@ cc = meson.get_compiler('cpp')
 doctest_dep = declare_dependency(
   include_directories : include_directories('third_party/doctest'))
 
+# wlroots is pinned to 0.19 and version-gated (ABI breaks every minor release).
+wlroots_dep        = dependency('wlroots-0.19', version : ['>=0.19.0', '<0.20.0'])
+wayland_server_dep = dependency('wayland-server')
+pixman_dep         = dependency('pixman-1')
+libdrm_dep         = dependency('libdrm')
+
+# wlroots 0.19's wlr_scene.h uses the C99 '[static 4]' array-parameter hint,
+# which is invalid C++. Generate a sanitized copy (hint -> '[]') that
+# toolkit/wlr.hpp includes ahead of the system header (it shares the include
+# guard, suppressing the original). See toolkit/wlr.hpp for the full rationale.
+wlr_incdir = wlroots_dep.get_variable(pkgconfig : 'includedir')
+sanitize_wlr_scene = find_program('tools/sanitize-wlr-scene.sh')
+wlr_scene_compat = custom_target('wlr_scene_compat.h',
+  output  : 'wlr_scene_compat.h',
+  command : [sanitize_wlr_scene,
+             wlr_incdir / 'wlroots-0.19' / 'wlr' / 'types' / 'wlr_scene.h'],
+  capture : true)
+
+# One combined dependency for everything that includes toolkit/wlr.hpp: the
+# wlroots stack plus the generated compat header (listing it in `sources` puts
+# its build dir on the consumer's include path — the same idiom wlroots
+# projects use for wayland-scanner output).
+wlr_dep = declare_dependency(
+  dependencies : [wlroots_dep, wayland_server_dep, pixman_dep, libdrm_dep],
+  sources      : wlr_scene_compat)
+
 subdir('toolkit')
 if get_option('tests')
   subdir('tests')
