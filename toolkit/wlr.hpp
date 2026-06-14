@@ -39,6 +39,16 @@ extern "C" {
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/types/wlr_single_pixel_buffer_v1.h>
 
+// input (seat/cursor/keyboard via wlr_seat.h's transitive pulls) + server-side
+// decorations (M3). wlr_seat.h transitively includes wlr_input_device.h,
+// wlr_keyboard.h (which pulls <xkbcommon/xkbcommon.h>) and wlr_pointer.h.
+#include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_xcursor_manager.h>
+#include <wlr/util/edges.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_server_decoration.h>
+
 } // extern "C"
 
 #endif // BLACKBOXAI_WLR_HPP

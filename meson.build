@@ -18,6 +18,9 @@ wayland_client_dep = dependency('wayland-client')
 wayland_protos     = dependency('wayland-protocols')
 pixman_dep         = dependency('pixman-1')
 libdrm_dep         = dependency('libdrm')
+# xkbcommon: M3 creates keyboards and xkb keymaps directly (wlr_keyboard.h pulls
+# <xkbcommon/xkbcommon.h>; the seat/keyboard path links libxkbcommon).
+xkbcommon_dep      = dependency('xkbcommon')
 # fcft (font rasterization, used by foot) drives M3 titlebar text. We call pixman
 # directly on its glyph masks, so pixman is linked explicitly alongside it.
 fcft_dep           = dependency('fcft', version : '>=3.0.0')
@@ -63,7 +66,7 @@ text_dep = declare_dependency(
 # projects use for wayland-scanner output).
 wlr_dep = declare_dependency(
   dependencies : [wlroots_dep, wayland_server_dep, pixman_dep, libdrm_dep,
-                  server_protos_dep],
+                  xkbcommon_dep, server_protos_dep],
   sources      : wlr_scene_compat)
 
 subdir('toolkit')
