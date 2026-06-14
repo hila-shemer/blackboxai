@@ -41,6 +41,24 @@ namespace bt {
   int TextRenderer::descent() const { return font_ ? font_->descent : 0; }
   int TextRenderer::height() const  { return font_ ? font_->height  : 0; }
 
+  std::u32string decodeUtf8(const char *s) {
+    std::u32string out;
+    if (!s) return out;
+    const auto *p = reinterpret_cast<const unsigned char *>(s);
+    while (*p) {
+      char32_t cp; int extra;
+      if (*p < 0x80)      { cp = *p;        extra = 0; }
+      else if (*p < 0xE0) { cp = *p & 0x1F; extra = 1; }
+      else if (*p < 0xF0) { cp = *p & 0x0F; extra = 2; }
+      else                { cp = *p & 0x07; extra = 3; }
+      ++p;
+      for (int i = 0; i < extra && (*p & 0xC0) == 0x80; ++i, ++p)
+        cp = (cp << 6) | (*p & 0x3F);
+      out.push_back(cp);
+    }
+    return out;
+  }
+
   int TextRenderer::textWidth(std::u32string_view text) const {
     if (!font_) return 0;
     int w = 0;
