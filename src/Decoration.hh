@@ -30,9 +30,9 @@ namespace bbai {
     Decoration(const Decoration &) = delete;
     Decoration &operator=(const Decoration &) = delete;
 
-    // (Re)build every decoration buffer for a client content size W x H, focus
-    // state, and window title (may be null). Destroys the previous buffers.
-    void rebuild(int W, int H, bool focused, const char *titleText);
+    // (Re)build every decoration buffer for a client content size W x H and
+    // window title (may be null). Destroys the previous buffers.
+    void rebuild(int W, int H, const char *titleText);
     // Drop all decoration buffers (CSD client / unmapped window).
     void clear();
 

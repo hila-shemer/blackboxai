@@ -56,7 +56,7 @@ namespace bbai {
   void View::relayout() {
     if (draw_frame) {
       wlr_scene_node_set_position(&surface_tree->node, frame::clientX(), frame::clientY());
-      deco->rebuild(cw, ch, /*focused=*/true, xdg_toplevel->title);
+      deco->rebuild(cw, ch, xdg_toplevel->title);
     } else {
       // CSD holdout: no chrome, client surface at the View origin; we still own
       // the scene tree and manage geometry.
