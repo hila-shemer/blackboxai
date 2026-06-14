@@ -11,21 +11,21 @@ under `~/.claude/projects/-home-hila-proj-blackboxai/memory/`._
 > Resume BlackboxAI (Wayland compositor rewrite of Blackbox, wlroots 0.19, C++20,
 > at `/home/hila/proj/blackboxai`). Read `docs/superpowers/RESUME.md` first, then
 > the project memory `~/.claude/projects/-home-hila-proj-blackboxai/memory/MEMORY.md`.
-> Status: **M1–M4 complete and pushed.** M1–M3 + M4 **Phase A** are on
-> `wayland-rewrite` (tip `ecdd4a7`); M4 **Phase B** (keyboard/keybindings +
-> workspaces + modal root menu) is on the forked branch **`m4-phase-b`** (tip
-> `87297dc`), **not yet merged**. Both branches are green (89% coverage, gate 80%,
-> clean-room CI-verified). My working style: pause to ask the genuinely important
-> user-owned decisions, then go all the way to push-ready with maximum effort;
-> rewrite over patch; tests + golden-PNGs over caveats; keep coverage up; use the
-> ultracode multi-agent treatment (parallel design research up front + an
-> adversarial review before pushing) for substantial milestones; for big
-> milestones offer a mid-way review checkpoint. **Next options (ask me which):**
-> (a) merge `m4-phase-b` → `wayland-rewrite` + add the `milestone: M4 complete`
-> marker commit (M1–M3 each have one; M4 does not yet); (b) start the **M5** plan
-> (style/config fidelity: drop-in `.blackboxrc`/style/menu-file parsing + slit
-> geometry); (c) knock out the deferred M4 follow-ups. Don't start coding before
-> confirming which, and surface any important decision first.
+> Status: **M1–M4 complete, merged, and pushed.** All of M1–M4 is on
+> `wayland-rewrite` (tip `5e765a4` = the `milestone: M4 … complete` marker over the
+> `Merge M4 Phase B` commit). M4 Phase B was merged `--no-ff` after a SECOND
+> adversarial review; the M4-B work branches `m4-phase-b` / `m4-phase-4-cont` (tip
+> `ec9034d`) are pushed but now subsumed by the merge. Green: 90% coverage, gate
+> 80%, clean-room CI-verified. My working style: pause to ask the genuinely
+> important user-owned decisions, then go all the way to push-ready with maximum
+> effort; rewrite over patch; tests + golden-PNGs over caveats; keep coverage up;
+> use the ultracode multi-agent treatment (parallel design research up front + an
+> adversarial review before pushing) for substantial milestones; for big milestones
+> offer a mid-way review checkpoint. **Next options (ask me which):** (a) start the
+> **M5** plan (style/config fidelity: drop-in `.blackboxrc`/style/menu-file parsing
+> + slit geometry); (b) knock out the deferred M4 follow-ups (cascade submenus,
+> toolbar auto-hide, active/inactive focus-swap, iconbar/iconify wiring). Don't
+> start coding before confirming which, and surface any important decision first.
 
 ---
 
@@ -37,14 +37,15 @@ under `~/.claude/projects/-home-hila-proj-blackboxai/memory/`._
 | **M2** | real xdg-shell client mapped & composited | `wayland-rewrite` | ✅ |
 | **M3** | Blackbox SSD decoration frame + move/resize + fcft title text | `wayland-rewrite` | ✅ |
 | **M4 Phase A** | StackingList/Workspace models + `bt::Clock`/Timer + Toolbar w/ ticking clock | `wayland-rewrite` @ `ecdd4a7` | ✅ |
-| **M4 Phase B** | Keyboard/keybindings + workspace switching + modal Rootmenu + CommandRunner | `m4-phase-b` @ `87297dc` (forked from `ecdd4a7`) | ✅ |
+| **M4 Phase B** | Keyboard/keybindings + workspace switching + modal Rootmenu + CommandRunner | merged into `wayland-rewrite` @ `db5d242` | ✅ |
+| **M4 complete** | second adversarial-review fixes + `milestone:` marker | `wayland-rewrite` @ `5e765a4` | ✅ |
 
 - Remote: `github.com:hila-shemer/blackboxai`. `main` is the untouched base (`90d2b70`).
-- **`m4-phase-b` is NOT merged into `wayland-rewrite`.** PR link offered on push:
-  `https://github.com/hila-shemer/blackboxai/pull/new/m4-phase-b`.
-- **No `milestone: M4 complete` marker commit yet** (M1–M3 each have an empty
-  `milestone: …` marker; M4 should get one after the merge).
-- 93 test cases, **89% line coverage** (gate 80%). Working tree clean.
+- **M4 Phase B IS merged into `wayland-rewrite`** (`--no-ff` merge `db5d242`, marker
+  `5e765a4`). The `m4-phase-b` / `m4-phase-4-cont` refs (tip `ec9034d`) are kept but
+  subsumed by the merge.
+- M1–M4 each have a `milestone: …` marker commit.
+- ~100 test cases, **90% line coverage** (gate 80%). Working tree clean.
 
 ## Build / test / verify (the exact commands)
 
@@ -87,9 +88,9 @@ gcovr -r . build --filter 'toolkit/' --filter 'src/' --fail-under-line=80   # co
 
 ## Next work (pick one; confirm before coding)
 
-- **Merge + milestone marker.** `git checkout wayland-rewrite && git merge --no-ff
-  m4-phase-b` (or open the PR), then an empty `git commit --allow-empty -m
-  "milestone: M4 … complete"` marker (matching M1–M3), then push.
+- _(done 2026-06-14: M4 Phase B merged into `wayland-rewrite` + `milestone: M4`
+  marker, after a second adversarial review — see the merge `db5d242` / marker
+  `5e765a4`.)_
 - **M5 — style/config fidelity (drop-in) + slit geometry** (~2.5 wk per roadmap):
   load original `.blackboxrc`/style/menu files unchanged; live re-theme via
   Configmenu; slit placement/auto-hide. This is where most of the deferred M4
