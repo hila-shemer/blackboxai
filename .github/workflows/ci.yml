@@ -1,0 +1,43 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    container: fedora:43
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: deps
+        # doctest is vendored (third_party/), so no doctest-devel needed.
+        run: >
+          dnf install -y meson ninja-build gcc-c++ gcovr pkgconf-pkg-config
+          wlroots-devel wayland-devel wayland-protocols-devel pixman-devel
+          libdrm-devel libxkbcommon-devel libpng-devel sed git
+
+      - name: build
+        run: meson setup build -Db_coverage=true -Dbuildtype=debug && ninja -C build
+
+      - name: unit tests
+        run: meson test -C build --suite unit -v
+
+      - name: system tests (headless + pixman)
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d); chmod 700 "$XDG_RUNTIME_DIR"
+          WLR_BACKENDS=headless WLR_RENDERER=pixman meson test -C build --suite system -v
+
+      - name: coverage gate (>= 80% lines on toolkit/ + src/)
+        run: >
+          gcovr -r . build --filter 'toolkit/' --filter 'src/'
+          --txt --xml coverage.xml --fail-under-line=80
+
+      - name: upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-artifacts
+          path: |
+            build/meson-logs/testlog.txt
+            tests/golden/*-actual.png
+            tests/golden/*-diff.png
+            coverage.xml
