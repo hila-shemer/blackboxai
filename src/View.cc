@@ -67,6 +67,15 @@ namespace bbai {
     wlr_scene_node_set_position(&frame_tree->node, x, y);
   }
 
+  void View::resizeTo(int x, int y, int w, int h) {
+    cw = w;
+    ch = h;
+    setPosition(x, y);
+    wlr_xdg_toplevel_set_size(xdg_toplevel, w, h);
+    // The client redraws + commits asynchronously; the commit handler re-lays-out
+    // the decoration frame at the new size (M3 resize task).
+  }
+
   void View::attachDecoration(wlr_xdg_toplevel_decoration_v1 *d) {
     decoration = d;
     deco_request_mode_.connect(&d->events.request_mode, [this](void *) {

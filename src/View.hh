@@ -31,6 +31,9 @@ namespace bbai {
 
     // Move the whole frame (and its decorations + client) to (x, y).
     void setPosition(int x, int y);
+    // Move to (x,y) and request a new content size (w,h); the decoration frame
+    // re-lays-out when the client commits the new buffer.
+    void resizeTo(int x, int y, int w, int h);
     // The frame scene tree (its node.data is this View) — for tests / hit-test.
     wlr_scene_tree *sceneTree() const { return frame_tree; }
 

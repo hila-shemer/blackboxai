@@ -1,8 +1,10 @@
 #include "Server.hh"
 #include "Output.hh"
 #include "View.hh"
+#include "Frame.hh"
 
 #include <algorithm>
+#include <linux/input-event-codes.h>   // BTN_LEFT
 
 namespace bbai {
 
@@ -67,6 +69,53 @@ namespace bbai {
     wlr_server_decoration_manager_set_default_mode(
       kde, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
 
+    // Seat + cursor. The seat advertises pointer+keyboard unconditionally (the
+    // headless backend has no real devices, but tests inject pointer events and
+    // clients still bind wl_pointer for focus). The cursor is a tracked layout
+    // point used for scene hit-testing; it is not itself a scene node.
+    seat = wlr_seat_create(display, "seat0");
+    wlr_seat_set_capabilities(seat,
+      WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD);
+    cursor = wlr_cursor_create();
+    wlr_cursor_attach_output_layout(cursor, output_layout);
+    xcursor_mgr = wlr_xcursor_manager_create(nullptr, 24);
+
+    // Real input devices (DRM/libinput backend) — never fires under headless.
+    new_input.connect(&backend->events.new_input, [this](void *data) {
+      auto *dev = static_cast<wlr_input_device *>(data);
+      if (dev->type == WLR_INPUT_DEVICE_POINTER) {
+        wlr_cursor_attach_input_device(cursor, dev);
+      } else if (dev->type == WLR_INPUT_DEVICE_KEYBOARD) {
+        wlr_keyboard *kb = wlr_keyboard_from_input_device(dev);
+        xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+        xkb_keymap *km = xkb_keymap_new_from_names(ctx, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        wlr_keyboard_set_keymap(kb, km);
+        xkb_keymap_unref(km);
+        xkb_context_unref(ctx);
+        wlr_seat_set_keyboard(seat, kb);
+      }
+    });
+
+    // Real cursor events: move/warp the cursor point then run the same handler
+    // bodies the test-injection API calls.
+    cursor_motion.connect(&cursor->events.motion, [this](void *data) {
+      auto *e = static_cast<wlr_pointer_motion_event *>(data);
+      wlr_cursor_move(cursor, &e->pointer->base, e->delta_x, e->delta_y);
+      onPointerMotion(e->time_msec);
+    });
+    cursor_motion_absolute.connect(&cursor->events.motion_absolute, [this](void *data) {
+      auto *e = static_cast<wlr_pointer_motion_absolute_event *>(data);
+      wlr_cursor_warp_absolute(cursor, &e->pointer->base, e->x, e->y);
+      onPointerMotion(e->time_msec);
+    });
+    cursor_button.connect(&cursor->events.button, [this](void *data) {
+      auto *e = static_cast<wlr_pointer_button_event *>(data);
+      onPointerButton(e->time_msec, e->button, e->state);
+    });
+    cursor_frame.connect(&cursor->events.frame, [this](void *) {
+      wlr_seat_pointer_notify_frame(seat);
+    });
+
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
       if (!active_output)                       // M1: a single output
@@ -91,14 +140,27 @@ namespace bbai {
     new_output.disconnect();
     new_xdg_toplevel.disconnect();
     new_toplevel_decoration.disconnect();
+    new_input.disconnect();
+    cursor_motion.disconnect();
+    cursor_motion_absolute.disconnect();
+    cursor_button.disconnect();
+    cursor_frame.disconnect();
     views.clear();
+    if (cursor) wlr_cursor_destroy(cursor);
+    if (xcursor_mgr) wlr_xcursor_manager_destroy(xcursor_mgr);
     if (display) {
       wl_display_destroy_clients(display);
-      wl_display_destroy(display);  // fires display_destroy -> backend finish
+      wl_display_destroy(display);  // fires display_destroy -> backend finish (incl. seat)
     }
   }
 
   void Server::removeView(View *view) {
+    if (grabbed_view == view) {
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+    if (focused_view == view) focused_view = nullptr;
     auto it = std::find_if(views.begin(), views.end(),
                            [view](const std::unique_ptr<View> &v) { return v.get() == view; });
     if (it != views.end())
@@ -117,6 +179,149 @@ namespace bbai {
 
   wlr_scene_output *Server::activeSceneOutputForTest() const {
     return active_output ? active_output->sceneOutput() : nullptr;
+  }
+
+  // --- input: hit-test, focus, grab state machine -------------------------------
+
+  View *Server::viewFromNode(wlr_scene_node *node) {
+    while (node) {
+      if (node->data) return static_cast<View *>(node->data);
+      node = node->parent ? &node->parent->node : nullptr;
+    }
+    return nullptr;
+  }
+
+  Part Server::partAt(View *v, double lx, double ly) {
+    using namespace frame;
+    const int fx = static_cast<int>(lx) - v->x();
+    const int fy = static_cast<int>(ly) - v->y();
+    const int W = v->contentWidth(), H = v->contentHeight();
+
+    if (!v->drawsFrame()) {  // CSD: only the client area, at the View origin
+      return (fx >= 0 && fy >= 0 && fx < W && fy < H) ? Part::Client : Part::None;
+    }
+    auto in = [&](Rect r) { return fx >= r.x && fy >= r.y && fx < r.x + r.w && fy < r.y + r.h; };
+    if (fx >= clientX() && fy >= clientY() && fx < clientX() + W && fy < clientY() + H)
+      return Part::Client;
+    if (in(leftGrip(W, H)))  return Part::LeftGrip;
+    if (in(rightGrip(W, H))) return Part::RightGrip;
+    if (in(closeButton(W, H)) || in(maximizeButton(W, H)) || in(iconifyButton(W, H)))
+      return Part::Button;
+    if (in(title(W, H)))     return Part::Titlebar;  // incl. the label (drag = move)
+    return Part::None;
+  }
+
+  void Server::focusView(View *v) {
+    if (focused_view == v) return;
+    if (focused_view) wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+    focused_view = v;
+    wlr_xdg_toplevel_set_activated(v->toplevel(), true);
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
+      wlr_seat_keyboard_notify_enter(seat, v->toplevel()->base->surface,
+                                     kb->keycodes, kb->num_keycodes, &kb->modifiers);
+  }
+
+  void Server::beginInteractive(View *v, CursorMode mode, uint32_t edges) {
+    grabbed_view = v;
+    cursor_mode  = mode;
+    grab_x = cursor->x;
+    grab_y = cursor->y;
+    grab_geo_x = v->x();
+    grab_geo_y = v->y();
+    grab_geo_w = v->contentWidth();
+    grab_geo_h = v->contentHeight();
+    resize_edges = edges;
+    if (mode == CursorMode::Resize)
+      wlr_xdg_toplevel_set_resizing(v->toplevel(), true);
+  }
+
+  void Server::processMove() {
+    const int nx = grab_geo_x + static_cast<int>(cursor->x - grab_x);
+    const int ny = grab_geo_y + static_cast<int>(cursor->y - grab_y);
+    grabbed_view->setPosition(nx, ny);
+  }
+
+  void Server::processResize() {
+    const double dx = cursor->x - grab_x, dy = cursor->y - grab_y;
+    int x = grab_geo_x, y = grab_geo_y, w = grab_geo_w, h = grab_geo_h;
+    if (resize_edges & WLR_EDGE_LEFT)   { x = grab_geo_x + static_cast<int>(dx); w = grab_geo_w - static_cast<int>(dx); }
+    if (resize_edges & WLR_EDGE_RIGHT)  {                                        w = grab_geo_w + static_cast<int>(dx); }
+    if (resize_edges & WLR_EDGE_TOP)    { y = grab_geo_y + static_cast<int>(dy); h = grab_geo_h - static_cast<int>(dy); }
+    if (resize_edges & WLR_EDGE_BOTTOM) {                                        h = grab_geo_h + static_cast<int>(dy); }
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
+    grabbed_view->resizeTo(x, y, w, h);
+  }
+
+  void Server::onPointerMotion(uint32_t time) {
+    if (cursor_mode == CursorMode::Move)   { processMove();   return; }
+    if (cursor_mode == CursorMode::Resize) { processResize(); return; }
+    double sx = 0, sy = 0;
+    wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
+    View *v = viewFromNode(n);
+    if (v && partAt(v, cursor->x, cursor->y) == Part::Client) {
+      wlr_surface *surf = v->toplevel()->base->surface;
+      wlr_seat_pointer_notify_enter(seat, surf, sx, sy);
+      wlr_seat_pointer_notify_motion(seat, time, sx, sy);
+    } else {
+      wlr_seat_pointer_notify_clear_focus(seat);
+    }
+  }
+
+  void Server::onPointerButton(uint32_t time, uint32_t button,
+                               wl_pointer_button_state state) {
+    if (state == WL_POINTER_BUTTON_STATE_RELEASED && cursor_mode != CursorMode::Passthrough) {
+      if (cursor_mode == CursorMode::Resize)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+      return;  // swallow the terminating release
+    }
+
+    if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+      double sx = 0, sy = 0;
+      wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
+      if (View *v = viewFromNode(n)) {
+        const Part part = partAt(v, cursor->x, cursor->y);
+        focusView(v);
+        if (button == BTN_LEFT) {
+          if (part == Part::Titlebar) { beginInteractive(v, CursorMode::Move, 0); return; }
+          if (part == Part::LeftGrip)  { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);  return; }
+          if (part == Part::RightGrip) { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT); return; }
+          if (part == Part::Button) { return; }  // buttons drawn; actions wired later
+        }
+        // press on the client area falls through to forward to the client
+      }
+    }
+    wlr_seat_pointer_notify_button(seat, time, button, state);
+  }
+
+  // --- test-only injection + introspection --------------------------------------
+
+  void Server::injectPointerMotionForTest(double lx, double ly) {
+    wlr_cursor_warp(cursor, nullptr, lx, ly);
+    onPointerMotion(nowMsec());
+  }
+
+  void Server::injectPointerButtonForTest(uint32_t button, bool pressed) {
+    onPointerButton(nowMsec(), button,
+                    pressed ? WL_POINTER_BUTTON_STATE_PRESSED
+                            : WL_POINTER_BUTTON_STATE_RELEASED);
+  }
+
+  View *Server::viewAtForTest(double lx, double ly) {
+    double sx = 0, sy = 0;
+    return viewFromNode(wlr_scene_node_at(&scene->tree.node, lx, ly, &sx, &sy));
+  }
+
+  Part Server::partAtForTest(double lx, double ly) {
+    View *v = viewAtForTest(lx, ly);
+    return v ? partAt(v, lx, ly) : Part::None;
+  }
+
+  wlr_surface *Server::focusedPointerSurfaceForTest() const {
+    return seat ? seat->pointer_state.focused_surface : nullptr;
   }
 
 } // namespace bbai

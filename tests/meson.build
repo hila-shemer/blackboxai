@@ -69,3 +69,9 @@ decoration_exe = executable('decoration-test', files('system/decoration_test.cc'
   dependencies : [harness_dep, doctest_dep])
 test('decoration', decoration_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M3 input: scene hit-test maps a cursor position to a View + frame part.
+hittest_exe = executable('hittest-test', files('system/hittest_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('hittest', hittest_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
