@@ -29,6 +29,11 @@ namespace bbai {
         return;
       }
       // A later commit at a new size (interactive resize) re-lays-out the frame.
+      // NOTE: M3 keys the frame size off the *requested* cw/ch, which the M3
+      // test client always honors. A client that clamps to its own min/max size
+      // would commit a different geometry, leaving the frame sized to the
+      // unfulfilled request — reconciling against the committed surface geometry
+      // belongs with min/max-size handling in M4.
       if (mapped && (cw != laid_w || ch != laid_h || draw_frame != laid_frame))
         relayout();
     });
