@@ -13,6 +13,7 @@
 #include "Timer.hh"
 #include "Workspace.hh"
 #include "Keybindings.hh"
+#include "StackingList.hh"
 #include "Decoration.hh"   // bbai::Part
 
 #include <memory>
@@ -39,6 +40,10 @@ namespace bbai {
 
     const std::string &socketName() const { return socket_name; }
     void removeView(View *view);
+
+    // Restack a view to the top/bottom of its layer (model + scene).
+    void raiseView(View *view);
+    void lowerView(View *view);
 
     // Shared title-text renderer for window-label decorations (M3). Loads the
     // configured font once; under a test's isolated fontconfig it resolves to
@@ -135,6 +140,7 @@ namespace bbai {
     bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame;
     Output *active_output = nullptr;            // M1: single output
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
+    StackingList stacking_;                     // Z-order across all views (M4)
     bt::TextRenderer title_font;                // titlebar label font (M3)
     std::unique_ptr<bt::Clock> clock_;          // wall/monotonic time (M4)
     std::unique_ptr<TimerRegistry> timer_registry_;
