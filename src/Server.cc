@@ -118,6 +118,16 @@ namespace bbai {
       wlr_seat_pointer_notify_frame(seat);
     });
 
+    // Clock + timer registry. Headless tests use a VirtualClock at a fixed UTC
+    // epoch (14:05:00 -> "02:05 PM") and drive timers by hand via
+    // advanceClockForTest, so the ticking clock is deterministic; production uses
+    // the real clock + this display's event loop.
+    if (headless)
+      clock_ = std::make_unique<bt::VirtualClock>(/*wall=*/14 * 3600 + 5 * 60, /*now_ms=*/0);
+    else
+      clock_ = std::make_unique<bt::SystemClock>();
+    timer_registry_ = std::make_unique<TimerRegistry>(*clock_, headless ? nullptr : loop);
+
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
       if (!active_output)                       // M1: a single output
@@ -148,6 +158,7 @@ namespace bbai {
     cursor_button.disconnect();
     cursor_frame.disconnect();
     views.clear();
+    timer_registry_.reset();  // removes its wl_event_source before the loop dies
     if (cursor) wlr_cursor_destroy(cursor);
     if (xcursor_mgr) wlr_xcursor_manager_destroy(xcursor_mgr);
     if (display) {
@@ -344,6 +355,16 @@ namespace bbai {
 
   wlr_surface *Server::focusedPointerSurfaceForTest() const {
     return seat ? seat->pointer_state.focused_surface : nullptr;
+  }
+
+  void Server::advanceClockForTest(int64_t seconds) {
+    if (auto *vc = dynamic_cast<bt::VirtualClock *>(clock_.get()))
+      vc->advance(seconds);
+    timer_registry_->fireDue(clock_->nowMs());
+  }
+
+  int64_t Server::wallSecondsForTest() const {
+    return clock_->wallSeconds();
   }
 
 } // namespace bbai
