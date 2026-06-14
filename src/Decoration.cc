@@ -11,24 +11,20 @@ namespace bbai {
 
   namespace {
     // Default M3 frame palette (style fidelity is M5; these are self-contained
-    // defaults using colors the toolkit parser knows or plain hex). Classic
-    // Blackbox grey, focused brighter than unfocused.
+    // defaults using plain hex). Classic Blackbox grey. M3 renders the active
+    // (focused) look only — the active/inactive distinction needs multiple
+    // windows and lands with window management in M4.
     struct Look { const char *desc; const char *c1; const char *c2; };
 
-    Look titleLook (bool f) { return f ? Look{"raised gradient diagonal", "#c0c0c0", "#808080"}
-                                       : Look{"flat solid",                "#808080", ""}; }
-    Look labelLook (bool f) { return f ? Look{"sunken gradient diagonal", "#b8b8b8", "#888888"}
-                                       : Look{"flat solid",               "#707070", ""}; }
-    Look handleLook(bool f) { return f ? Look{"raised gradient diagonal", "#c0c0c0", "#808080"}
-                                       : Look{"flat solid",               "#707070", ""}; }
-    Look gripLook  (bool f) { return f ? Look{"raised gradient diagonal", "#d8d8d8", "#909090"}
-                                       : Look{"raised solid",             "#909090", ""}; }
-    Look buttonLook(bool f) { return f ? Look{"raised gradient diagonal", "#e0e0e0", "#a8a8a8"}
-                                       : Look{"flat solid",               "#989898", ""}; }
+    constexpr Look kTitleLook  {"raised gradient diagonal", "#c0c0c0", "#808080"};
+    constexpr Look kLabelLook  {"sunken gradient diagonal", "#b8b8b8", "#888888"};
+    constexpr Look kHandleLook {"raised gradient diagonal", "#c0c0c0", "#808080"};
+    constexpr Look kGripLook   {"raised gradient diagonal", "#d8d8d8", "#909090"};
+    constexpr Look kButtonLook {"raised gradient diagonal", "#e0e0e0", "#a8a8a8"};
 
-    bt::Color textColor(bool f)   { return f ? bt::Color(0, 0, 0)    : bt::Color(56, 56, 56); }
-    bt::Color borderColor()       { return bt::Color(48, 48, 48); }
-    bt::Color picColor()          { return bt::Color(32, 32, 32); }
+    bt::Color textColor()   { return bt::Color(0, 0, 0); }
+    bt::Color borderColor() { return bt::Color(48, 48, 48); }
+    bt::Color picColor()    { return bt::Color(32, 32, 32); }
 
     bt::Texture makeTexture(const Look &l) {
       bt::Texture t;
@@ -113,7 +109,7 @@ namespace bbai {
     nodes.push_back(&rect->node);
   }
 
-  void Decoration::rebuild(int W, int H, bool focused, const char *titleText) {
+  void Decoration::rebuild(int W, int H, const char *titleText) {
     clear();
     using namespace frame;
 
@@ -122,24 +118,24 @@ namespace bbai {
     emitRect(rightBorder(W, H), borderColor());
 
     // Titlebar.
-    emit(title(W, H), renderTexture(frameWidth(W), kTitleHeight, titleLook(focused)));
+    emit(title(W, H), renderTexture(frameWidth(W), kTitleHeight, kTitleLook));
 
     // Label with the window title text, left-aligned, vertically centred.
     {
       const Rect lr = label(W, H);
-      std::vector<uint32_t> px = renderTexture(lr.w, lr.h, labelLook(focused));
+      std::vector<uint32_t> px = renderTexture(lr.w, lr.h, kLabelLook);
       if (font && font->ok()) {
         const int top_pad = (kLabelHeight - font->height()) / 2;
         const int baseline = (top_pad > 0 ? top_pad : 0) + font->ascent();
         font->drawText(px, lr.w, lr.h, /*penX=*/1, baseline, decodeUtf8(titleText),
-                       textColor(focused));
+                       textColor());
       }
       emit(lr, std::move(px));
     }
 
     // Buttons (drawn; only close is wired, later). iconify | ... | maximize close
     auto button = [&](Rect r, void (*glyph)(std::vector<uint32_t> &, int, const bt::Color &)) {
-      std::vector<uint32_t> px = renderTexture(r.w, r.h, buttonLook(focused));
+      std::vector<uint32_t> px = renderTexture(r.w, r.h, kButtonLook);
       glyph(px, kButtonWidth, picColor());
       emit(r, std::move(px));
     };
@@ -148,9 +144,9 @@ namespace bbai {
     button(closeButton(W, H),    drawCloseGlyph);
 
     // Handle and the two resize grips on top of it.
-    emit(handle(W, H), renderTexture(frameWidth(W), kHandleHeight, handleLook(focused)));
-    emit(leftGrip(W, H),  renderTexture(kGripWidth, kHandleHeight, gripLook(focused)));
-    emit(rightGrip(W, H), renderTexture(kGripWidth, kHandleHeight, gripLook(focused)));
+    emit(handle(W, H), renderTexture(frameWidth(W), kHandleHeight, kHandleLook));
+    emit(leftGrip(W, H),  renderTexture(kGripWidth, kHandleHeight, kGripLook));
+    emit(rightGrip(W, H), renderTexture(kGripWidth, kHandleHeight, kGripLook));
   }
 
 } // namespace bbai
