@@ -19,6 +19,10 @@ wayland_protos     = dependency('wayland-protocols')
 pixman_dep         = dependency('pixman-1')
 libdrm_dep         = dependency('libdrm')
 
+# Generated protocol code: server headers the wlroots headers need (e.g.
+# xdg-shell-protocol.h) + client stubs for the in-process test client.
+subdir('protocols')
+
 # wlroots 0.19's wlr_scene.h uses the C99 '[static 4]' array-parameter hint,
 # which is invalid C++. Generate a sanitized copy (hint -> '[]') that
 # toolkit/wlr.hpp includes ahead of the system header (it shares the include
@@ -36,10 +40,10 @@ wlr_scene_compat = custom_target('wlr_scene_compat.h',
 # its build dir on the consumer's include path — the same idiom wlroots
 # projects use for wayland-scanner output).
 wlr_dep = declare_dependency(
-  dependencies : [wlroots_dep, wayland_server_dep, pixman_dep, libdrm_dep],
+  dependencies : [wlroots_dep, wayland_server_dep, pixman_dep, libdrm_dep,
+                  server_protos_dep],
   sources      : wlr_scene_compat)
 
-subdir('protocols')
 subdir('toolkit')
 subdir('src')
 if get_option('tests')

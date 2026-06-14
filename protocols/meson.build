@@ -26,3 +26,19 @@ endforeach
 client_protos_dep = declare_dependency(
   sources      : client_proto_targets,
   dependencies : wayland_client_dep)
+
+# Server-side protocol headers required by the wlroots headers themselves
+# (wlr_xdg_shell.h includes "xdg-shell-protocol.h"). Folded into wlr_dep so
+# every TU that includes toolkit/wlr.hpp can find them.
+server_protocols = [
+  protos_dir / 'stable' / 'xdg-shell' / 'xdg-shell.xml',
+]
+server_proto_targets = []
+foreach xml : server_protocols
+  base = fs.stem(xml)
+  server_proto_targets += custom_target(base + '-server-header',
+    output  : base + '-protocol.h',
+    command : [wl_scanner, 'server-header', xml, '@OUTPUT@'])
+endforeach
+
+server_protos_dep = declare_dependency(sources : server_proto_targets)

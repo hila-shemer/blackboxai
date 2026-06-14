@@ -33,6 +33,12 @@ extern "C" {
 #include <wlr/util/log.h>
 #include <wlr/interfaces/wlr_buffer.h>
 
+// client-facing globals (M2+)
+#include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_single_pixel_buffer_v1.h>
+
 } // extern "C"
 
 #endif // BLACKBOXAI_WLR_HPP

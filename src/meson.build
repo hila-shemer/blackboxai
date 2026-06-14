@@ -6,6 +6,7 @@ bbai_lib = static_library('bbai',
     'DataBuffer.cc',
     'Server.cc',
     'Output.cc',
+    'View.cc',
   ),
   include_directories : [src_inc],
   dependencies : [bt_dep, wlr_dep])
