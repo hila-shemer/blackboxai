@@ -52,6 +52,7 @@ namespace bbai {
 
     // client-facing globals
     wlr_xdg_shell *xdg_shell = nullptr;
+    wlr_xdg_decoration_manager_v1 *xdg_decoration = nullptr;
 
     // fixed layer order (bottom -> top): background, bottom, window, top, overlay
     wlr_scene_tree *layer_background = nullptr;
@@ -67,6 +68,7 @@ namespace bbai {
     std::string socket_name;
     bt::Listener new_output;
     bt::Listener new_xdg_toplevel;
+    bt::Listener new_toplevel_decoration;
     Output *active_output = nullptr;            // M1: single output
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
     bt::TextRenderer title_font;                // titlebar label font (M3)

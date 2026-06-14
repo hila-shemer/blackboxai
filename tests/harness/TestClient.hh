@@ -16,8 +16,15 @@ namespace bbai::test {
 
   class TestClient {
   public:
+    // Whether the client negotiates server-side decorations via xdg-decoration.
+    //   None       — never binds the protocol (compositor's default policy wins)
+    //   RequestSSD — binds + set_mode(server_side)
+    //   RequestCSD — binds + set_mode(client_side) (a CSD holdout)
+    enum class Deco { None, RequestSSD, RequestCSD };
+
     // argb is a packed ARGB8888 (premultiplied) constant; the window is w x h.
-    TestClient(const std::string &socket, uint32_t argb, int w, int h);
+    TestClient(const std::string &socket, uint32_t argb, int w, int h,
+               Deco deco = Deco::None);
     ~TestClient();
     TestClient(const TestClient &) = delete;
     TestClient &operator=(const TestClient &) = delete;
