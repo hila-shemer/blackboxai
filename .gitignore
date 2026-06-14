@@ -67,3 +67,14 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Upstream source kept locally for reference/porting only (not vendored into history)
+reference/
+
+# Coverage artifacts
+*.gcda
+*.gcno
+coverage.xml
+cov/
+*-actual.png
+*-diff.png
