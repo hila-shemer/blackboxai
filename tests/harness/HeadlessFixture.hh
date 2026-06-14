@@ -9,6 +9,8 @@
 #include <vector>
 #include <cstdint>
 
+namespace bbai { class Server; }
+
 namespace bbai::test {
 
   // One captured frame, row-major ARGB8888 with alpha forced to 0xFF.
@@ -16,6 +18,10 @@ namespace bbai::test {
     uint32_t w = 0, h = 0;
     std::vector<uint32_t> pixels;
   };
+
+  // Render and read back the current scene on `server`'s active output.
+  // Throws std::runtime_error on failure.
+  Frame captureFrame(bbai::Server &server);
 
   // Boot a headless Server, pump the loop until the single output composits,
   // and capture its frame. Throws std::runtime_error on any failure.
