@@ -27,6 +27,7 @@ namespace bbai {
   class Output;
   class View;
   class Toolbar;
+  class Menu;
   struct Keyboard;
 
   class Server {
@@ -58,6 +59,13 @@ namespace bbai {
 
     CommandRunner &commandRunner() { return *command_runner_; }
     void setCommandRunnerForTest(CommandRunner *r) { command_runner_ = r; }
+
+    // Modal root menu (compositor chrome on layer_overlay).
+    void openRootMenu(double lx, double ly);
+    void closeMenus();
+    void activeOutputSize(int &w, int &h) const;
+    bool menuOpenForTest() const { return active_menu_ != nullptr; }
+    int activeMenuItemForTest() const;
 
     // --- test-only input injection + hit-test introspection (headless has no
     // real input devices, so tests drive the SAME onPointer* handlers the real
@@ -128,6 +136,11 @@ namespace bbai {
     bool dispatchBinding(uint32_t mods, xkb_keysym_t sym);  // true if a binding fired
     void executeAction(const Action &a);
     void cycleWorkspace(int delta);
+    // menu modal helpers
+    void handleMenuButton(uint32_t button, wl_pointer_button_state state);
+    bool handleMenuKey(xkb_keysym_t sym);                   // true if consumed
+    void itemClicked(int index);
+    bool overDesktop(double lx, double ly);                 // background, not a view/chrome
     void beginInteractive(View *v, CursorMode mode, uint32_t edges);
     void processMove();
     void processResize();
@@ -160,6 +173,7 @@ namespace bbai {
     std::vector<std::unique_ptr<Keyboard>> keyboards_;
     std::set<uint32_t> swallowed_keycodes_;     // bound presses whose release we also swallow
     Action last_action_;                        // last fired binding (test introspection)
+    std::unique_ptr<Menu> active_menu_;         // open root menu (nullptr = none); the modal gate
 
     // interactive grab state
     CursorMode cursor_mode = CursorMode::Passthrough;

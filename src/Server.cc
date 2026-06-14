@@ -3,10 +3,22 @@
 #include "View.hh"
 #include "Toolbar.hh"
 #include "Keyboard.hh"
+#include "Menu.hh"
+#include "Rootmenu.hh"
 #include "Frame.hh"
 
 #include <algorithm>
-#include <linux/input-event-codes.h>   // BTN_LEFT
+#include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
+
+namespace {
+  // Is `node` somewhere under the given scene layer tree?
+  bool isUnder(wlr_scene_node *node, wlr_scene_tree *layer) {
+    if (!node) return false;
+    for (wlr_scene_tree *t = node->parent; t; t = t->node.parent)
+      if (t == layer) return true;
+    return false;
+  }
+}
 
 namespace bbai {
 
@@ -173,6 +185,7 @@ namespace bbai {
     cursor_button.disconnect();
     cursor_frame.disconnect();
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish
+    active_menu_.reset();     // destroys its overlay scene tree
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
@@ -303,6 +316,11 @@ namespace bbai {
   }
 
   void Server::onPointerMotion(uint32_t time) {
+    if (active_menu_) {  // modal: hover highlights the item under the cursor
+      active_menu_->setActive(active_menu_->itemIndexAtGlobal(
+        static_cast<int>(cursor->x), static_cast<int>(cursor->y)));
+      return;
+    }
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
     if (cursor_mode == CursorMode::Resize) { processResize(); return; }
 
@@ -332,6 +350,8 @@ namespace bbai {
 
   void Server::onPointerButton(uint32_t time, uint32_t button,
                                wl_pointer_button_state state) {
+    if (active_menu_) { handleMenuButton(button, state); return; }  // modal gate
+
     if (state == WL_POINTER_BUTTON_STATE_RELEASED && cursor_mode != CursorMode::Passthrough) {
       if (cursor_mode == CursorMode::Resize)
         wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
@@ -342,6 +362,11 @@ namespace bbai {
     }
 
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+      // Right-click on the bare desktop opens the modal root menu.
+      if (button == BTN_RIGHT && overDesktop(cursor->x, cursor->y)) {
+        openRootMenu(cursor->x, cursor->y);
+        return;
+      }
       double sx = 0, sy = 0;
       wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
       if (View *v = viewFromNode(n)) {
@@ -395,7 +420,12 @@ namespace bbai {
     const uint32_t mods = wlr_keyboard_get_modifiers(kb);
 
     if (state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-      // (menu-modal key handling is added in B8.)
+      if (active_menu_) {  // modal: keys drive the menu, never the client
+        for (int i = 0; i < nsyms; ++i)
+          if (handleMenuKey(syms[i])) break;
+        swallowed_keycodes_.insert(keycode);
+        return;
+      }
       for (int i = 0; i < nsyms; ++i) {
         if (dispatchBinding(mods, syms[i])) {
           swallowed_keycodes_.insert(keycode);  // also swallow the matching release
@@ -439,8 +469,8 @@ namespace bbai {
     case Action::CloseWindow:
       if (focused_view) wlr_xdg_toplevel_send_close(focused_view->toplevel());
       break;
-    case Action::OpenMenu:  break;  // B8: openRootMenu at the cursor
-    case Action::CycleNext: break;  // B5: cycle focus within the workspace
+    case Action::OpenMenu:  openRootMenu(cursor->x, cursor->y); break;
+    case Action::CycleNext: break;  // cycle focus within the workspace (future)
     case Action::CyclePrev: break;
     case Action::None:      break;
     }
@@ -502,7 +532,96 @@ namespace bbai {
   }
 
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
+    if (active_menu_) { if (pressed) handleMenuKey(sym); return; }
     if (pressed) dispatchBinding(mods, sym);
+  }
+
+  // --- modal root menu ----------------------------------------------------------
+
+  void Server::activeOutputSize(int &w, int &h) const {
+    if (wlr_scene_output *so = activeSceneOutputForTest()) {
+      w = so->output->width; h = so->output->height;
+    } else { w = 1280; h = 720; }
+  }
+
+  int Server::activeMenuItemForTest() const {
+    return active_menu_ ? active_menu_->activeIndex() : -1;
+  }
+
+  bool Server::overDesktop(double lx, double ly) {
+    double sx = 0, sy = 0;
+    wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, lx, ly, &sx, &sy);
+    if (!n) return true;                                       // nothing -> desktop
+    if (viewFromNode(n)) return false;                         // a client window
+    if (isUnder(n, layer_top) || isUnder(n, layer_overlay)) return false;  // chrome
+    return true;                                               // background texture
+  }
+
+  void Server::openRootMenu(double lx, double ly) {
+    if (active_menu_) return;
+    active_menu_ = std::make_unique<Menu>(*this, rootmenu::title(),
+                                          rootmenu::build(workspaces_));
+    active_menu_->show(static_cast<int>(lx), static_cast<int>(ly));
+    wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
+  }
+
+  void Server::closeMenus() {
+    active_menu_.reset();
+    onPointerMotion(nowMsec());   // restore normal pointer focus
+  }
+
+  void Server::handleMenuButton(uint32_t, wl_pointer_button_state state) {
+    if (state != WL_POINTER_BUTTON_STATE_PRESSED) return;  // activate on press
+    const int idx = active_menu_->itemIndexAtGlobal(static_cast<int>(cursor->x),
+                                                    static_cast<int>(cursor->y));
+    if (idx >= 0) { itemClicked(idx); return; }
+    if (!active_menu_->containsGlobal(static_cast<int>(cursor->x),
+                                     static_cast<int>(cursor->y)))
+      closeMenus();   // a press outside the menu dismisses it
+  }
+
+  bool Server::handleMenuKey(xkb_keysym_t sym) {
+    if (!active_menu_) return false;
+    const int n = active_menu_->itemCount();
+    const int a = active_menu_->activeIndex();
+    switch (sym) {
+    case XKB_KEY_Escape:
+      closeMenus();
+      return true;
+    case XKB_KEY_Down:
+      for (int k = 1; k <= n; ++k) {
+        const int j = ((a < 0 ? -1 : a) + k) % n;
+        if (active_menu_->item(j).selectable()) { active_menu_->setActive(j); break; }
+      }
+      return true;
+    case XKB_KEY_Up:
+      for (int k = 1; k <= n; ++k) {
+        const int j = (((a < 0 ? 0 : a) - k) % n + n) % n;
+        if (active_menu_->item(j).selectable()) { active_menu_->setActive(j); break; }
+      }
+      return true;
+    case XKB_KEY_Return:
+    case XKB_KEY_space:
+      if (a >= 0 && active_menu_->item(a).selectable()) itemClicked(a);
+      return true;
+    default:
+      return true;   // swallow every key while the menu is modal
+    }
+  }
+
+  void Server::itemClicked(int index) {
+    if (!active_menu_) return;
+    const MenuItem it = active_menu_->item(index);  // copy before closeMenus destroys the menu
+    closeMenus();
+    switch (it.action) {
+    case MenuItem::Act::Exec:            commandRunner().run(it.argv); break;
+    case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(it.workspace); break;
+    case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
+    case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
+    case MenuItem::Act::Exit:            terminate(); break;
+    case MenuItem::Act::Restart:         break;  // stub in M4
+    case MenuItem::Act::None:            break;
+    }
   }
 
   void Server::advanceClockForTest(int64_t seconds) {
