@@ -17,6 +17,15 @@ unit_exe = executable('unit-tests', unit_sources,
   dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
 test('unit', unit_exe, suite : 'unit')
 
+# Text renderer determinism test — its own executable so it can run under an
+# isolated fontconfig (FONTCONFIG_FILE + cwd = source root, so the conf's
+# prefix="cwd" <dir> resolves to the bundled font).
+text_test_exe = executable('text-test', files('unit/text_test.cc'),
+  dependencies : [doctest_dep, bttext_dep])
+test('text', text_test_exe, suite : 'unit',
+  workdir : meson.project_source_root(),
+  env : ['FONTCONFIG_FILE=' + (meson.project_source_root() / 'tests' / 'fixtures' / 'fonts.conf')])
+
 # Reusable headless capture + golden harness, plus the in-process test client.
 # HeadlessFixture.cc is server-side (bbai_dep) and TestClient.cc is client-side
 # (wayland-client + generated client stubs); they never share a TU.
