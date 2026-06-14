@@ -39,26 +39,6 @@ namespace bbai {
       return img.renderBuffer(makeTexture(l));
     }
 
-    // Minimal UTF-8 -> UTF-32 (enough for window titles; malformed bytes pass
-    // through as their raw value so rendering never throws).
-    std::u32string decodeUtf8(const char *s) {
-      std::u32string out;
-      if (!s) return out;
-      const auto *p = reinterpret_cast<const unsigned char *>(s);
-      while (*p) {
-        char32_t cp; int extra;
-        if (*p < 0x80)        { cp = *p;        extra = 0; }
-        else if (*p < 0xE0)   { cp = *p & 0x1F; extra = 1; }
-        else if (*p < 0xF0)   { cp = *p & 0x0F; extra = 2; }
-        else                  { cp = *p & 0x07; extra = 3; }
-        ++p;
-        for (int i = 0; i < extra && (*p & 0xC0) == 0x80; ++i, ++p)
-          cp = (cp << 6) | (*p & 0x3F);
-        out.push_back(cp);
-      }
-      return out;
-    }
-
     inline void setPx(std::vector<uint32_t> &px, int w, int h, int x, int y,
                       const bt::Color &c) {
       if (x < 0 || y < 0 || x >= w || y >= h) return;
@@ -127,7 +107,7 @@ namespace bbai {
       if (font && font->ok()) {
         const int top_pad = (kLabelHeight - font->height()) / 2;
         const int baseline = (top_pad > 0 ? top_pad : 0) + font->ascent();
-        font->drawText(px, lr.w, lr.h, /*penX=*/1, baseline, decodeUtf8(titleText),
+        font->drawText(px, lr.w, lr.h, /*penX=*/1, baseline, bt::decodeUtf8(titleText),
                        textColor());
       }
       emit(lr, std::move(px));

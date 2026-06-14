@@ -11,6 +11,7 @@
 #include "Text.hh"
 #include "Clock.hh"
 #include "Timer.hh"
+#include "Workspace.hh"
 #include "Decoration.hh"   // bbai::Part
 
 #include <memory>
@@ -21,6 +22,7 @@ namespace bbai {
 
   class Output;
   class View;
+  class Toolbar;
 
   class Server {
   public:
@@ -39,6 +41,7 @@ namespace bbai {
     // configured font once; under a test's isolated fontconfig it resolves to
     // the bundled font deterministically.
     bt::TextRenderer *titleFont() { return &title_font; }
+    WorkspaceModel &workspaces() { return workspaces_; }
 
     // --- test-only input injection + hit-test introspection (headless has no
     // real input devices, so tests drive the SAME onPointer* handlers the real
@@ -114,6 +117,8 @@ namespace bbai {
     bt::TextRenderer title_font;                // titlebar label font (M3)
     std::unique_ptr<bt::Clock> clock_;          // wall/monotonic time (M4)
     std::unique_ptr<TimerRegistry> timer_registry_;
+    WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
+    std::unique_ptr<Toolbar> toolbar_;          // top-layer chrome (M4)
 
     // interactive grab state
     CursorMode cursor_mode = CursorMode::Passthrough;
