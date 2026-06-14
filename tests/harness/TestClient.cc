@@ -25,6 +25,7 @@ namespace bbai::test {
     wl_buffer *buffer = nullptr;
     uint32_t argb = 0;
     int w = 0, h = 0;
+    int pending_w = 0, pending_h = 0;  // size from the latest toplevel.configure
     TestClient::Deco deco = TestClient::Deco::None;
     bool created = false;
   };
@@ -54,11 +55,28 @@ namespace bbai::test {
   }
   static const xdg_wm_base_listener s_wm_base_listener = { wm_ping };
 
-  // First xdg_surface.configure: ack and attach the colored buffer.
+  // xdg_toplevel.configure carries the size the compositor wants; remember it so
+  // the next surface.configure can (re)make a buffer of that size (resize).
+  static void tl_configure(void *data, xdg_toplevel *, int32_t width,
+                           int32_t height, wl_array *) {
+    auto *c = static_cast<TestClient::Impl *>(data);
+    if (width > 0 && height > 0) { c->pending_w = width; c->pending_h = height; }
+  }
+  static void tl_close(void *, xdg_toplevel *) {}
+  static const xdg_toplevel_listener s_xdg_toplevel_listener = {
+    .configure = tl_configure, .close = tl_close };
+
+  // xdg_surface.configure: ack and (re)attach the colored buffer at the size the
+  // compositor asked for (creating it on first map, replacing it on resize).
   static void surf_configure(void *data, xdg_surface *xs, uint32_t serial) {
     auto *c = static_cast<TestClient::Impl *>(data);
     xdg_surface_ack_configure(xs, serial);
-    if (!c->buffer) {
+    const int tw = c->pending_w > 0 ? c->pending_w : c->w;
+    const int th = c->pending_h > 0 ? c->pending_h : c->h;
+    if (!c->buffer || tw != c->w || th != c->h) {
+      if (c->buffer) wl_buffer_destroy(c->buffer);
+      c->w = tw;
+      c->h = th;
       c->buffer = makeShmBuffer(c);
       wl_surface_attach(c->surface, c->buffer, 0, 0);
       wl_surface_damage_buffer(c->surface, 0, 0, c->w, c->h);
@@ -72,6 +90,7 @@ namespace bbai::test {
     c->xdgsurf = xdg_wm_base_get_xdg_surface(c->wm_base, c->surface);
     xdg_surface_add_listener(c->xdgsurf, &s_xdg_surface_listener, c);
     c->toplevel = xdg_surface_get_toplevel(c->xdgsurf);
+    xdg_toplevel_add_listener(c->toplevel, &s_xdg_toplevel_listener, c);
     xdg_toplevel_set_title(c->toplevel, "bbai-test");
     if (c->deco != TestClient::Deco::None && c->deco_mgr) {
       c->decoration =

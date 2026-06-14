@@ -56,7 +56,9 @@ namespace bbai {
     std::unique_ptr<Decoration> deco;
     wlr_xdg_toplevel_decoration_v1 *decoration = nullptr;
     int pos_x = 160, pos_y = 120;
-    int cw = 200, ch = 150;   // content size (fixed in M3 until resize lands)
+    int cw = 200, ch = 150;   // requested content size
+    int laid_w = -1, laid_h = -1;  // size the decorations were last built for
+    bool laid_frame = false;       // whether the last layout drew the frame
     bool mapped = false;
     bool draw_frame = true;   // default SSD; a CLIENT_SIDE request flips this off
     bt::Listener map_, unmap_, commit_, destroy_;

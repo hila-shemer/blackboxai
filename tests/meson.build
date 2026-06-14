@@ -81,3 +81,9 @@ move_exe = executable('move-test', files('system/move_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('move', move_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# M3 interactive resize: grip drag, decoration re-layout on commit.
+resize_exe = executable('resize-test', files('system/resize_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('resize', resize_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
