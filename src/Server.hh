@@ -8,6 +8,7 @@
 #include "wlr.hpp"
 #include "listener.hpp"
 #include "Resource.hh"
+#include "Text.hh"
 
 #include <memory>
 #include <string>
@@ -30,6 +31,11 @@ namespace bbai {
 
     const std::string &socketName() const { return socket_name; }
     void removeView(View *view);
+
+    // Shared title-text renderer for window-label decorations (M3). Loads the
+    // configured font once; under a test's isolated fontconfig it resolves to
+    // the bundled font deterministically.
+    bt::TextRenderer *titleFont() { return &title_font; }
 
     // test-only accessors (M1 has a single output)
     Output *activeOutputForTest() const { return active_output; }
@@ -63,6 +69,7 @@ namespace bbai {
     bt::Listener new_xdg_toplevel;
     Output *active_output = nullptr;            // M1: single output
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
+    bt::TextRenderer title_font;                // titlebar label font (M3)
   };
 
 } // namespace bbai
