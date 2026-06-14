@@ -18,6 +18,10 @@ unit_sources = files(
   'unit/clock_test.cc',
   'unit/timer_test.cc',
   'unit/toolbar_geom_test.cc',
+  'unit/keycode_test.cc',
+  'unit/keybinding_test.cc',
+  'unit/menu_geometry_test.cc',
+  'unit/command_runner_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
@@ -104,4 +108,32 @@ test('clock_seam', clock_seam_exe, suite : 'system',
 toolbar_exe = executable('toolbar-test', files('system/toolbar_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('toolbar', toolbar_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# M4 keybindings: Mod4 actions via the deviceless key injector.
+keybinding_exe = executable('keybinding-test', files('system/keybinding_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('keybinding', keybinding_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# M4 restacking: View is a StackEntity; raise/lower + show/hide.
+restack_exe = executable('restack-test', files('system/restack_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('restack', restack_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# M4 workspace switching: show/hide + focus restore + label, two clients.
+ws_switch_exe = executable('workspace-switch-test', files('system/workspace_switch_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('workspace_switch', ws_switch_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# M4 root menu: modal chrome on overlay + dismiss + actions.
+rootmenu_exe = executable('rootmenu-test', files('system/rootmenu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('rootmenu', rootmenu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+menu_action_exe = executable('menu-action-test', files('system/menu_action_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('menu_action', menu_action_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
