@@ -14,6 +14,8 @@ doctest_dep = declare_dependency(
 # wlroots is pinned to 0.19 and version-gated (ABI breaks every minor release).
 wlroots_dep        = dependency('wlroots-0.19', version : ['>=0.19.0', '<0.20.0'])
 wayland_server_dep = dependency('wayland-server')
+wayland_client_dep = dependency('wayland-client')
+wayland_protos     = dependency('wayland-protocols')
 pixman_dep         = dependency('pixman-1')
 libdrm_dep         = dependency('libdrm')
 
@@ -37,6 +39,7 @@ wlr_dep = declare_dependency(
   dependencies : [wlroots_dep, wayland_server_dep, pixman_dep, libdrm_dep],
   sources      : wlr_scene_compat)
 
+subdir('protocols')
 subdir('toolkit')
 subdir('src')
 if get_option('tests')
