@@ -13,21 +13,10 @@
 
 namespace bbai::test {
 
-  Frame captureFirstFrame() {
-    setenv("WLR_BACKENDS", "headless", 1);
-    setenv("WLR_RENDERER", "pixman", 1);
-
-    Server server(/*headless=*/true);
-    if (!server.ok())
-      throw std::runtime_error("headless Server failed to start");
-
-    // The output is created synchronously by wlr_headless_add_output during
-    // construction; pump a few iterations defensively in case anything defers.
-    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
-      server.dispatch();
+  Frame captureFrame(Server &server) {
     wlr_scene_output *so = server.activeSceneOutputForTest();
     if (!so)
-      throw std::runtime_error("no scene output after pumping the event loop");
+      throw std::runtime_error("no scene output to capture");
 
     // Render the scene into a fresh output-state buffer (no page-flip needed).
     wlr_output_state st;
@@ -62,6 +51,21 @@ namespace bbai::test {
     wlr_buffer_end_data_ptr_access(st.buffer);
     wlr_output_state_finish(&st);
     return f;
+  }
+
+  Frame captureFirstFrame() {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    if (!server.ok())
+      throw std::runtime_error("headless Server failed to start");
+
+    // The output is created synchronously by wlr_headless_add_output during
+    // construction; pump a few iterations defensively in case anything defers.
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+      server.dispatch();
+    return captureFrame(server);
   }
 
   // ---- libpng helpers (RGBA8) -------------------------------------------------
