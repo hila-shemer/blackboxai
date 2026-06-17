@@ -132,4 +132,10 @@ namespace bbai {
     return decoration ? static_cast<int>(decoration->current.mode) : -1;
   }
 
+  void View::setFocused(bool f) {
+    if (focused_ == f) return;     // idempotent
+    focused_ = f;
+    if (mapped && draw_frame) relayout();
+  }
+
 } // namespace bbai
