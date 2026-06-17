@@ -19,7 +19,7 @@ namespace bt { class Texture; class TextRenderer; }
 
 namespace bbai {
 
-  enum class Part { None, Titlebar, Label, Button, LeftGrip, RightGrip, Client };
+  enum class Part { None, Titlebar, Label, IconifyButton, MaximizeButton, CloseButton, LeftGrip, RightGrip, Client };
 
   class Decoration {
   public:
