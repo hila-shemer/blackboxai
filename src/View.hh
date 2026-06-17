@@ -47,6 +47,10 @@ namespace bbai {
     void setOnWorkspace(bool on);
     bool visible() const;
 
+    // Iconified state: a minimised window is hidden regardless of workspace.
+    void setIconified(bool i);
+    bool isIconified() const { return iconified_; }
+
     // xdg-decoration: a decoration object for this toplevel appeared. Decide and
     // schedule its mode (request SSD / honor CSD holdout).
     void attachDecoration(wlr_xdg_toplevel_decoration_v1 *deco);
@@ -63,6 +67,7 @@ namespace bbai {
   private:
     void relayout();             // (re)build decorations for the current size + focus
     void chooseDecorationMode(); // the SSD/CSD rule; safe to call repeatedly
+    void applyVisibility();      // sync frame_tree enable from on_workspace_ + iconified_
 
     Server &server;
     wlr_xdg_toplevel *xdg_toplevel;
@@ -71,6 +76,8 @@ namespace bbai {
     std::unique_ptr<Decoration> deco;
     wlr_xdg_toplevel_decoration_v1 *decoration = nullptr;
     unsigned workspace_ = 0;  // owning workspace (M4)
+    bool on_workspace_ = true;  // last value passed to setOnWorkspace
+    bool iconified_ = false;    // minimised state; hides frame regardless of workspace
     int pos_x = 160, pos_y = 120;
     int cw = 200, ch = 150;   // requested content size
     int laid_w = -1, laid_h = -1;  // size the decorations were last built for
