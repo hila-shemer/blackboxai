@@ -150,3 +150,9 @@ view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'
   dependencies : [harness_dep, doctest_dep])
 test('view_focus', view_focus_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
+
+# F1.3 focusView/clearFocus restyle: titlebar click propagates focus state to both views.
+focus_restyle_exe = executable('focus-restyle-test', files('system/focus_restyle_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('focus_restyle', focus_restyle_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
