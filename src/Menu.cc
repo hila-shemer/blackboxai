@@ -42,6 +42,11 @@ namespace bbai {
       for (int i = 0; i < 3; ++i) setPx(px, w, h, x0 + i, cy + i, c);
       for (int i = 0; i < 5; ++i) setPx(px, w, h, x0 + 2 + i, cy + 2 - i, c);
     }
+    void drawArrow(std::vector<uint32_t> &px, int w, int h, const bt::Color &c) {
+      const int x0 = w - 9, cy = h / 2;           // right gutter triangle
+      for (int d = 0; d <= 4; ++d)
+        for (int dy = -(4 - d); dy <= (4 - d); ++dy) setPx(px, w, h, x0 + d, cy + dy, c);
+    }
   } // namespace
 
   Menu::Menu(Server &server, std::u32string title, std::vector<MenuItem> items)
@@ -118,6 +123,7 @@ namespace bbai {
       if (font->ok())
         font->drawText(px, r.w, r.h, menu::kItemIndent, baseline, it.label, tc);
       if (it.checked) drawCheck(px, r.w, r.h, tc);
+      if (it.kind == MenuItem::Kind::Submenu) drawArrow(px, r.w, r.h, tc);
     }
     DataBuffer *buf = DataBuffer::create(r.w, r.h, std::move(px));
     wlr_scene_buffer *sb = wlr_scene_buffer_create(tree_, buf->base());
