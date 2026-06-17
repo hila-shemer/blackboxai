@@ -338,9 +338,16 @@ namespace bbai {
   }
 
   void Server::onPointerMotion(uint32_t time) {
-    if (active_menu_) {  // modal: hover highlights the item under the cursor
-      active_menu_->setActive(active_menu_->itemIndexAtGlobal(
-        static_cast<int>(cursor->x), static_cast<int>(cursor->y)));
+    if (active_menu_) {
+      const int idx = active_menu_->itemIndexAtGlobal(
+        static_cast<int>(cursor->x), static_cast<int>(cursor->y));
+      if (idx >= 0) {
+        active_menu_->setActive(idx);
+        if (active_menu_->item(idx).kind == MenuItem::Kind::Submenu)
+          active_menu_->openSubmenuAt(idx);
+        else
+          active_menu_->closeSubmenu();
+      }
       return;
     }
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
