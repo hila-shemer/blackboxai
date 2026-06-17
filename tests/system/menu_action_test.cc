@@ -49,36 +49,7 @@ TEST_CASE("clicking the foot entry runs it via the CommandRunner (no spawn)") {
   CHECK(runner.lastCommand() == std::vector<std::string>{"foot"});
 }
 
-TEST_CASE("clicking a workspace entry switches workspaces") {
-  setenv("WLR_BACKENDS", "headless", 1);
-  setenv("WLR_RENDERER", "pixman", 1);
-
-  Server server(/*headless=*/true);
-  REQUIRE(server.ok());
-  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
-    server.dispatch();
-  CHECK(server.currentWorkspaceForTest() == 0);
-
-  // The click coordinates below assume the isolated bundled font (height 18); a
-  // font-isolation regression would otherwise silently click the wrong row.
-  REQUIRE(server.titleFont()->height() == 18);
-
-  const int ox = 400, oy = 200;
-  server.injectPointerMotionForTest(ox, oy);
-  server.injectPointerButtonForTest(BTN_RIGHT, true);
-  REQUIRE(server.menuOpenForTest());
-
-  // Items: 0=foot 1=xterm 2=sep 3=Workspace1 4=Workspace2 ... index 4 -> ws1.
-  // Separators are kSeparatorHeight tall, so compute y by walking heights.
-  int y = oy + menu::titleHeight(18) + menu::kFrameMargin;
-  const int ih = menu::itemHeight(18, false), sh = menu::itemHeight(0, true);
-  y += ih + ih + sh;          // skip foot, xterm, separator -> top of "Workspace 1"
-  y += ih + ih / 2;            // into "Workspace 2" (index 4)
-  server.injectPointerMotionForTest(ox + 30, y);
-  server.injectPointerButtonForTest(BTN_LEFT, true);
-  CHECK_FALSE(server.menuOpenForTest());
-  CHECK(server.currentWorkspaceForTest() == 1);
-}
+// "clicking a workspace entry" moved into the Workspaces submenu - re-tested in F3.4.
 
 TEST_CASE("the menu is modal: a press that would start a move is consumed") {
   setenv("WLR_BACKENDS", "headless", 1);
@@ -258,11 +229,11 @@ TEST_CASE("the Exit menu action dismisses the menu (terminate)") {
   server.injectPointerButtonForTest(BTN_RIGHT, true);
   REQUIRE(server.menuOpenForTest());
 
-  // Items: ... 8=Restart, 9=Exit. Keyboard-navigate to Exit and activate it.
+  // Items: ... 5=Restart, 6=Exit. Keyboard-navigate to Exit and activate it.
   // terminate() only flags wl_display_terminate (the display is not running here).
-  for (int i = 0; i < 20 && server.menuOpenForTest() && server.activeMenuItemForTest() != 9; ++i)
+  for (int i = 0; i < 20 && server.menuOpenForTest() && server.activeMenuItemForTest() != 6; ++i)
     server.injectKeyForTest(XKB_KEY_Down, 0, true);
-  REQUIRE(server.activeMenuItemForTest() == 9);
+  REQUIRE(server.activeMenuItemForTest() == 6);
   server.injectKeyForTest(XKB_KEY_Return, 0, true);
   CHECK_FALSE(server.menuOpenForTest());   // Exit dismissed the menu without crashing
 }

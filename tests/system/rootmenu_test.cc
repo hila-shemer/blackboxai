@@ -69,7 +69,7 @@ TEST_CASE("menu keyboard navigation: Down/Up skip separators, Return activates")
   server.injectPointerButtonForTest(BTN_RIGHT, true);
   REQUIRE(server.menuOpenForTest());
 
-  // Items: 0=foot 1=xterm 2=sep 3=Workspace1 ... Down lands on selectable rows.
+  // Items: 0=foot 1=xterm 2=sep 3=Workspaces(submenu) 4=sep 5=Restart 6=Exit
   server.injectKeyForTest(XKB_KEY_Down, 0, true);
   CHECK(server.activeMenuItemForTest() == 0);          // foot
   server.injectKeyForTest(XKB_KEY_Down, 0, true);
@@ -85,13 +85,7 @@ TEST_CASE("menu keyboard navigation: Down/Up skip separators, Return activates")
   CHECK(last > 3);
   CHECK(server.menuOpenForTest());                     // still open
 
-  // Navigate to a workspace row and Return -> switch + dismiss.
-  while (server.menuOpenForTest() && server.activeMenuItemForTest() != 4)
-    server.injectKeyForTest(XKB_KEY_Down, 0, true);
-  REQUIRE(server.activeMenuItemForTest() == 4);         // Workspace 2
-  server.injectKeyForTest(XKB_KEY_Return, 0, true);
-  CHECK_FALSE(server.menuOpenForTest());
-  CHECK(server.currentWorkspaceForTest() == 1);
+  // (workspace switch via the Workspaces submenu is covered in F3.4)
 }
 
 TEST_CASE("a press inside the menu but not on an item keeps it open") {
