@@ -79,8 +79,16 @@ namespace bbai {
     wlr_scene_node_set_position(&frame_tree->node, x, y);
   }
 
-  void View::setOnWorkspace(bool on) {
-    wlr_scene_node_set_enabled(&frame_tree->node, on);
+  void View::setOnWorkspace(bool on) { on_workspace_ = on; applyVisibility(); }
+
+  void View::setIconified(bool i) {
+    if (iconified_ == i) return;
+    iconified_ = i;
+    applyVisibility();
+  }
+
+  void View::applyVisibility() {
+    wlr_scene_node_set_enabled(&frame_tree->node, on_workspace_ && !iconified_);
   }
 
   bool View::visible() const { return frame_tree->node.enabled; }

@@ -153,6 +153,12 @@ rootmenu_submenu_exe = executable('rootmenu-submenu-test',
 test('rootmenu_submenu', rootmenu_submenu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# F4.2 View iconified state: composes with workspace visibility (nonvisual, no golden).
+iconify_exe = executable('iconify-test', files('system/iconify_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('iconify', iconify_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
 view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
   dependencies : [harness_dep, doctest_dep])
