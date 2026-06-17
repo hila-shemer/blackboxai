@@ -177,6 +177,13 @@ maximize_exe = executable('maximize-test', files('system/maximize_test.cc'),
 test('maximize', maximize_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# F4.6 Maximized golden: a maximized SSD window fills the work area above the toolbar.
+maximized_golden_exe = executable('maximized-golden-test',
+  files('system/maximized_golden_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('maximized_golden', maximized_golden_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F1.3 focusView/clearFocus restyle: titlebar click propagates focus state to both views.
 focus_restyle_exe = executable('focus-restyle-test', files('system/focus_restyle_test.cc'),
   dependencies : [harness_dep, doctest_dep])
