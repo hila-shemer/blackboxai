@@ -171,6 +171,12 @@ view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'
 test('view_focus', view_focus_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# F4.5 Maximize button: press+release-inside toggles maximize with save/restore (nonvisual, no golden).
+maximize_exe = executable('maximize-test', files('system/maximize_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('maximize', maximize_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # F1.3 focusView/clearFocus restyle: titlebar click propagates focus state to both views.
 focus_restyle_exe = executable('focus-restyle-test', files('system/focus_restyle_test.cc'),
   dependencies : [harness_dep, doctest_dep])
