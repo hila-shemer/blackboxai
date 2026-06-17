@@ -45,14 +45,11 @@ namespace bbai::rootmenu {
     items.push_back(exec("foot", {"foot"}));
     items.push_back(exec("xterm", {"xterm"}));
     items.push_back(separator());
-    for (unsigned i = 0; i < ws.count(); ++i) {
-      MenuItem m;
-      m.label = bt::decodeUtf8(ws.name(i).c_str());
-      m.action = MenuItem::Act::WorkspaceSwitch;
-      m.workspace = i;
-      m.checked = (i == ws.current());
-      items.push_back(m);
-    }
+    MenuItem wsm;
+    wsm.kind = MenuItem::Kind::Submenu;
+    wsm.label = bt::decodeUtf8("Workspaces");
+    wsm.submenu_items = buildWorkspacesSubmenu(ws);
+    items.push_back(std::move(wsm));
     items.push_back(separator());
     items.push_back(simple("Restart", MenuItem::Act::Restart));  // stub in M4
     items.push_back(simple("Exit", MenuItem::Act::Exit));
