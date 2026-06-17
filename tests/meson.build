@@ -40,6 +40,13 @@ test('text', text_test_exe, suite : 'unit',
   workdir : meson.project_source_root(),
   env : ['FONTCONFIG_FILE=' + fontconfig_conf])
 
+# Pure palette selector: focused/unfocused Look + color helpers, no wlroots.
+decoration_palette_exe = executable('decoration_palette',
+  files('unit/decoration_palette_test.cc'),
+  dependencies : [doctest_dep, bt_dep],
+  include_directories : include_directories('../src'))
+test('decoration_palette', decoration_palette_exe, suite : 'unit')
+
 # Reusable headless capture + golden harness, plus the in-process test client.
 # HeadlessFixture.cc is server-side (bbai_dep) and TestClient.cc is client-side
 # (wayland-client + generated client stubs); they never share a TU.
