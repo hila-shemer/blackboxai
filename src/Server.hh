@@ -99,6 +99,7 @@ namespace bbai {
 
     // test-only accessors (M1 has a single output)
     Output *activeOutputForTest() const { return active_output; }
+    const std::string &toolbarWindowTitleForTest() const;
     wlr_scene_output *activeSceneOutputForTest() const;
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
 

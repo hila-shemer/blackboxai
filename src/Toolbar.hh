@@ -33,6 +33,7 @@ namespace bbai {
     void redrawWindowLabel(const char *title);    // on focus change (null/"" -> blank)
 
     toolbar::Rect barRectForTest(void) const { return toolbar::barRect(ow_, oh_); }
+    const std::string &windowTitleForTest(void) const { return window_title_; }
 
   private:
     void rebuild(void);

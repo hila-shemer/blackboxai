@@ -259,6 +259,10 @@ namespace bbai {
     return active_output ? active_output->sceneOutput() : nullptr;
   }
 
+  const std::string &Server::toolbarWindowTitleForTest() const {
+    return toolbar_->windowTitleForTest();
+  }
+
   // --- input: hit-test, focus, grab state machine -------------------------------
 
   View *Server::viewFromNode(wlr_scene_node *node) {
@@ -302,6 +306,7 @@ namespace bbai {
     if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
       wlr_seat_keyboard_notify_enter(seat, v->toplevel()->base->surface,
                                      kb->keycodes, kb->num_keycodes, &kb->modifiers);
+    if (toolbar_) toolbar_->redrawWindowLabel(v->toplevel()->title);
   }
 
   void Server::beginInteractive(View *v, CursorMode mode, uint32_t edges) {
@@ -580,6 +585,7 @@ namespace bbai {
     }
     focused_view = nullptr;
     wlr_seat_keyboard_notify_clear_focus(seat);
+    if (toolbar_) toolbar_->redrawWindowLabel(nullptr);
   }
 
   View *Server::viewForHandle(void *handle) {
