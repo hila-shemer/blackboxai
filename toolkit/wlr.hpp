@@ -19,6 +19,13 @@ extern "C" {
 // even when pulled in transitively below. See the wlr_scene_compat
 // custom_target in the top-level meson.build. (No -fpermissive, no keyword
 // macros — the fix is localized to this boundary shim.)
+// wlr/render/color.h (new in 0.20) uses the same '[static N]' hint. It is
+// pulled in transitively (wlr_scene.h -> wlr_renderer.h -> pass.h -> color.h,
+// and via wlr_output.h), so its sanitized copy must come FIRST — before
+// wlr_scene_compat below — so WLR_RENDER_COLOR_H is defined and the broken
+// system header is suppressed everywhere downstream.
+#include <wlr_color_compat.h>
+
 #include <wlr_scene_compat.h>
 
 #include <wayland-server-core.h>
