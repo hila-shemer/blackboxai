@@ -159,6 +159,12 @@ iconify_exe = executable('iconify-test', files('system/iconify_test.cc'),
 test('iconify', iconify_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# F4.4 Close button: press+release-inside sends xdg close request (nonvisual, no golden).
+close_button_exe = executable('close-button-test', files('system/close_button_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('close_button', close_button_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
 view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
   dependencies : [harness_dep, doctest_dep])
