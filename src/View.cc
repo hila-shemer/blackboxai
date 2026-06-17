@@ -87,6 +87,22 @@ namespace bbai {
     applyVisibility();
   }
 
+  void View::setMaximized(bool m, int frameW, int frameH) {
+    if (maximized_ == m) return;
+    if (m) {
+      premax_x = pos_x; premax_y = pos_y; premax_w = cw; premax_h = ch;
+      maximized_ = true;
+      const int contentW = frameW - 2 * frame::kBorder;
+      const int contentH = frameH - frame::kTitleHeight - frame::kHandleHeight;
+      resizeTo(0, 0, contentW, contentH);
+      wlr_xdg_toplevel_set_maximized(xdg_toplevel, true);
+    } else {
+      maximized_ = false;
+      resizeTo(premax_x, premax_y, premax_w, premax_h);
+      wlr_xdg_toplevel_set_maximized(xdg_toplevel, false);
+    }
+  }
+
   void View::applyVisibility() {
     wlr_scene_node_set_enabled(&frame_tree->node, on_workspace_ && !iconified_);
   }
