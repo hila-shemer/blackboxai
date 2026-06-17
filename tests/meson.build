@@ -144,3 +144,9 @@ menu_action_exe = executable('menu-action-test', files('system/menu_action_test.
   dependencies : [harness_dep, doctest_dep])
 test('menu_action', menu_action_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
+view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('view_focus', view_focus_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
