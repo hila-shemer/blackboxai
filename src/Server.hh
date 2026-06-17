@@ -188,6 +188,15 @@ namespace bbai {
     int grab_geo_w = 0, grab_geo_h = 0;         // content size at grab start
     uint32_t resize_edges = 0;                  // wlr_edges bitmask
     uint32_t next_time = 1;                      // monotonic event time seam
+
+    // title-bar button press state: track which view+button was pressed so we
+    // can dispatch on release-inside and ignore release-outside (F4.3+).
+    Part pressed_button_part_ = Part::None;
+    View *pressed_button_view_ = nullptr;
+    std::vector<View *> icons_;                 // iconified windows (for icon menu, F4.7)
+
+    void iconifyView(View *v);
+    void dispatchButtonRelease(View *v, Part part);
   };
 
 } // namespace bbai

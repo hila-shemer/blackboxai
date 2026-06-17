@@ -213,6 +213,11 @@ namespace bbai {
       grabbed_view = nullptr;
       resize_edges = 0;
     }
+    if (pressed_button_view_ == view) {
+      pressed_button_view_ = nullptr;
+      pressed_button_part_ = Part::None;
+    }
+    std::erase(icons_, view);
     const bool was_focused = (focused_view == view);
     if (was_focused) focused_view = nullptr;
     workspaces_.clearFocused(view);   // drop from every workspace's focus memory
@@ -386,13 +391,27 @@ namespace bbai {
                                wl_pointer_button_state state) {
     if (active_menu_) { handleMenuButton(button, state); return; }  // modal gate
 
-    if (state == WL_POINTER_BUTTON_STATE_RELEASED && cursor_mode != CursorMode::Passthrough) {
-      if (cursor_mode == CursorMode::Resize)
-        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
-      cursor_mode = CursorMode::Passthrough;
-      grabbed_view = nullptr;
-      resize_edges = 0;
-      return;  // swallow the terminating release
+    if (state == WL_POINTER_BUTTON_STATE_RELEASED) {
+      if (cursor_mode != CursorMode::Passthrough) {  // end a move/resize grab
+        if (cursor_mode == CursorMode::Resize && grabbed_view)
+          wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+        cursor_mode = CursorMode::Passthrough;
+        grabbed_view = nullptr;
+        resize_edges = 0;
+        return;  // swallow the terminating release
+      }
+      if (pressed_button_view_) {  // a title-bar button was pressed; check release-inside
+        View *pv = pressed_button_view_;
+        Part pp = pressed_button_part_;
+        pressed_button_view_ = nullptr;
+        pressed_button_part_ = Part::None;
+        double sx = 0, sy = 0;
+        wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
+        if (viewFromNode(n) == pv && partAt(pv, cursor->x, cursor->y) == pp)
+          dispatchButtonRelease(pv, pp);
+        return;  // swallow the release either way
+      }
+      // else: fall through to forward the release to the client
     }
 
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
@@ -411,13 +430,33 @@ namespace bbai {
           if (part == Part::LeftGrip)  { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);  return; }
           if (part == Part::RightGrip) { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT); return; }
           if (part == Part::IconifyButton || part == Part::MaximizeButton || part == Part::CloseButton) {
-            return;  // buttons drawn; release-side actions wired in later F4 tasks
+            pressed_button_view_ = v;
+            pressed_button_part_ = part;
+            return;  // swallow press; dispatch action on release-inside
           }
         }
         // press on the client area falls through to forward to the client
       }
     }
     wlr_seat_pointer_notify_button(seat, time, button, state);
+  }
+
+  // --- title-bar button dispatch (F4.3+) ----------------------------------------
+
+  void Server::dispatchButtonRelease(View *v, Part part) {
+    switch (part) {
+    case Part::IconifyButton: iconifyView(v); break;
+    default: break;   // Close (F4.4) and Maximize (F4.5) wired in later tasks
+    }
+  }
+
+  void Server::iconifyView(View *v) {
+    v->setIconified(true);            // hide first, so the re-home below skips it
+    icons_.push_back(v);
+    if (focused_view == v) {
+      if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+      else clearFocus();
+    }
   }
 
   // --- test-only injection + introspection --------------------------------------
@@ -541,7 +580,7 @@ namespace bbai {
     for (auto it = stacking_.begin(); it != stacking_.end(); ++it) {
       if (!*it) continue;                          // skip the layer sentinels
       View *v = static_cast<View *>(*it);
-      if (v->workspace() == ws && v->isMapped()) return v;
+      if (v->workspace() == ws && v->isMapped() && !v->isIconified()) return v;
     }
     return nullptr;
   }
