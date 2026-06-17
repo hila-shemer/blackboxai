@@ -55,6 +55,11 @@ namespace bbai {
     // 2 SERVER_SIDE), or -1 if there is no decoration object.
     int decorationMode() const;
 
+    // Focus state — tracks whether this window is the keyboard focus.
+    // setFocused is idempotent; triggers a relayout only for mapped SSD windows.
+    void setFocused(bool f);
+    bool isFocused() const { return focused_; }
+
   private:
     void relayout();             // (re)build decorations for the current size + focus
     void chooseDecorationMode(); // the SSD/CSD rule; safe to call repeatedly
@@ -72,6 +77,7 @@ namespace bbai {
     bool laid_frame = false;       // whether the last layout drew the frame
     bool mapped = false;
     bool draw_frame = true;   // default SSD; a CLIENT_SIDE request flips this off
+    bool focused_ = false;
     bt::Listener map_, unmap_, commit_, destroy_;
     bt::Listener deco_request_mode_, deco_destroy_;
   };
