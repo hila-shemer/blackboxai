@@ -9,8 +9,6 @@
 
 namespace bbai {
 
-  class Menu;
-
   struct MenuItem {
     enum class Kind { Command, Separator, Submenu };
     enum class Act {
@@ -20,11 +18,11 @@ namespace bbai {
     std::u32string label;
     Kind kind = Kind::Command;
     Act  action = Act::None;
-    std::vector<std::string> argv;   // for Exec (argv[0] is the program)
-    unsigned workspace = ~0u;        // target for WorkspaceSwitch
+    std::vector<std::string> argv;          // for Exec (argv[0] is the program)
+    unsigned workspace = ~0u;               // target for WorkspaceSwitch
     bool enabled = true;
-    bool checked = false;            // e.g. the current workspace
-    Menu *sub = nullptr;             // non-null for Kind::Submenu (cascade)
+    bool checked = false;                   // e.g. the current workspace
+    std::vector<MenuItem> submenu_items;    // non-empty for Kind::Submenu (cascade)
 
     bool separator() const { return kind == Kind::Separator; }
     bool selectable() const { return kind != Kind::Separator && enabled; }

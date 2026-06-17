@@ -14,6 +14,9 @@ namespace bbai::rootmenu {
   std::u32string title();
   // Built from the live workspace model so the entries + the current-✓ stay correct.
   std::vector<MenuItem> build(const WorkspaceModel &ws);
+  // Switch rows for every workspace + separator + New + Remove Last.
+  // Used as the child items for the Workspaces submenu (F3.2+).
+  std::vector<MenuItem> buildWorkspacesSubmenu(const WorkspaceModel &ws);
 
 } // namespace bbai::rootmenu
 
