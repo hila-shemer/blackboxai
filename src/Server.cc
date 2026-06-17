@@ -339,15 +339,19 @@ namespace bbai {
 
   void Server::onPointerMotion(uint32_t time) {
     if (active_menu_) {
-      const int idx = active_menu_->itemIndexAtGlobal(
-        static_cast<int>(cursor->x), static_cast<int>(cursor->y));
-      if (idx >= 0) {
-        active_menu_->setActive(idx);
-        if (active_menu_->item(idx).kind == MenuItem::Kind::Submenu)
-          active_menu_->openSubmenuAt(idx);
-        else
-          active_menu_->closeSubmenu();
+      const int x = static_cast<int>(cursor->x), y = static_cast<int>(cursor->y);
+      for (Menu *m = liveMenu(); m; m = m->parent()) {
+        const int idx = m->itemIndexAtGlobal(x, y);
+        if (idx >= 0) {
+          m->setActive(idx);
+          if (m->item(idx).kind == MenuItem::Kind::Submenu) m->openSubmenuAt(idx);
+          else m->closeSubmenu();   // hovering a plain row in m drops m's stale child
+          return;
+        }
+        if (m->containsGlobal(x, y)) { m->setActive(-1); return; }  // inside m, between items
       }
+      // outside the whole chain: clear the deepest highlight but keep the menu open
+      if (Menu *lm = liveMenu()) lm->setActive(-1);
       return;
     }
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
