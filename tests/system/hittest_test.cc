@@ -44,8 +44,8 @@ TEST_CASE("cursor position classifies the View and frame part under it") {
   CHECK(server.viewAtForTest(260, 130) == v);
   CHECK(server.partAtForTest(260, 130) == Part::Titlebar);
   // Buttons in the titlebar.
-  CHECK(server.partAtForTest(346, 127) == Part::Button);   // close button
-  CHECK(server.partAtForTest(170, 130) == Part::Button);   // iconify button
+  CHECK(server.partAtForTest(346, 127) == Part::CloseButton);    // close button
+  CHECK(server.partAtForTest(170, 130) == Part::IconifyButton);  // iconify button
   // Resize grips on the handle.
   CHECK(server.partAtForTest(165, 295) == Part::LeftGrip);
   CHECK(server.partAtForTest(350, 295) == Part::RightGrip);

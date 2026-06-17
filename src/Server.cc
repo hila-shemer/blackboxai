@@ -278,8 +278,9 @@ namespace bbai {
       return Part::Client;
     if (in(leftGrip(W, H)))  return Part::LeftGrip;
     if (in(rightGrip(W, H))) return Part::RightGrip;
-    if (in(closeButton(W, H)) || in(maximizeButton(W, H)) || in(iconifyButton(W, H)))
-      return Part::Button;
+    if (in(iconifyButton(W, H)))  return Part::IconifyButton;
+    if (in(maximizeButton(W, H))) return Part::MaximizeButton;
+    if (in(closeButton(W, H)))    return Part::CloseButton;
     if (in(title(W, H)))     return Part::Titlebar;  // incl. the label (drag = move)
     return Part::None;
   }
@@ -409,7 +410,9 @@ namespace bbai {
           if (part == Part::Titlebar) { beginInteractive(v, CursorMode::Move, 0); return; }
           if (part == Part::LeftGrip)  { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);  return; }
           if (part == Part::RightGrip) { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT); return; }
-          if (part == Part::Button) { return; }  // buttons drawn; actions wired later
+          if (part == Part::IconifyButton || part == Part::MaximizeButton || part == Part::CloseButton) {
+            return;  // buttons drawn; release-side actions wired in later F4 tasks
+          }
         }
         // press on the client area falls through to forward to the client
       }
