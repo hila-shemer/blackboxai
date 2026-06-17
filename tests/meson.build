@@ -195,3 +195,9 @@ focus_swap_exe = executable('focus-swap-test', files('system/focus_swap_test.cc'
   dependencies : [harness_dep, doctest_dep])
 test('focus_swap', focus_swap_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# F4.7 Icon menu: middle-click / Mod4+Alt+T opens icon list; click deiconifies.
+icon_menu_exe = executable('icon-menu-test', files('system/icon_menu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('icon_menu', icon_menu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
