@@ -446,7 +446,8 @@ namespace bbai {
   void Server::dispatchButtonRelease(View *v, Part part) {
     switch (part) {
     case Part::IconifyButton: iconifyView(v); break;
-    default: break;   // Close (F4.4) and Maximize (F4.5) wired in later tasks
+    case Part::CloseButton: wlr_xdg_toplevel_send_close(v->toplevel()); break;
+    default: break;   // Maximize (F4.5) wired in later task
     }
   }
 
