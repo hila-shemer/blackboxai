@@ -140,6 +140,20 @@ namespace bbai {
     if (active_ >= 0 && active_ < static_cast<int>(items_.size())) emitItem(active_);
   }
 
+  void Menu::openSubmenuAt(int index) {
+    if (index < 0 || index >= static_cast<int>(items_.size())) return;
+    if (items_[index].kind != MenuItem::Kind::Submenu) return;
+    if (open_sub_ == index && child_) return;            // already open
+    closeSubmenu();
+    child_ = std::make_unique<Menu>(server_, items_[index].label, items_[index].submenu_items);
+    child_->parent_ = this;
+    open_sub_ = index;
+    // open to the right of the parent, aligned to the row top
+    child_->show(gx_ + layout_.width, gy_ + layout_.items[index].y);
+  }
+
+  void Menu::closeSubmenu() { child_.reset(); open_sub_ = -1; }
+
   bool Menu::containsGlobal(int gx, int gy) const {
     return gx >= gx_ && gy >= gy_ && gx < gx_ + layout_.width && gy < gy_ + layout_.height;
   }

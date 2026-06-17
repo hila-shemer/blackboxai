@@ -66,6 +66,7 @@ namespace bbai {
     void activeOutputSize(int &w, int &h) const;
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     int activeMenuItemForTest() const;
+    Menu *rootMenuForTest() const { return active_menu_.get(); }
 
     // --- test-only input injection + hit-test introspection (headless has no
     // real input devices, so tests drive the SAME onPointer* handlers the real
