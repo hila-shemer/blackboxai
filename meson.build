@@ -11,8 +11,8 @@ cc = meson.get_compiler('cpp')
 doctest_dep = declare_dependency(
   include_directories : include_directories('third_party/doctest'))
 
-# wlroots is pinned to 0.19 and version-gated (ABI breaks every minor release).
-wlroots_dep        = dependency('wlroots-0.19', version : ['>=0.19.0', '<0.20.0'])
+# wlroots is pinned to 0.20 and version-gated (ABI breaks every minor release).
+wlroots_dep        = dependency('wlroots-0.20', version : ['>=0.20.0', '<0.21.0'])
 wayland_server_dep = dependency('wayland-server')
 wayland_client_dep = dependency('wayland-client')
 wayland_protos     = dependency('wayland-protocols')
@@ -41,7 +41,16 @@ wlr_incdir = wlroots_dep.get_variable(pkgconfig : 'includedir')
 wlr_scene_compat = custom_target('wlr_scene_compat.h',
   output  : 'wlr_scene_compat.h',
   command : [sanitize_c_header,
-             wlr_incdir / 'wlroots-0.19' / 'wlr' / 'types' / 'wlr_scene.h'],
+             wlr_incdir / 'wlroots-0.20' / 'wlr' / 'types' / 'wlr_scene.h'],
+  capture : true)
+
+# wlr/render/color.h is new in 0.20 and uses the same '[static N]' hint
+# (matrix[static 9], in/out[static 3]). It is pulled in transitively by
+# wlr/types/wlr_output.h, so it needs the same sanitize-and-suppress treatment.
+wlr_color_compat = custom_target('wlr_color_compat.h',
+  output  : 'wlr_color_compat.h',
+  command : [sanitize_c_header,
+             wlr_incdir / 'wlroots-0.20' / 'wlr' / 'render' / 'color.h'],
   capture : true)
 
 # fcft_compat: fcft.h uses '#pragma once' (not an include guard), so the copy is
@@ -67,7 +76,7 @@ text_dep = declare_dependency(
 wlr_dep = declare_dependency(
   dependencies : [wlroots_dep, wayland_server_dep, pixman_dep, libdrm_dep,
                   xkbcommon_dep, server_protos_dep],
-  sources      : wlr_scene_compat)
+  sources      : [wlr_scene_compat, wlr_color_compat])
 
 subdir('toolkit')
 subdir('src')
