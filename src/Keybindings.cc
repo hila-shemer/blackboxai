@@ -4,6 +4,7 @@ namespace bbai {
 
   Keybindings::Keybindings() {
     const uint32_t SUPER = WLR_MODIFIER_LOGO;
+    const uint32_t ALT   = WLR_MODIFIER_ALT;
     const uint32_t SHIFT = WLR_MODIFIER_SHIFT;
     bindings_ = {
       { SUPER,         XKB_KEY_Right, { Action::WorkspaceNext } },
@@ -17,6 +18,7 @@ namespace bbai {
       { SUPER,         XKB_KEY_Tab,   { Action::CycleNext } },
       { SUPER | SHIFT, XKB_KEY_Tab,         { Action::CyclePrev } },
       { SUPER | SHIFT, XKB_KEY_ISO_Left_Tab,{ Action::CyclePrev } },  // real Shift+Tab sym
+      { SUPER | ALT,   XKB_KEY_t,     { Action::IconMenu } },
     };
   }
 

@@ -16,7 +16,8 @@ namespace bbai {
   struct Action {
     enum Kind {
       None, WorkspaceNext, WorkspacePrev, WorkspaceTo,
-      OpenMenu, CloseWindow, CycleNext, CyclePrev
+      OpenMenu, CloseWindow, CycleNext, CyclePrev,
+      IconMenu
     };
     Kind kind = None;
     int arg = 0;     // workspace index for WorkspaceTo

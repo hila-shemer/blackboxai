@@ -420,6 +420,11 @@ namespace bbai {
         openRootMenu(cursor->x, cursor->y);
         return;
       }
+      // Middle-click on the bare desktop opens the icon menu.
+      if (button == BTN_MIDDLE && overDesktop(cursor->x, cursor->y)) {
+        openIconMenu(cursor->x, cursor->y);
+        return;
+      }
       double sx = 0, sy = 0;
       wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
       if (View *v = viewFromNode(n)) {
@@ -554,6 +559,7 @@ namespace bbai {
       if (focused_view) wlr_xdg_toplevel_send_close(focused_view->toplevel());
       break;
     case Action::OpenMenu:  openRootMenu(cursor->x, cursor->y); break;
+    case Action::IconMenu:  openIconMenu(cursor->x, cursor->y); break;
     case Action::CycleNext: break;  // cycle focus within the workspace (future)
     case Action::CyclePrev: break;
     case Action::None:      break;
@@ -662,6 +668,47 @@ namespace bbai {
     wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
   }
 
+  std::vector<MenuItem> Server::buildIconMenu() {
+    std::vector<MenuItem> items;
+    for (View *v : icons_) {
+      MenuItem m;
+      const char *t = v->toplevel()->title;
+      m.label = bt::decodeUtf8(t && *t ? t : "(unnamed)");
+      m.action = MenuItem::Act::Deiconify;
+      m.target = v->windowID();
+      items.push_back(std::move(m));
+    }
+    return items;
+  }
+
+  void Server::openIconMenu(double lx, double ly) {
+    if (active_menu_) return;
+    // Abort any in-progress move/resize grab before going modal — otherwise the
+    // grab's terminating release is swallowed by the modal gate and the window
+    // would keep following the cursor after the menu closes.
+    if (cursor_mode != CursorMode::Passthrough) {
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+    active_menu_ = std::make_unique<Menu>(*this, bt::decodeUtf8("Icons"), buildIconMenu());
+    active_menu_->show(static_cast<int>(lx), static_cast<int>(ly));
+    wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
+  }
+
+  void Server::deiconifyView(View *v) {
+    v->setIconified(false);
+    raiseView(v);
+    focusView(v);
+    std::erase(icons_, v);
+  }
+
+  void Server::openIconMenuForTest() {
+    openIconMenu(cursor->x, cursor->y);
+  }
+
   void Server::closeMenus() {
     active_menu_.reset();
     // While modal, onModifiers swallowed every modifier change so the client
@@ -690,6 +737,9 @@ namespace bbai {
     case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
     case MenuItem::Act::Exit:            terminate(); break;
     case MenuItem::Act::Restart:         break;  // stub in M4
+    case MenuItem::Act::Deiconify:
+      if (View *v = viewForHandle(copy.target)) deiconifyView(v);
+      break;
     case MenuItem::Act::None:            break;
     }
   }

@@ -63,6 +63,10 @@ namespace bbai {
 
     // Modal root menu (compositor chrome on layer_overlay).
     void openRootMenu(double lx, double ly);
+    void openIconMenu(double lx, double ly);
+    void openIconMenuForTest();
+    std::vector<MenuItem> buildIconMenu();
+    void deiconifyView(View *v);
     void closeMenus();
     void activeOutputSize(int &w, int &h) const;
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
