@@ -31,8 +31,10 @@ namespace bbai {
     Decoration &operator=(const Decoration &) = delete;
 
     // (Re)build every decoration buffer for a client content size W x H and
-    // window title (may be null). Destroys the previous buffers.
-    void rebuild(int W, int H, const char *titleText);
+    // window title (may be null). Destroys the previous buffers. `focused`
+    // selects the active palette (default true); active values are byte-identical
+    // to the M3 constants so existing callers see no pixel change.
+    void rebuild(int W, int H, const char *titleText, bool focused = true);
     // Drop all decoration buffers (CSD client / unmapped window).
     void clear();
 
