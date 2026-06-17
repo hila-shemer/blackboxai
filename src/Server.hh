@@ -16,6 +16,7 @@
 #include "StackingList.hh"
 #include "CommandRunner.hh"
 #include "Decoration.hh"   // bbai::Part
+#include "MenuItem.hh"
 
 #include <memory>
 #include <set>
@@ -141,6 +142,8 @@ namespace bbai {
     void handleMenuButton(uint32_t button, wl_pointer_button_state state);
     bool handleMenuKey(xkb_keysym_t sym);                   // true if consumed
     void itemClicked(int index);
+    Menu *liveMenu();                                        // deepest open menu in the chain
+    void activateMenuItem(const MenuItem &it);               // dispatch + dismiss whole chain
     bool overDesktop(double lx, double ly);                 // background, not a view/chrome
     void beginInteractive(View *v, CursorMode mode, uint32_t edges);
     void processMove();

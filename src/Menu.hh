@@ -40,6 +40,9 @@ namespace bbai {
     int rectXForTest() const { return gx_; }
     int rectYForTest() const { return gy_; }
 
+    Menu *child()  const { return child_.get(); }
+    Menu *parent() const { return parent_; }
+
     bool submenuOpenForTest() const { return static_cast<bool>(child_); }
     int  openSubmenuIndexForTest() const { return open_sub_; }
     int  submenuItemCountForTest() const { return child_ ? child_->itemCount() : 0; }
