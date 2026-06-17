@@ -4,7 +4,7 @@ on: [push, pull_request]
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    container: fedora:43
+    container: fedora:44
     steps:
       - uses: actions/checkout@v4
 
