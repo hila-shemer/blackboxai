@@ -447,7 +447,13 @@ namespace bbai {
     switch (part) {
     case Part::IconifyButton: iconifyView(v); break;
     case Part::CloseButton: wlr_xdg_toplevel_send_close(v->toplevel()); break;
-    default: break;   // Maximize (F4.5) wired in later task
+    case Part::MaximizeButton: {
+      int ow = 0, oh = 0;
+      activeOutputSize(ow, oh);
+      v->setMaximized(!v->isMaximized(), ow, oh - toolbar::kBarHeight);
+      break;
+    }
+    default: break;
     }
   }
 

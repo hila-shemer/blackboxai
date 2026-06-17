@@ -51,6 +51,11 @@ namespace bbai {
     void setIconified(bool i);
     bool isIconified() const { return iconified_; }
 
+    // Maximized state: frame fills the work area (output minus the toolbar).
+    // frameW x frameH is the target frame dimensions to fill.
+    void setMaximized(bool m, int frameW, int frameH);
+    bool isMaximized() const { return maximized_; }
+
     // xdg-decoration: a decoration object for this toplevel appeared. Decide and
     // schedule its mode (request SSD / honor CSD holdout).
     void attachDecoration(wlr_xdg_toplevel_decoration_v1 *deco);
@@ -78,6 +83,8 @@ namespace bbai {
     unsigned workspace_ = 0;  // owning workspace (M4)
     bool on_workspace_ = true;  // last value passed to setOnWorkspace
     bool iconified_ = false;    // minimised state; hides frame regardless of workspace
+    bool maximized_ = false;    // frame fills the work area
+    int premax_x = 0, premax_y = 0, premax_w = 0, premax_h = 0;
     int pos_x = 160, pos_y = 120;
     int cw = 200, ch = 150;   // requested content size
     int laid_w = -1, laid_h = -1;  // size the decorations were last built for
