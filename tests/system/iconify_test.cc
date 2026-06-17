@@ -1,6 +1,8 @@
 // F4.2: View iconified state composes with workspace visibility.
 // F4.3: Clicking the iconify title-bar button iconifies the window and re-homes
 //       focus; a release that drifts off the button is a no-op.
+// F4.8: Toolbar window-label tracks focus: shows the focused window's title,
+//       blanks on clearFocus.
 // Nonvisual — no golden compare.
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
@@ -256,4 +258,73 @@ TEST_CASE("iconify button: release outside the button is a no-op") {
 
     CHECK_FALSE(A->isIconified());
     CHECK(A->visible());
+}
+
+// --- F4.8: toolbar window-label tracks focus ----------------------------------
+
+TEST_CASE("toolbar window-label shows focused title and blanks on clearFocus") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+        server.dispatch();
+
+    // Map two SSD clients. TestClient default title is "bbai-test".
+    test::TestClient ca(server.socketName(), 0xFFFF0000u, 200, 150,
+                        test::TestClient::Deco::RequestSSD);
+    REQUIRE(ca.ok());
+    test::TestClient cb(server.socketName(), 0xFF00FF00u, 200, 150,
+                        test::TestClient::Deco::RequestSSD);
+    REQUIRE(cb.ok());
+
+    pumpUntilMapped(server, ca, cb);
+
+    const auto &views = server.viewsForTest();
+    REQUIRE(views.size() >= 2);
+    REQUIRE(views[0]->isMapped());
+    REQUIRE(views[1]->isMapped());
+
+    View *A = views[0].get();
+    View *B = views[1].get();
+
+    // Position B so it does not overlap A's titlebar.
+    B->setPosition(160, 400);
+
+    // Focus A by clicking its titlebar.
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/true);
+    server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/false);
+    REQUIRE(server.focusedViewForTest() == A);
+
+    // Toolbar label must now show A's title.
+    CHECK(server.toolbarWindowTitleForTest() == "bbai-test");
+
+    // Iconify A — focus re-homes to B, toolbar label must switch.
+    const int bx = A->x() + frame::iconifyButton(A->contentWidth(), A->contentHeight()).x
+                          + frame::kButtonWidth / 2;
+    const int by = A->y() + frame::iconifyButton(A->contentWidth(), A->contentHeight()).y
+                          + frame::kButtonWidth / 2;
+    server.injectPointerMotionForTest(bx, by);
+    server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/true);
+    server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/false);
+
+    REQUIRE(A->isIconified());
+    REQUIRE(server.focusedViewForTest() == B);
+    CHECK(server.toolbarWindowTitleForTest() == "bbai-test");
+
+    // Close B: with no other visible window clearFocus() fires -> label blanks.
+    cb.closeWindow();
+    for (int i = 0; i < 200; ++i) {
+        ca.flush(); cb.flush();
+        server.dispatch();
+        ca.pump(); cb.pump();
+        if (server.viewsForTest().size() < 2) break;
+    }
+    // Pump a few more to let the server process the unmap+destroy.
+    for (int i = 0; i < 30; ++i) { ca.flush(); cb.flush(); server.dispatch(); ca.pump(); cb.pump(); }
+
+    // Only A (iconified) remains; no visible window -> toolbar label is blank.
+    CHECK(server.toolbarWindowTitleForTest().empty());
 }
