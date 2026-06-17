@@ -620,21 +620,49 @@ namespace bbai {
     onPointerMotion(nowMsec());   // restore normal pointer focus
   }
 
+  Menu *Server::liveMenu() {
+    Menu *m = active_menu_.get();
+    if (!m) return nullptr;
+    while (Menu *c = m->child()) m = c;
+    return m;
+  }
+
+  void Server::activateMenuItem(const MenuItem &it) {
+    const MenuItem copy = it;   // copy before closeMenus() destroys the owning Menu
+    closeMenus();
+    switch (copy.action) {
+    case MenuItem::Act::Exec:            commandRunner().run(copy.argv); break;
+    case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(copy.workspace); break;
+    case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
+    case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
+    case MenuItem::Act::Exit:            terminate(); break;
+    case MenuItem::Act::Restart:         break;  // stub in M4
+    case MenuItem::Act::None:            break;
+    }
+  }
+
   void Server::handleMenuButton(uint32_t, wl_pointer_button_state state) {
     if (state != WL_POINTER_BUTTON_STATE_PRESSED) return;  // activate on press
-    const int idx = active_menu_->itemIndexAtGlobal(static_cast<int>(cursor->x),
-                                                    static_cast<int>(cursor->y));
-    if (idx >= 0) { itemClicked(idx); return; }
-    if (!active_menu_->containsGlobal(static_cast<int>(cursor->x),
-                                     static_cast<int>(cursor->y)))
-      closeMenus();   // a press outside the menu dismisses it
+    const int x = static_cast<int>(cursor->x), y = static_cast<int>(cursor->y);
+    for (Menu *m = liveMenu(); m; m = m->parent()) {
+      const int idx = m->itemIndexAtGlobal(x, y);
+      if (idx >= 0) {
+        if (m->item(idx).kind == MenuItem::Kind::Submenu) { m->openSubmenuAt(idx); return; }
+        activateMenuItem(m->item(idx));
+        return;
+      }
+      if (m->containsGlobal(x, y)) return;   // inside this menu but not on an item: keep open
+    }
+    closeMenus();   // outside the whole chain
   }
 
   bool Server::handleMenuKey(xkb_keysym_t sym) {
     if (!active_menu_) return false;
-    const int n = active_menu_->itemCount();
+    Menu *m = liveMenu();
+    if (!m) { if (sym == XKB_KEY_Escape) closeMenus(); return true; }
+    const int n = m->itemCount();
     if (n <= 0) { if (sym == XKB_KEY_Escape) closeMenus(); return true; }  // guard %n
-    const int a = active_menu_->activeIndex();
+    const int a = m->activeIndex();
     switch (sym) {
     case XKB_KEY_Escape:
       closeMenus();
@@ -642,18 +670,31 @@ namespace bbai {
     case XKB_KEY_Down:
       for (int k = 1; k <= n; ++k) {
         const int j = ((a < 0 ? -1 : a) + k) % n;
-        if (active_menu_->item(j).selectable()) { active_menu_->setActive(j); break; }
+        if (m->item(j).selectable()) { m->setActive(j); break; }
       }
       return true;
     case XKB_KEY_Up:
       for (int k = 1; k <= n; ++k) {
         const int j = (((a < 0 ? 0 : a) - k) % n + n) % n;
-        if (active_menu_->item(j).selectable()) { active_menu_->setActive(j); break; }
+        if (m->item(j).selectable()) { m->setActive(j); break; }
       }
       return true;
     case XKB_KEY_Return:
     case XKB_KEY_space:
-      if (a >= 0 && active_menu_->item(a).selectable()) itemClicked(a);
+      if (a >= 0 && m->item(a).selectable()) {
+        if (m->item(a).kind == MenuItem::Kind::Submenu) {
+          m->openSubmenuAt(a);
+          // set child active to its first selectable row
+          Menu *child = m->child();
+          if (child) {
+            for (int j = 0; j < child->itemCount(); ++j) {
+              if (child->item(j).selectable()) { child->setActive(j); break; }
+            }
+          }
+        } else {
+          activateMenuItem(m->item(a));
+        }
+      }
       return true;
     default:
       return true;   // swallow every key while the menu is modal
@@ -662,19 +703,8 @@ namespace bbai {
 
   void Server::itemClicked(int index) {
     if (!active_menu_) return;
-    const MenuItem it = active_menu_->item(index);  // copy before closeMenus destroys the menu
-    closeMenus();
-    switch (it.action) {
-    case MenuItem::Act::Exec:            commandRunner().run(it.argv); break;
-    case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(it.workspace); break;
-    // New/RemoveWorkspace are reachable once the Workspaces *submenu* lands (M5,
-    // with menu-file parsing); the M4 flat menu does not emit these items yet.
-    case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
-    case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
-    case MenuItem::Act::Exit:            terminate(); break;
-    case MenuItem::Act::Restart:         break;  // stub in M4
-    case MenuItem::Act::None:            break;
-    }
+    const MenuItem it = active_menu_->item(index);  // copy before activateMenuItem destroys the menu
+    activateMenuItem(it);
   }
 
   void Server::advanceClockForTest(int64_t seconds) {
