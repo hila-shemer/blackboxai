@@ -286,9 +286,13 @@ namespace bbai {
 
   void Server::focusView(View *v) {
     if (focused_view == v) return;
-    if (focused_view) wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+    if (focused_view) {
+      wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+      focused_view->setFocused(false);
+    }
     focused_view = v;
     wlr_xdg_toplevel_set_activated(v->toplevel(), true);
+    v->setFocused(true);
     if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
       wlr_seat_keyboard_notify_enter(seat, v->toplevel()->base->surface,
                                      kb->keycodes, kb->num_keycodes, &kb->modifiers);
@@ -504,7 +508,10 @@ namespace bbai {
   }
 
   void Server::clearFocus() {
-    if (focused_view) wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+    if (focused_view) {
+      wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+      focused_view->setFocused(false);
+    }
     focused_view = nullptr;
     wlr_seat_keyboard_notify_clear_focus(seat);
   }

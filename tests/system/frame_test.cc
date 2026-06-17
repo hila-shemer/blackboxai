@@ -11,6 +11,7 @@
 #include "Frame.hh"
 
 #include <cstdlib>
+#include <linux/input-event-codes.h>  // BTN_LEFT
 
 using namespace bbai;
 
@@ -48,6 +49,14 @@ TEST_CASE("a mapped SSD client is wrapped in a Blackbox frame") {
     // Frame is content + decorations: 202 x 179 (per frame::frameWidth/Height).
     CHECK(frame::frameWidth(200)  == 202);
     CHECK(frame::frameHeight(150) == 179);
+
+    // Focus the window via a titlebar click (press + release, no drag) so the
+    // canonical golden captures the ACTIVE decoration look.
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/true);
+    server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/false);
+    // Pump so the setFocused relayout completes before we capture.
+    for (int i = 0; i < 10; ++i) { client.flush(); server.dispatch(); client.pump(); }
 
     test::Frame f = test::captureFrame(server);
     REQUIRE(f.w == 1280u);
