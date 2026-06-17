@@ -286,3 +286,114 @@ TEST_CASE("F3.4 mouse: click child workspace row switches workspace and closes c
   CHECK_FALSE(server.menuOpenForTest());
   CHECK(server.currentWorkspaceForTest() == 1);
 }
+
+// F3.5-a: hovering a child row highlights it (chain-aware motion).
+TEST_CASE("F3.5 child row highlights on hover") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  const int ox = 400, oy = 200;
+  server.injectPointerMotionForTest(ox, oy);
+  server.injectPointerButtonForTest(BTN_RIGHT, /*pressed=*/true);
+  REQUIRE(server.menuOpenForTest());
+
+  // Hover Workspaces (index 3) — opens the child.
+  server.injectPointerMotionForTest(ox + 30, itemCentreY(oy, 3));
+  Menu *root = server.rootMenuForTest();
+  REQUIRE(root != nullptr);
+  REQUIRE(root->submenuOpenForTest());
+
+  // Now hover child item 1 (Workspace 2).
+  Menu *child = root->child();
+  REQUIRE(child != nullptr);
+  const int cy = childItemCentreY(child, 1);
+  const int cx = child->rectXForTest() + child->itemCount() / 2 + 10;  // inside child width
+  server.injectPointerMotionForTest(cx, cy);
+
+  CHECK(child->activeIndex() == 1);
+}
+
+// F3.5-b: hovering a plain parent row while child is open closes the child.
+TEST_CASE("F3.5 hover plain parent row closes stale child") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  const int ox = 400, oy = 200;
+  server.injectPointerMotionForTest(ox, oy);
+  server.injectPointerButtonForTest(BTN_RIGHT, /*pressed=*/true);
+  REQUIRE(server.menuOpenForTest());
+
+  // Open child by hovering Workspaces (index 3).
+  server.injectPointerMotionForTest(ox + 30, itemCentreY(oy, 3));
+  Menu *root = server.rootMenuForTest();
+  REQUIRE(root != nullptr);
+  REQUIRE(root->submenuOpenForTest());
+
+  // Hover "foot" (index 0) — plain row in the parent: child should close.
+  server.injectPointerMotionForTest(ox + 30, itemCentreY(oy, 0));
+  CHECK_FALSE(root->submenuOpenForTest());
+  CHECK(server.menuOpenForTest());   // root menu itself stays open
+}
+
+// F3.5-c: clicking outside the whole chain while child is open closes everything.
+TEST_CASE("F3.5 outside-click closes the whole chain") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  const int ox = 400, oy = 200;
+  server.injectPointerMotionForTest(ox, oy);
+  server.injectPointerButtonForTest(BTN_RIGHT, /*pressed=*/true);
+  REQUIRE(server.menuOpenForTest());
+
+  // Open child by hovering Workspaces (index 3).
+  server.injectPointerMotionForTest(ox + 30, itemCentreY(oy, 3));
+  REQUIRE(server.rootMenuForTest() != nullptr);
+  REQUIRE(server.rootMenuForTest()->submenuOpenForTest());
+
+  // Left-press far outside both menus — should dismiss the whole chain.
+  server.injectPointerMotionForTest(1100, 600);
+  server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/true);
+
+  CHECK_FALSE(server.menuOpenForTest());
+}
+
+// F3.5-d: pressing Escape while the child is open closes the whole chain.
+TEST_CASE("F3.5 Escape from child closes the whole chain") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  const int ox = 400, oy = 200;
+  server.injectPointerMotionForTest(ox, oy);
+  server.injectPointerButtonForTest(BTN_RIGHT, /*pressed=*/true);
+  REQUIRE(server.menuOpenForTest());
+
+  // Open child by hovering Workspaces (index 3).
+  server.injectPointerMotionForTest(ox + 30, itemCentreY(oy, 3));
+  REQUIRE(server.rootMenuForTest() != nullptr);
+  REQUIRE(server.rootMenuForTest()->submenuOpenForTest());
+
+  // Press Escape — closes the whole chain.
+  server.injectKeyForTest(XKB_KEY_Escape, 0, true);
+
+  CHECK_FALSE(server.menuOpenForTest());
+}
