@@ -156,3 +156,9 @@ focus_restyle_exe = executable('focus-restyle-test', files('system/focus_restyle
   dependencies : [harness_dep, doctest_dep])
 test('focus_restyle', focus_restyle_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
+
+# F1.4 focus-swap golden: two SSD windows, focused vs unfocused titlebars differ.
+focus_swap_exe = executable('focus-swap-test', files('system/focus_swap_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('focus_swap', focus_swap_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
