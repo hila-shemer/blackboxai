@@ -12,7 +12,8 @@ namespace bbai {
   struct MenuItem {
     enum class Kind { Command, Separator, Submenu };
     enum class Act {
-      None, Exec, WorkspaceSwitch, NewWorkspace, RemoveWorkspace, Restart, Exit
+      None, Exec, WorkspaceSwitch, NewWorkspace, RemoveWorkspace, Restart, Exit,
+      Deiconify
     };
 
     std::u32string label;
@@ -20,6 +21,7 @@ namespace bbai {
     Act  action = Act::None;
     std::vector<std::string> argv;          // for Exec (argv[0] is the program)
     unsigned workspace = ~0u;               // target for WorkspaceSwitch
+    void *target = nullptr;                 // Deiconify: handle to the View
     bool enabled = true;
     bool checked = false;                   // e.g. the current workspace
     std::vector<MenuItem> submenu_items;    // non-empty for Kind::Submenu (cascade)
