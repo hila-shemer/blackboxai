@@ -162,6 +162,12 @@ namespace bbai::test {
     }
   }
 
+  bool writeFramePng(const Frame &f, const std::string &path) {
+    size_t slash = path.find_last_of('/');
+    if (slash != std::string::npos) mkdirs(path.substr(0, slash));
+    return writePNG(path, f.w, f.h, f.pixels);
+  }
+
   bool compareGolden(const Frame &f, const std::string &golden_path,
                      int tolerance, int pixel_budget) {
     const char *bless = std::getenv("BLESS");
