@@ -78,3 +78,6 @@ coverage.xml
 cov/
 *-actual.png
 *-diff.png
+
+# Generated demo videos (regenerate with tools/make-demos.sh)
+demos/*.mp4

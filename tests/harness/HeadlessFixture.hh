@@ -36,6 +36,10 @@ namespace bbai::test {
   bool compareGolden(const Frame &f, const std::string &golden_path,
                      int tolerance = 2, int pixel_budget = 0);
 
+  // Write `f` as a PNG to `path`, creating parent directories as needed.
+  // Returns true on success.
+  bool writeFramePng(const Frame &f, const std::string &path);
+
 } // namespace bbai::test
 
 #endif // BLACKBOXAI_HEADLESS_FIXTURE_HH

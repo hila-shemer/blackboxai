@@ -222,3 +222,33 @@ toolbar_autohide_golden_exe = executable('toolbar-autohide-golden-test',
   dependencies : [harness_dep, doctest_dep])
 test('toolbar_autohide_golden', toolbar_autohide_golden_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# ---- Demo scenarios (suite: 'demo') ----------------------------------------
+# Each is a normal integration test that asserts multi-step behavior AND, when
+# BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via
+# tools/make-demos.sh.  The text_env is required because these tests render
+# title/menu text.
+
+demo_focus_swap_exe = executable('demo-focus-swap',
+  files('system/demo_focus_swap.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('demo_focus_swap', demo_focus_swap_exe, suite : 'demo',
+  workdir : meson.project_source_root(), env : text_env)
+
+demo_cascade_menu_exe = executable('demo-cascade-menu',
+  files('system/demo_cascade_menu.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('demo_cascade_menu', demo_cascade_menu_exe, suite : 'demo',
+  workdir : meson.project_source_root(), env : text_env)
+
+demo_window_ops_exe = executable('demo-window-ops',
+  files('system/demo_window_ops.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('demo_window_ops', demo_window_ops_exe, suite : 'demo',
+  workdir : meson.project_source_root(), env : text_env)
+
+demo_toolbar_exe = executable('demo-toolbar',
+  files('system/demo_toolbar.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('demo_toolbar', demo_toolbar_exe, suite : 'demo',
+  workdir : meson.project_source_root(), env : text_env)
