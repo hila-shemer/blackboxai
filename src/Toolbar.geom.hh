@@ -29,10 +29,18 @@ namespace bbai::toolbar {
 
   inline int barWidth(int OW) { return OW * kWidthPercent / 100; }
 
-  // The bar's on-screen rect (output coords); BottomCenter.
-  inline Rect barRect(int OW, int OH) {
+  enum class Placement { TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight };
+
+  // The bar's on-screen rect (output coords). Default: BottomCenter (preserves
+  // all existing callers that pass only OW,OH).
+  inline Rect barRect(int OW, int OH, Placement p = Placement::BottomCenter) {
     const int bw = barWidth(OW);
-    return { (OW - bw) / 2, OH - kBarHeight, bw, kBarHeight };
+    int x = (OW - bw) / 2;                                   // centered
+    if (p == Placement::TopLeft  || p == Placement::BottomLeft)  x = 0;
+    else if (p == Placement::TopRight || p == Placement::BottomRight) x = OW - bw;
+    const bool top = (p == Placement::TopLeft || p == Placement::TopCenter || p == Placement::TopRight);
+    const int y = top ? 0 : OH - kBarHeight;
+    return { x, y, bw, kBarHeight };
   }
 
   // Equalized workspace-label / clock width = widest text + 2*margin.
