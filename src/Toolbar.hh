@@ -35,6 +35,7 @@ namespace bbai {
     toolbar::Rect barRectForTest(void) const { return toolbar::barRect(ow_, oh_, placement_); }
     toolbar::Placement placementForTest(void) const { return placement_; }
     const std::string &windowTitleForTest(void) const { return window_title_; }
+    void setPlacementForTest(toolbar::Placement p) { placement_ = p; rebuild(); }
 
   private:
     void rebuild(void);
