@@ -707,6 +707,13 @@ namespace bbai {
 
   void Server::deiconifyView(View *v) {
     v->setIconified(false);
+    // If the window was iconified on a different workspace, bring it to the
+    // current one so it is visible before we raise and focus it. Without this,
+    // on_workspace_ stays false and keyboard focus goes to an invisible window.
+    if (v->workspace() != workspaces_.current()) {
+      v->setWorkspace(workspaces_.current());
+      v->setOnWorkspace(true);
+    }
     raiseView(v);
     focusView(v);
     std::erase(icons_, v);

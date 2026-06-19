@@ -210,6 +210,79 @@ TEST_CASE("clicking an icon menu entry deiconifies the window") {
   server.injectKeyForTest(XKB_KEY_Escape, 0, /*pressed=*/true);
 }
 
+TEST_CASE("deiconify from a different workspace brings window to current workspace") {
+  // Regression: deiconifyView cleared iconified_ but left on_workspace_=false when
+  // the window was iconified on ws0 and deiconified from the icon menu on ws1.
+  // Result: focusView fired on an invisible window. Fix: reassign to current ws.
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  test::TestClient ca(server.socketName(), 0xFFFF0000u, 200, 150,
+                      test::TestClient::Deco::RequestSSD);
+  REQUIRE(ca.ok());
+  test::TestClient cb(server.socketName(), 0xFF00FF00u, 200, 150,
+                      test::TestClient::Deco::RequestSSD);
+  REQUIRE(cb.ok());
+
+  pumpUntilBothMapped(server, ca, cb);
+
+  const auto &views = server.viewsForTest();
+  REQUIRE(views.size() >= 2);
+  View *A = views[0].get();
+  View *B = views[1].get();
+  B->setPosition(160, 400);
+
+  // Step 1: confirm A is on workspace 0.
+  REQUIRE(A->workspace() == 0u);
+  REQUIRE(A->visible());
+
+  // Step 2: iconify A from workspace 0.
+  server.injectPointerMotionForTest(260, 130);
+  server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/true);
+  server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/false);
+  REQUIRE(server.focusedViewForTest() == A);
+
+  clickIconifyButton(server, A);
+  REQUIRE(A->isIconified());
+  REQUIRE_FALSE(A->visible());
+
+  // Step 3: switch to workspace 1. A.on_workspace_ becomes false (ws0 != ws1).
+  server.setCurrentWorkspace(1);
+  REQUIRE(server.currentWorkspaceForTest() == 1u);
+  REQUIRE(A->workspace() == 0u);   // still logically on ws0
+
+  // Step 4: open the icon menu from ws1 — A must appear (buildIconMenu lists all
+  // workspaces, which is the precondition for the bug).
+  const int menu_x = 800, menu_y = 400;
+  server.injectPointerMotionForTest(menu_x, menu_y);
+  server.injectPointerButtonForTest(BTN_MIDDLE, /*pressed=*/true);
+  REQUIRE(server.menuOpenForTest());
+  REQUIRE(server.rootMenuForTest() != nullptr);
+  REQUIRE(server.rootMenuForTest()->itemCount() == 1);  // A is listed
+
+  // Step 5: click A's entry → deiconifyView(A).
+  const int iy = itemY(menu_y, menu::titleHeight(18), 0);
+  server.injectPointerMotionForTest(menu_x + 30, iy);
+  server.injectPointerButtonForTest(BTN_LEFT, /*pressed=*/true);
+
+  // Menu must be dismissed.
+  CHECK_FALSE(server.menuOpenForTest());
+
+  // THE BUG ASSERTIONS — these failed before the fix:
+  // A must be visible (not just de-iconified; on_workspace_ must also be true).
+  CHECK(A->visible());
+  // Keyboard focus must not go to an invisible window.
+  CHECK(server.focusedViewForTest() == A);
+  // A must be on the current workspace (ws1), not still stranded on ws0.
+  CHECK(A->workspace() == server.currentWorkspaceForTest());
+  CHECK(A->workspace() == 1u);
+}
+
 TEST_CASE("destroyed iconified window is removed from icons list (no crash, 0 items)") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
