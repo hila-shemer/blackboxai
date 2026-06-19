@@ -162,6 +162,12 @@ namespace bbai {
     applyPosition();
   }
 
+  void Toolbar::handlePointerMotion(double x, double y) {
+    const toolbar::Rect b = toolbar::barRect(ow_, oh_, placement_);   // shown footprint = hot zone
+    const bool over = (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
+    onPointerOverToolbar(over);   // no-op when auto_hide_ is off
+  }
+
   void Toolbar::onPointerOverToolbar(bool over) {
     if (!auto_hide_) return;
     const bool want_shown = over;             // pointer over the bar/sliver -> reveal
