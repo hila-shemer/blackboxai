@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 #include "HeadlessFixture.hh"
 #include "Server.hh"
+#include "Toolbar.hh"
 #include "Toolbar.geom.hh"
 #include "Clock.hh"
 
@@ -26,6 +27,10 @@ TEST_CASE("toolbar: bottom-center bar, workspace name, ticking clock") {
   CHECK(bar.y == 697);
   CHECK(bar.w == 844);
   CHECK(bar.h == 23);
+
+  // F2.2: Toolbar carries a placement member; default is BottomCenter.
+  CHECK(server.toolbarForTest()->placementForTest() == toolbar::Placement::BottomCenter);
+  CHECK(server.toolbarForTest()->barRectForTest().y == 697);
 
   test::Frame f = test::captureFrame(server);
   REQUIRE(f.w == 1280u);
