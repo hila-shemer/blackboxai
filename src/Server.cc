@@ -365,6 +365,7 @@ namespace bbai {
       if (Menu *lm = liveMenu()) lm->setActive(-1);
       return;
     }
+    if (toolbar_) toolbar_->handlePointerMotion(cursor->x, cursor->y);   // auto-hide edge trigger (no-op when off)
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
     if (cursor_mode == CursorMode::Resize) { processResize(); return; }
 
