@@ -8,24 +8,29 @@ under `~/.claude/projects/-home-hila-proj-blackboxai/memory/`._
 
 ## Resume prompt (paste into a fresh session)
 
-> Resume BlackboxAI (Wayland compositor rewrite of Blackbox, wlroots 0.19, C++20,
+> Resume BlackboxAI (Wayland compositor rewrite of Blackbox, wlroots **0.20**, C++20,
 > at `/home/hila/proj/blackboxai`). Read `docs/superpowers/RESUME.md` first, then
 > the project memory `~/.claude/projects/-home-hila-proj-blackboxai/memory/MEMORY.md`.
-> Status: **M1–M4 complete, merged, and pushed.** All of M1–M4 is on
-> `wayland-rewrite` (tip `5e765a4` = the `milestone: M4 … complete` marker over the
-> `Merge M4 Phase B` commit). M4 Phase B was merged `--no-ff` after a SECOND
-> adversarial review; the M4-B work branches `m4-phase-b` / `m4-phase-4-cont` (tip
-> `ec9034d`) are pushed but now subsumed by the merge. Green: 90% coverage, gate
-> 80%, clean-room CI-verified. My working style: pause to ask the genuinely
-> important user-owned decisions, then go all the way to push-ready with maximum
-> effort; rewrite over patch; tests + golden-PNGs over caveats; keep coverage up;
-> use the ultracode multi-agent treatment (parallel design research up front + an
-> adversarial review before pushing) for substantial milestones; for big milestones
-> offer a mid-way review checkpoint. **Next options (ask me which):** (a) start the
-> **M5** plan (style/config fidelity: drop-in `.blackboxrc`/style/menu-file parsing
-> + slit geometry); (b) knock out the deferred M4 follow-ups (cascade submenus,
-> toolbar auto-hide, active/inactive focus-swap, iconbar/iconify wiring). Don't
-> start coding before confirming which, and surface any important decision first.
+> Status: **M1–M4, the wlroots 0.19→0.20 port, AND all four deferred M4 features are
+> complete and green on `wayland-rewrite`.** The fc43→44 host upgrade forced the 0.20
+> port (build-system only — a sanitize shim for the new `render/color.h`; no src/ call
+> site changed); CI bumped to fedora:44. The four deferred follow-ups are now DONE:
+> active/inactive focus-swap, cascade root-menu submenus (Workspaces + New/Remove),
+> iconbar + iconify/maximize (icon menu via middle-click + **Mod4+Alt+T**; root menu was
+> already on Mod4+Space), toolbar auto-hide + placements (default off). An ultracode
+> adversarial review passed (1 must-fix — cross-workspace deiconify focusing an invisible
+> window — fixed; 2 auto-hide test-coverage gaps closed). Parked on the fork via git-park:
+> `refs/wip/wayland-rewrite` (pre-demo checkpoint) and `refs/staging/wayland-rewrite`
+> (full demos). Demo videos in `demos/*.mp4` (regenerate with `tools/make-demos.sh`;
+> gitignored, on-disk artifacts). Green: **90% coverage**, gate 80%, 33 test executables
+> incl. a `demo` suite. My working style: pause to ask the genuinely important user-owned
+> decisions, then go all the way to push-ready with maximum effort; rewrite over patch;
+> tests + golden-PNGs over caveats; keep coverage up; ultracode multi-agent treatment
+> (parallel design research up front + adversarial review before pushing) for substantial
+> milestones; offer a mid-way checkpoint. **Next: M5 — style/config fidelity** (drop-in
+> `.blackboxrc`/style/menu-file parsing + live re-theme via Configmenu + slit geometry).
+> The Configmenu is also where the deferred config knobs land (`focusNewWindows`, toolbar
+> placement/auto-hide defaults — all hardcoded for now). Confirm scope before coding.
 
 ---
 
@@ -39,13 +44,23 @@ under `~/.claude/projects/-home-hila-proj-blackboxai/memory/`._
 | **M4 Phase A** | StackingList/Workspace models + `bt::Clock`/Timer + Toolbar w/ ticking clock | `wayland-rewrite` @ `ecdd4a7` | ✅ |
 | **M4 Phase B** | Keyboard/keybindings + workspace switching + modal Rootmenu + CommandRunner | merged into `wayland-rewrite` @ `db5d242` | ✅ |
 | **M4 complete** | second adversarial-review fixes + `milestone:` marker | `wayland-rewrite` @ `5e765a4` | ✅ |
+| **M5(port)** | wlroots 0.19→0.20 (build-system shim for `render/color.h`) + CI fedora:44 | `wayland-rewrite` @ `b45727c`,`2d1ed83` | ✅ |
+| **F1 focus-swap** | active/inactive frame decoration on focus | `wayland-rewrite` @ `ed74783` | ✅ |
+| **F3 cascade submenus** | Workspaces submenu; New/Remove reachable | `wayland-rewrite` @ `69c239c` | ✅ |
+| **F4 iconbar+iconify** | iconify/maximize/close wiring + Iconified-Windows menu | `wayland-rewrite` @ `dccb160` | ✅ |
+| **F2 toolbar auto-hide** | placements + auto-hide (default OFF) | `wayland-rewrite` @ `527fcbe` | ✅ |
+| **review + demos** | adversarial-review fixes + demo-video suite | `wayland-rewrite` @ `1c3ed6a` | ✅ wip+staging |
 
 - Remote: `github.com:hila-shemer/blackboxai`. `main` is the untouched base (`90d2b70`).
+- **Parked via git-park** (`/home/hila/remote-local-bin/git-park`, pushes hidden refs to
+  the fork): `refs/wip/wayland-rewrite` (pre-demo checkpoint) and
+  `refs/staging/wayland-rewrite` (full demos). `git-park list wip staging` to see them.
 - **M4 Phase B IS merged into `wayland-rewrite`** (`--no-ff` merge `db5d242`, marker
   `5e765a4`). The `m4-phase-b` / `m4-phase-4-cont` refs (tip `ec9034d`) are kept but
   subsumed by the merge.
 - M1–M4 each have a `milestone: …` marker commit.
-- ~100 test cases, **90% line coverage** (gate 80%). Working tree clean.
+- 33 test executables (unit / system / `demo` suites), **90% line coverage** (gate 80%).
+  Working tree clean. Demo videos: `demos/*.mp4` (regenerate: `tools/make-demos.sh`).
 
 ## Build / test / verify (the exact commands)
 
@@ -88,21 +103,22 @@ gcovr -r . build --filter 'toolkit/' --filter 'src/' --fail-under-line=80   # co
 
 ## Next work (pick one; confirm before coding)
 
-- _(done 2026-06-14: M4 Phase B merged into `wayland-rewrite` + `milestone: M4`
-  marker, after a second adversarial review — see the merge `db5d242` / marker
-  `5e765a4`.)_
+- _(done 2026-06-17..19: wlroots 0.20 port + ALL four deferred M4 follow-ups —
+  active/inactive focus-swap, cascade submenus (+ New/RemoveWorkspace reachable),
+  iconbar + iconify/maximize, toolbar auto-hide + placements — implemented subagent-
+  driven with an adversarial review; parked wip + staging. See the status table.)_
 - **M5 — style/config fidelity (drop-in) + slit geometry** (~2.5 wk per roadmap):
-  load original `.blackboxrc`/style/menu files unchanged; live re-theme via
-  Configmenu; slit placement/auto-hide. This is where most of the deferred M4
-  items naturally land.
-- **Deferred M4 follow-ups** (all intentionally cut to M5, flagged in code):
-  - Menu **cascade submenus** (M4 ships a FLAT root menu) + menu-file parsing.
-  - Toolbar **auto-hide** + placements other than BottomCenter.
-  - **Active/inactive frame-focus swap** (needs multiple windows; M3 cut it).
-  - **Iconbar** population (needs iconify state/actions; window buttons are drawn
-    but iconify/maximize are not wired).
-  - `NewWorkspace`/`RemoveWorkspace` menu actions are coded in `itemClicked` but
-    not emitted by the flat menu yet (reachable when the Workspaces submenu lands).
+  load original `.blackboxrc`/style/menu files unchanged; live re-theme via Configmenu;
+  slit placement/auto-hide. The deferred M4 *behaviors* are all done; what M5 still owns:
+  - **menu-file parsing** (the cascade machinery exists; M4/Phase-2 used the in-code
+    menu — drop-in menu files are M5).
+  - the **Configmenu** + `.blackboxrc` parsing, which is where the currently-hardcoded
+    knobs become configurable: `focusNewWindows` (Phase 2 hardcoded NO auto-focus, so a
+    lone window renders inactive), toolbar **placement** (TopLeft..BottomRight all work
+    via `setPlacementForTest`, no config source yet) and **auto-hide default** (OFF).
+  - a real **work-area/strut** abstraction (maximize currently hardcodes output-minus-
+    toolbar on the single M1 output).
+  - the **slit** (SNI/StatusNotifierItem tray) — still unstarted.
 
 ## Documented coverage gaps (untestable headless — don't chase blindly)
 
