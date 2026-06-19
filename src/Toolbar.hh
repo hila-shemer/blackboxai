@@ -37,6 +37,7 @@ namespace bbai {
     const std::string &windowTitleForTest(void) const { return window_title_; }
     void setPlacementForTest(toolbar::Placement p) { placement_ = p; rebuild(); }
 
+    void handlePointerMotion(double x, double y);
     void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
     void setAutoHideForTest(bool on);              // enable auto-hide (no config yet)
     bool hiddenForTest(void) const { return hidden_; }

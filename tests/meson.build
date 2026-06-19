@@ -215,3 +215,10 @@ toolbar_autohide_exe = executable('toolbar-autohide-test',
   dependencies : [harness_dep, doctest_dep])
 test('toolbar_autohide', toolbar_autohide_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
+
+# F2.6 Toolbar auto-hide hidden golden + reveal via pointer motion.
+toolbar_autohide_golden_exe = executable('toolbar-autohide-golden-test',
+  files('system/toolbar_autohide_golden_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('toolbar_autohide_golden', toolbar_autohide_golden_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
