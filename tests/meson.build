@@ -208,3 +208,10 @@ toolbar_placement_exe = executable('toolbar-placement-test',
   dependencies : [harness_dep, doctest_dep])
 test('toolbar_placement', toolbar_placement_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# F2.5 Toolbar auto-hide: state + hide timer (position only, no golden).
+toolbar_autohide_exe = executable('toolbar-autohide-test',
+  files('system/toolbar_autohide_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('toolbar_autohide', toolbar_autohide_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
