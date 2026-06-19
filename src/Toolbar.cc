@@ -58,9 +58,11 @@ namespace bbai {
     // Per-minute clock tick (deterministic in tests via the VirtualClock).
     clock_timer_ = std::make_unique<Timer>(server_.timerRegistry(), *this);
     clock_timer_->start(60000, /*recurring=*/true);
+    hide_timer_ = std::make_unique<Timer>(server_.timerRegistry(), hide_handler_);
   }
 
   Toolbar::~Toolbar() {
+    hide_timer_.reset();    // unregister before the registry
     clock_timer_.reset();   // unregister before the registry
     clearNodes();
     if (tree_) wlr_scene_node_destroy(&tree_->node);
@@ -97,7 +99,6 @@ namespace bbai {
   void Toolbar::rebuild(void) {
     clearNodes();
     const toolbar::Rect bar = toolbar::barRect(ow_, oh_, placement_);
-    wlr_scene_node_set_position(&tree_->node, bar.x, bar.y);
 
     bt::TextRenderer *font = server_.titleFont();
     const std::string ws_name = server_.workspaces().name(server_.workspaces().current());
@@ -134,6 +135,7 @@ namespace bbai {
     button(sections_.prev_win, /*right=*/false);
     button(sections_.next_win, /*right=*/true);
     redrawClock();
+    applyPosition();
   }
 
   void Toolbar::redrawClock(void) {
@@ -147,6 +149,30 @@ namespace bbai {
                      bt::decodeUtf8(clockText().c_str()), textColor());
     }
     emit(sections_.clock, std::move(px), /*is_clock=*/true);
+  }
+
+  void Toolbar::applyPosition(void) {
+    const toolbar::Rect shown = toolbar::barRect(ow_, oh_, placement_);
+    const toolbar::Rect r = hidden_ ? toolbar::hiddenBarRect(shown, placement_) : shown;
+    wlr_scene_node_set_position(&tree_->node, r.x, r.y);
+  }
+
+  void Toolbar::onHideTimeout(void) {
+    hidden_ = !hidden_;
+    applyPosition();
+  }
+
+  void Toolbar::onPointerOverToolbar(bool over) {
+    if (!auto_hide_) return;
+    const bool want_shown = over;             // pointer over the bar/sliver -> reveal
+    if (want_shown == !hidden_) { hide_timer_->stop(); return; }   // already in/heading to the right state
+    hide_timer_->start(kHideDelayMs, /*recurring=*/false);         // one-shot toward the toggle
+  }
+
+  void Toolbar::setAutoHideForTest(bool on) {
+    auto_hide_ = on;
+    hidden_ = on;
+    applyPosition();
   }
 
 } // namespace bbai

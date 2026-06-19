@@ -37,11 +37,28 @@ namespace bbai {
     const std::string &windowTitleForTest(void) const { return window_title_; }
     void setPlacementForTest(toolbar::Placement p) { placement_ = p; rebuild(); }
 
+    void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
+    void setAutoHideForTest(bool on);              // enable auto-hide (no config yet)
+    bool hiddenForTest(void) const { return hidden_; }
+
   private:
     void rebuild(void);
     void clearNodes(void);
     void emit(toolbar::Rect r, std::vector<uint32_t> px, bool is_clock = false);
     std::string clockText(void) const;
+    void applyPosition(void);
+    void onHideTimeout(void);
+
+    static constexpr int kHideDelayMs = 250;
+    struct HideTick : TimeoutHandler {
+      explicit HideTick(Toolbar *t) : tb(t) {}
+      Toolbar *tb;
+      void timeout() override { tb->onHideTimeout(); }
+    };
+    HideTick hide_handler_{ this };
+    std::unique_ptr<Timer> hide_timer_;
+    bool auto_hide_ = false;
+    bool hidden_ = false;
 
     Server &server_;
     wlr_scene_tree *tree_;
