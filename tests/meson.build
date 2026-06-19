@@ -201,3 +201,10 @@ icon_menu_exe = executable('icon-menu-test', files('system/icon_menu_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('icon_menu', icon_menu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# F2.3 Toolbar TopCenter placement golden.
+toolbar_placement_exe = executable('toolbar-placement-test',
+  files('system/toolbar_placement_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('toolbar_placement', toolbar_placement_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
