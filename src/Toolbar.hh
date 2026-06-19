@@ -32,7 +32,8 @@ namespace bbai {
     void redrawWorkspaceLabel(void);              // on workspace switch (Phase B)
     void redrawWindowLabel(const char *title);    // on focus change (null/"" -> blank)
 
-    toolbar::Rect barRectForTest(void) const { return toolbar::barRect(ow_, oh_); }
+    toolbar::Rect barRectForTest(void) const { return toolbar::barRect(ow_, oh_, placement_); }
+    toolbar::Placement placementForTest(void) const { return placement_; }
     const std::string &windowTitleForTest(void) const { return window_title_; }
 
   private:
@@ -44,6 +45,7 @@ namespace bbai {
     Server &server_;
     wlr_scene_tree *tree_;
     int ow_, oh_;
+    toolbar::Placement placement_ = toolbar::Placement::BottomCenter;
     int label_w_ = 0, clock_w_ = 0;
     toolbar::Sections sections_{};
     std::vector<wlr_scene_node *> nodes_;   // all section nodes except the clock

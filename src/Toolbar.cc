@@ -96,7 +96,7 @@ namespace bbai {
 
   void Toolbar::rebuild(void) {
     clearNodes();
-    const toolbar::Rect bar = toolbar::barRect(ow_, oh_);
+    const toolbar::Rect bar = toolbar::barRect(ow_, oh_, placement_);
     wlr_scene_node_set_position(&tree_->node, bar.x, bar.y);
 
     bt::TextRenderer *font = server_.titleFont();
