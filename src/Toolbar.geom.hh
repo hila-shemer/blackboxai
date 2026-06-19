@@ -43,6 +43,15 @@ namespace bbai::toolbar {
     return { x, y, bw, kBarHeight };
   }
 
+  // The bar slid mostly off its edge, leaving a kHiddenHeight sliver on-screen.
+  inline Rect hiddenBarRect(Rect shown, Placement p) {
+    const bool top = (p == Placement::TopLeft || p == Placement::TopCenter || p == Placement::TopRight);
+    Rect r = shown;
+    r.y = top ? shown.y + kHiddenHeight - shown.h    // slide up (negative y)
+              : shown.y + shown.h - kHiddenHeight;    // slide down
+    return r;
+  }
+
   // Equalized workspace-label / clock width = widest text + 2*margin.
   inline int labelWidth(int max_text_w) { return max_text_w + kLabelMargin * 2; }
 

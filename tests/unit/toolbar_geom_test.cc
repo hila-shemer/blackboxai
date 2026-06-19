@@ -54,6 +54,16 @@ TEST_CASE("barRect placement variants") {
   }
 }
 
+TEST_CASE("hiddenBarRect slides bar to leave kHiddenHeight sliver at screen edge") {
+  using P = bbai::toolbar::Placement;
+  auto bc = barRect(1280, 720, P::BottomCenter);            // {218,697,844,23}
+  auto hbc = hiddenBarRect(bc, P::BottomCenter);
+  CHECK(hbc.x == 218); CHECK(hbc.y == 718); CHECK(hbc.w == 844); CHECK(hbc.h == 23);   // slid down: 697+23-2
+  auto tc = barRect(1280, 720, P::TopCenter);               // {218,0,844,23}
+  auto htc = hiddenBarRect(tc, P::TopCenter);
+  CHECK(htc.x == 218); CHECK(htc.y == -21); CHECK(htc.w == 844); CHECK(htc.h == 23);   // slid up: 0+2-23
+}
+
 TEST_CASE("sectionRects is placement-independent (takes bar_w, not placement)") {
   // sectionRects only depends on bar_w / label_w / clock_w; compute it once and
   // verify it gives the same result regardless of which placement barRect used.
