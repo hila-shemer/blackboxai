@@ -1,0 +1,32 @@
+ARTIFACTS READY — BlackboxAI wlroots 0.20 port + the four deferred M4 features
+(2026-06-19, branch wayland-rewrite, tip b2d88ac)
+
+WHAT'S DONE
+  - wlroots 0.19 -> 0.20 port (build-system only; the fc43->44 upgrade forced it).
+  - All four deferred M4 features: active/inactive focus-swap, cascade root-menu
+    submenus (Workspaces + New/Remove), iconbar + iconify/maximize (icon menu on
+    middle-click + Mod4+Alt+T), toolbar auto-hide + placements (default off).
+  - Ultracode adversarial review passed: 1 must-fix (cross-workspace deiconify
+    focusing an invisible window) fixed; 2 auto-hide test gaps closed.
+  - Green: 33 test executables (unit/system/demo), 90% line coverage (gate 80%).
+
+PARKED ON THE FORK (git-park; hidden refs, not branches)
+  - refs/wip/wayland-rewrite      pre-demo checkpoint (reviewed, green)
+  - refs/staging/wayland-rewrite  full demos (this tip, b2d88ac)
+  list:    /home/hila/remote-local-bin/git-park list wip staging
+  restore: /home/hila/remote-local-bin/git-park restore staging wayland-rewrite <local>
+
+DEMO VIDEOS (on disk; player on this machine; regenerable, gitignored)
+  /home/hila/proj/blackboxai/demos/focus_swap.mp4       active/inactive frame focus
+  /home/hila/proj/blackboxai/demos/cascade_menu.mp4     root menu -> Workspaces submenu
+  /home/hila/proj/blackboxai/demos/window_ops.mp4       maximize/restore + iconify + deiconify
+  /home/hila/proj/blackboxai/demos/toolbar_autohide.mp4 auto-hide reveal/hide
+  regenerate: tools/make-demos.sh
+
+NEXT (M5, not started): drop-in .blackboxrc/style/menu-file parsing + Configmenu
+  (where the hardcoded focusNewWindows / toolbar placement / auto-hide knobs land),
+  a real work-area/strut abstraction, and the slit (SNI tray).
+  Full handoff: docs/superpowers/RESUME.md
+
+NOTHING BLOCKED — no human action required. main is untouched (90d2b70); nothing
+was pushed to a branch, only the wip/staging park refs on the fork.
