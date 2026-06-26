@@ -22,8 +22,10 @@ namespace bbai::screenshot {
     if (!png) return out;
     png_infop info = png_create_info_struct(png);
     if (!info) { png_destroy_write_struct(&png, nullptr); return out; }
-    // libpng error path. Keep no non-trivial-dtor locals live across this setjmp
-    // except `out`, which we clear on error (mirrors the harness writePNG).
+    // `out` and `row` are both declared BEFORE this setjmp, so a longjmp out of
+    // any png_write_* call returns to the block below and the normal `return`
+    // there runs their destructors (longjmp itself does not unwind C++ locals).
+    std::vector<png_byte> row(static_cast<size_t>(w) * 4);
     if (setjmp(png_jmpbuf(png))) {
       png_destroy_write_struct(&png, &info);
       out.clear();
@@ -33,7 +35,6 @@ namespace bbai::screenshot {
     png_set_IHDR(png, info, w, h, 8, PNG_COLOR_TYPE_RGBA,
                  PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
     png_write_info(png, info);
-    std::vector<png_byte> row(static_cast<size_t>(w) * 4);
     for (int y = 0; y < h; ++y) {
       for (int x = 0; x < w; ++x) {
         const uint32_t p = px[static_cast<size_t>(y) * w + x];

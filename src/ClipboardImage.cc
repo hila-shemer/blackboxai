@@ -46,6 +46,7 @@ namespace bbai {
       auto *w = new Writer{ ci->png, 0, fd, nullptr };
       wl_event_loop *loop = wl_display_get_event_loop(ci->display);
       w->src = wl_event_loop_add_fd(loop, fd, WL_EVENT_WRITABLE, writerCb, w);
+      if (!w->src) { close(fd); delete w; return; }   // add_fd OOM: don't leak fd+Writer
     }
 
     void ciDestroy(wlr_data_source *source) {
