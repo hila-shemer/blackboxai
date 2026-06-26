@@ -78,11 +78,24 @@ TEST_CASE("while selecting, pointer input does not reach a focused client") {
   REQUIRE(c.ok());
   auto mapped = [&] { const auto &v = s->viewsForTest(); return !v.empty() && v[0]->isMapped(); };
   for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); s->dispatch(); c.pump(); }
-  s->injectKeyForTest(XKB_KEY_F7, WLR_MODIFIER_LOGO, true);
-  s->injectPointerMotionForTest(260, 130);              // over the client
+  View *v = s->viewsForTest()[0].get();
+  const int cx = v->x() + 20, cy = v->y() + 40;   // client content area, below titlebar
+  auto settle = [&] { for (int i = 0; i < 15; ++i) { c.flush(); s->dispatch(); c.pump(); } };
+
+  // POSITIVE CONTROL: a press+release over the client IS delivered (2 events),
+  // so the suppression assertion below actually proves the gate did something.
+  s->injectPointerMotionForTest(cx, cy);
   s->injectPointerButtonForTest(BTN_LEFT, true);
-  for (int i = 0; i < 10; ++i) { c.flush(); s->dispatch(); c.pump(); }
-  CHECK(c.pointerButtonEvents() == 0);                  // modal: client saw nothing
+  s->injectPointerButtonForTest(BTN_LEFT, false);
+  settle();
+  REQUIRE(c.pointerButtonEvents() == 2);
+
+  // Arm the mode, then press over the same spot: the client must see nothing more.
+  s->injectKeyForTest(XKB_KEY_F7, WLR_MODIFIER_LOGO, true);
+  s->injectPointerMotionForTest(cx, cy);
+  s->injectPointerButtonForTest(BTN_LEFT, true);
+  settle();
+  CHECK(c.pointerButtonEvents() == 2);   // unchanged: the modal gate suppressed it
   delete s;
 }
 
