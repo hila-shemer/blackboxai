@@ -222,3 +222,42 @@ net-new (`wlr_cursor_set_xcursor(cursor, xcursor_mgr, "crosshair")`); a theme wi
 crosshair glyph is a silent no-op, eyeballed in the nested run. `wlr_scene_rect` color
 is **premultiplied** - black-at-0.35 is fine, but a future tint must be authored
 premultiplied. The overlay tree is **destroyed** (not hidden) before the capture render.
+
+## Post-implementation review (2026-06-26): fixed + accepted
+
+An adversarial-review workflow (five dimensions, each finding independently verified)
+plus a nested GL smoke run shook out the following. **Fixed:**
+
+- ScreenshotSelect copied the menu gate for keys and pointer but missed three things
+  the menu gate handles, all now closed: `onModifiers` gates the mode (+ re-sync on
+  exit) so a released modifier isn't stuck-down in the focused client; `beginScreenshot`
+  clears pointer focus so a client holding a button at arm-time isn't stranded mid-drag
+  (its button-up is swallowed while modal); and the exit paths re-resolve pointer focus.
+- `captureRegion` guards against `build_state` direct-scanning-out a single opaque
+  full-output buffer (it would hand back the client's own buffer, wrong-sized + offset):
+  it bails on a texture whose dimensions don't match the output rather than reading
+  mismatched coordinates. Effectively unreachable while the always-present toolbar keeps
+  the scene list >1, but cheap insurance.
+- Hygiene: `~Server` frees the dim overlay if a drag was live; `encodePng`'s `row` is
+  declared before the `setjmp` so a libpng longjmp doesn't leak it; `ciSend` doesn't leak
+  the fd+Writer if `wl_event_loop_add_fd` fails.
+- Test rigor: the e2e now decodes the clipboard PNG and asserts the region dimensions +
+  an un-dimmed window pixel (was: PNG magic only); the modal pointer-suppression test
+  gained a positive control; a second-screenshot test exercises the re-entrant
+  selection-replacement (double-free) path; the clipboard test tears down via the real
+  `wlr_data_source_destroy` ordering.
+
+**Accepted (documented, not chased):**
+
+- The **real `onKey` body** for the ScreenshotSelect branch (the Escape match over
+  `nsyms`, the `swallowed_keycodes_` press+release swallow, key suppression to the focused
+  client) is headless-untestable without a fake `wlr_keyboard` - the exact limitation the
+  project already accepts for the modal menu (gotchas memory #24). Tests drive the
+  matcher + the modal nav via `injectKeyForTest`; the real keyboard path is eyeballed in
+  the nested run. The production branch is consistent with the menu's, which is exercised.
+- The **GL `read_pixels` failure path** (`px.empty()` -> no clipboard) is defensive. The
+  GL path itself is **validated**: a nested run on the real GPU (`is_pixman=0`) returned
+  `read_pixels(ARGB8888) -> 1` with correctly-ordered pixels - `GL_EXT_read_format_bgra`
+  is present, so the documented GL risk does not bite here.
+- The **in-flight paste `Writer` leak at compositor shutdown** is shutdown-only hygiene
+  (the OS reclaims the fd + memory on exit); not worth a Writer-tracking registry.
