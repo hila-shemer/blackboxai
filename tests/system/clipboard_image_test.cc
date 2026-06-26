@@ -54,8 +54,9 @@ TEST_CASE("ClipboardImage offers image/png and serves the bytes over a pipe") {
   CHECK(got == *blob);
   CHECK(fcntl(wfd, F_GETFD) == -1);     // writer closed the write end
 
-  // Destroy: wlroots would call impl->destroy on selection replacement; do it directly.
-  ci->base.impl->destroy(&ci->base);    // no crash, frees the C++ subtype
+  // Tear down via the real wlroots path (frees mime_types, then calls ciDestroy) -
+  // the same ordering a selection replacement triggers.
+  wlr_data_source_destroy(&ci->base);
 }
 
 TEST_CASE("ClipboardImage writer cleans up when the reader hangs up early") {
@@ -71,5 +72,5 @@ TEST_CASE("ClipboardImage writer cleans up when the reader hangs up early") {
   ci->base.impl->send(&ci->base, "image/png", fds[1]);
   for (int i = 0; i < 50; ++i) server.dispatch();   // writer hits EPIPE/HANGUP
   CHECK(fcntl(fds[1], F_GETFD) == -1);  // writer closed its fd, removed its source
-  ci->base.impl->destroy(&ci->base);
+  wlr_data_source_destroy(&ci->base);
 }
