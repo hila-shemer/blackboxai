@@ -50,6 +50,7 @@ under `~/.claude/projects/-home-hila-proj-blackboxai/memory/`._
 | **F4 iconbar+iconify** | iconify/maximize/close wiring + Iconified-Windows menu | `wayland-rewrite` @ `dccb160` | ✅ |
 | **F2 toolbar auto-hide** | placements + auto-hide (default OFF) | `wayland-rewrite` @ `527fcbe` | ✅ |
 | **review + demos** | adversarial-review fixes + demo-video suite | `wayland-rewrite` @ `1c3ed6a` | ✅ wip+staging |
+| **Screenshot** | Super+F7 region → clipboard PNG (capture + server-side `wlr_data_source`); 7 TDD + 4 review commits; GL-validated | `wayland-rewrite` @ `e0d10ea` | ✅ |
 
 - Remote: `github.com:hila-shemer/blackboxai`. `main` is the untouched base (`90d2b70`).
 - **Parked via git-park** (`/home/hila/remote-local-bin/git-park`, pushes hidden refs to
@@ -100,6 +101,22 @@ gcovr -r . build --filter 'toolkit/' --filter 'src/' --fail-under-line=80   # co
    confirmed findings + add the missing tests, then push.
    - M3 review caught a real resize-anchor bug; M4-B review caught a null-`xkb_state`
      deref crash + a grab-stranding bug. Worth doing.
+
+## Screenshot feature (2026-06-26, DONE)
+
+User-requested standalone feature, not part of the M-roadmap: **Super+F7 (Mod4+F7) →
+click-drag a region → PNG straight to the clipboard** (GNOME-style dim overlay).
+Whole-window/screen modes and file-save are explicit non-goals. Spec
+`specs/2026-06-23-screenshot-region-clipboard-design.md`, plan
+`plans/2026-06-26-screenshot-region-clipboard.md`. New: `src/Screenshot.{geom.hh,hh,cc}`
+(pure `dimRects`, libpng `encodePng`, renderer-agnostic `captureRegion` via
+`wlr_texture_read_pixels`) + `src/ClipboardImage.{hh,cc}` (server-side `wlr_data_source`,
+async event-loop writer). `Server` gained `CursorMode::ScreenshotSelect`. Full ultracode
+treatment: design-research workflow (compiled C POCs), TDD one-commit-per-task, adversarial
+review (16 confirmed findings → 3 production fixes + hygiene + test hardening), nested GL
+smoke run (`read_pixels(ARGB8888)` validated on the real GPU). 38 suites, 90% coverage.
+The **only un-automated check**: a real cross-client paste (drag Super+F7, paste into an
+app) — needs physical input; the serving half is covered by pipe tests.
 
 ## Next work (pick one; confirm before coding)
 
