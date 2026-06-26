@@ -85,3 +85,22 @@ TEST_CASE("while selecting, pointer input does not reach a focused client") {
   CHECK(c.pointerButtonEvents() == 0);                  // modal: client saw nothing
   delete s;
 }
+
+TEST_CASE("arming with a held button clears the client's pointer focus (no stuck drag)") {
+  Server *s = boot();
+  test::TestClient c(s->socketName(), 0xFFFF0000u, 200, 150,
+                     test::TestClient::Deco::RequestSSD);
+  REQUIRE(c.ok());
+  auto mapped = [&] { const auto &v = s->viewsForTest(); return !v.empty() && v[0]->isMapped(); };
+  for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); s->dispatch(); c.pump(); }
+  View *v = s->viewsForTest()[0].get();
+  // Press inside the client area (below the 23px titlebar) so the seat focuses the
+  // client surface with a button held.
+  s->injectPointerMotionForTest(v->x() + 20, v->y() + 40);
+  s->injectPointerButtonForTest(BTN_LEFT, true);
+  for (int i = 0; i < 10; ++i) { c.flush(); s->dispatch(); c.pump(); }
+  REQUIRE(s->focusedPointerSurfaceForTest() == v->toplevel()->base->surface);
+  s->injectKeyForTest(XKB_KEY_F7, WLR_MODIFIER_LOGO, true);   // arm mid-press
+  CHECK(s->focusedPointerSurfaceForTest() == nullptr);        // implicit grab released
+  delete s;
+}
