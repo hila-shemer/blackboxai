@@ -49,10 +49,41 @@ namespace bbai::screenshot {
     return out;
   }
 
-  std::vector<uint32_t> captureRegion(wlr_scene_output *, wlr_renderer *,
-                                      Rect, int &outW, int &outH) {
-    outW = outH = 0;   // Task 3 fills this in.
-    return {};
+  std::vector<uint32_t> captureRegion(wlr_scene_output *so, wlr_renderer *renderer,
+                                      Rect sel, int &outW, int &outH) {
+    outW = outH = 0;
+    if (!so || !so->output || !renderer) return {};
+    sel = clampToOutput(sel, so->output->width, so->output->height);
+    if (sel.w <= 0 || sel.h <= 0) return {};
+
+    wlr_output_state st;
+    wlr_output_state_init(&st);
+    if (!wlr_scene_output_build_state(so, &st, nullptr)) {
+      wlr_output_state_finish(&st);
+      return {};
+    }
+    wlr_texture *tex = wlr_texture_from_buffer(renderer, st.buffer);
+    if (!tex) { wlr_output_state_finish(&st); return {}; }
+
+    std::vector<uint32_t> px(static_cast<size_t>(sel.w) * sel.h);
+    // src_box is a const member -> build the whole options aggregate at once.
+    const wlr_texture_read_pixels_options opts = {
+      .data = px.data(),
+      .format = DRM_FORMAT_ARGB8888,
+      .stride = static_cast<uint32_t>(sel.w) * 4,
+      .dst_x = 0,
+      .dst_y = 0,
+      .src_box = { .x = sel.x, .y = sel.y, .width = sel.w, .height = sel.h },
+    };
+    const bool ok = wlr_texture_read_pixels(tex, &opts);
+    wlr_texture_destroy(tex);
+    wlr_output_state_finish(&st);
+    if (!ok) return {};
+
+    for (uint32_t &p : px) p |= 0xFF000000u;   // opaque guard (ARGB read is already opaque)
+    outW = sel.w;
+    outH = sel.h;
+    return px;
   }
 
 } // namespace bbai::screenshot

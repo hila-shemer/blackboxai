@@ -173,6 +173,13 @@ screenshot_png_exe = executable('screenshot-png-test',
 test('screenshot_png', screenshot_png_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Region screenshot: scene readback crop (texture_from_buffer + read_pixels).
+screenshot_capture_exe = executable('screenshot-capture-test',
+  files('system/screenshot_capture_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('screenshot_capture', screenshot_capture_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
 view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
   dependencies : [harness_dep, doctest_dep])
