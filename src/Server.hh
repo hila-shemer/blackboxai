@@ -159,6 +159,7 @@ namespace bbai {
     void beginInteractive(View *v, CursorMode mode, uint32_t edges);
     void beginScreenshot();   // arm region-select mode (crosshair); aborts any grab
     void cancelScreenshot();           // tear down, restore cursor, no capture
+    void resyncSeatAfterScreenshot();  // re-resolve pointer focus + modifiers on exit
     void updateScreenshotOverlay();    // reposition the four dim rects to the drag
     void destroyScreenshotOverlay();   // destroy the overlay tree
     void finishScreenshot();           // capture on a real release -> clipboard (T7)

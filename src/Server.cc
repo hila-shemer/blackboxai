@@ -200,6 +200,7 @@ namespace bbai {
     cursor_frame.disconnect();
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish
     active_menu_.reset();     // destroys its overlay scene tree
+    destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
@@ -330,6 +331,21 @@ namespace bbai {
     }
     cursor_mode = CursorMode::ScreenshotSelect;
     wlr_cursor_set_xcursor(cursor, xcursor_mgr, "crosshair");
+    // Release any client-side implicit pointer grab (mirrors openRootMenu): a
+    // client holding a button when the keyboard-triggered mode arms would
+    // otherwise never see its button-up (we swallow releases while modal) and be
+    // stranded mid-drag.
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
+  // Leaving the modal mode: re-resolve pointer focus onto whatever the cursor is
+  // now over, and re-sync modifiers so one released during the mode isn't left
+  // stuck-down in the focused client (mirrors closeMenus). cursor_mode must
+  // already be Passthrough so onPointerMotion doesn't re-enter the modal gate.
+  void Server::resyncSeatAfterScreenshot() {
+    onPointerMotion(nowMsec());
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
   }
 
   void Server::updateScreenshotOverlay() {
@@ -366,6 +382,7 @@ namespace bbai {
     screenshot_dragging_ = false;
     cursor_mode = CursorMode::Passthrough;
     wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
+    resyncSeatAfterScreenshot();
   }
 
   void Server::finishScreenshot() {
@@ -373,6 +390,7 @@ namespace bbai {
     screenshot_dragging_ = false;
     cursor_mode = CursorMode::Passthrough;
     wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
+    resyncSeatAfterScreenshot();                // before any early return below
 
     int ow = 1280, oh = 720;
     activeOutputSize(ow, oh);
@@ -649,7 +667,10 @@ namespace bbai {
   }
 
   void Server::onModifiers(wlr_keyboard *kb) {
-    if (active_menu_) return;   // modal: don't leak modifier state to the client
+    // Modal modes own the keyboard: don't leak modifier state to the focused
+    // client (the menu gate and the screenshot mode both rely on this). The exit
+    // paths re-sync, so a modifier released while modal isn't left stuck-down.
+    if (active_menu_ || cursor_mode == CursorMode::ScreenshotSelect) return;
     wlr_seat_set_keyboard(seat, kb);
     wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
   }

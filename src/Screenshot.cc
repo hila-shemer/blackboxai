@@ -63,7 +63,19 @@ namespace bbai::screenshot {
       return {};
     }
     wlr_texture *tex = wlr_texture_from_buffer(renderer, st.buffer);
-    if (!tex) { wlr_output_state_finish(&st); return {}; }
+    // The readback assumes an output-sized composited texture. build_state CAN
+    // direct-scanout a single opaque full-output buffer and hand back the
+    // client's own (differently-sized, offset) buffer instead; our output-space
+    // src_box would then sample the wrong region. Bail rather than read
+    // mismatched coordinates - a wrong/garbage capture is worse than none. (In
+    // practice the always-present toolbar keeps the scene list >1, so scanout
+    // does not trigger; this is a guard, not a hot path.)
+    if (!tex || tex->width != static_cast<uint32_t>(so->output->width) ||
+        tex->height != static_cast<uint32_t>(so->output->height)) {
+      if (tex) wlr_texture_destroy(tex);
+      wlr_output_state_finish(&st);
+      return {};
+    }
 
     std::vector<uint32_t> px(static_cast<size_t>(sel.w) * sel.h);
     // src_box is a const member -> build the whole options aggregate at once.
