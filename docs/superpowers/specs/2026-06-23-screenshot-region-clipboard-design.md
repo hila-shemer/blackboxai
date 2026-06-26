@@ -173,3 +173,52 @@ logic). Both are exercised by hand in a nested run before pushing.
 - `wlr_scene_output_build_state` re-renders enough to read back a correct frame
   outside a normal commit cycle. The harness already relies on this headless; this
   spec extends the reliance to GL, to be confirmed in the nested smoke run.
+
+## Research-verified corrections (2026-06-26)
+
+A design-research pass compiled and ran the capture path as standalone C (pixman) and
+verified the clipboard contract against cloned wlroots 0.20 source. What it changed:
+
+**Capture.** `wlr_scene_output_build_state(so, &st, nullptr)` - no options struct.
+Reading into `DRM_FORMAT_ARGB8888` already returns alpha 0xff per pixel, so the
+"force opaque" is a cheap guard, not a required step. `wlr_texture_from_buffer` takes
+its *own* buffer lock, so there is no fragile destroy-vs-finish ordering invariant
+(cleanest is still read_pixels -> destroy texture -> finish state, but it's style).
+`wlr_texture_read_pixels_options.src_box` is a **const member** - build the whole
+options aggregate in one initializer with the clamped box already computed; you cannot
+assign `opts.src_box` after construction (it won't compile). `captureRegion` needs
+`#include <drm_fourcc.h>` (libdrm, already pulled via `wlr_dep`) for the format
+constant. `read_pixels` returns `bool` and *can* fail - notably a GL backend lacking
+`GL_EXT_read_format_bgra` rejects the ARGB read rather than mis-ordering; check the
+return. Pixman always succeeds; GL is the nested-run unknown. Note this is a genuinely
+*new* readback path - the harness's `captureFrame` uses `begin_data_ptr_access`
+(pixman-only); `captureRegion` is the first in-tree use of `read_pixels`.
+
+**PNG.** Drop the "one writer" unification - the harness writer is `FILE*`/`png_init_io`
+and can't be lifted into an in-memory encoder verbatim. `encodePng` is a fresh
+callback-based encoder (`png_set_write_fn` over a `std::vector`), channel order R,G,B,A
+unpacked from `0xAARRGGBB` to match the harness convention so goldens don't shift.
+`src/meson.build` must gain `dependency('libpng')` - today it's test-harness-only.
+
+**Clipboard - the ownership trap.** `wlr_data_source` destroy is **synchronous and
+re-entrant**: setting the next selection tears the old `ClipboardImage` down *inside*
+`wlr_seat_set_selection`, before it returns. So the Server owns the `ClipboardImage`
+via a **raw pointer with wlroots' `impl->destroy` as the sole deleter** - no owning
+`unique_ptr`, or the second screenshot double-frees. wlroots keeps no awareness of
+in-flight paste writers, so the refcounted PNG blob is load-bearing: the async writer
+holds its *own* ref to the bytes and never dereferences the source after `send()`
+returns. `destroy` frees only the C++ subtype - **not** `mime_types`/the strdup'd
+string (wlroots already freed those before calling it) - and since `impl->destroy` is
+set, wlroots will not `free(source)` for you. Do cleanup in `impl->destroy`, never via
+a listener on `events.destroy` (wlroots asserts that list empty after emit). The paste
+fd arrives **blocking**; the `O_NONBLOCK` fcntl in `send()` is mandatory, not optional.
+
+**Server wiring.** There is no production active-scene-output getter; the Server glue
+passes the `wlr_scene_output*` + `wlr_renderer*` into `captureRegion` (which holds no
+Server state). Escape-cancel is not reachable through `injectKeyForTest` as written -
+it needs a `ScreenshotSelect` branch in the inject path plus a `screenshotActiveForTest()`
+accessor (right-click cancel already reaches `onPointerButton`). The crosshair is
+net-new (`wlr_cursor_set_xcursor(cursor, xcursor_mgr, "crosshair")`); a theme without a
+crosshair glyph is a silent no-op, eyeballed in the nested run. `wlr_scene_rect` color
+is **premultiplied** - black-at-0.35 is fine, but a future tint must be authored
+premultiplied. The overlay tree is **destroyed** (not hidden) before the capture render.
