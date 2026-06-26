@@ -103,7 +103,10 @@ namespace bbai {
     Output *activeOutputForTest() const { return active_output; }
     Toolbar *toolbarForTest() const { return toolbar_.get(); }
     const std::string &toolbarWindowTitleForTest() const;
-    wlr_scene_output *activeSceneOutputForTest() const;
+    wlr_scene_output *activeSceneOutput() const;     // production accessor
+    wlr_scene_output *activeSceneOutputForTest() const { return activeSceneOutput(); }
+    const char *seatSelectionMimeForTest() const;
+    wlr_data_source *seatSelectionSourceForTest() const { return seat->selection_source; }
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
 
     wl_display *display = nullptr;

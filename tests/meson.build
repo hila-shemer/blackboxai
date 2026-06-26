@@ -194,6 +194,13 @@ screenshot_select_exe = executable('screenshot-select-test',
 test('screenshot_select', screenshot_select_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Region screenshot: end-to-end release -> capture -> clipboard.
+screenshot_e2e_exe = executable('screenshot-e2e-test',
+  files('system/screenshot_e2e_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('screenshot_e2e', screenshot_e2e_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
 view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
   dependencies : [harness_dep, doctest_dep])
