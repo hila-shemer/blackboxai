@@ -71,6 +71,7 @@ namespace bbai {
     void activeOutputSize(int &w, int &h) const;
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
+    bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
     int activeMenuItemForTest() const;
     Menu *rootMenuForTest() const { return active_menu_.get(); }
 
@@ -154,6 +155,10 @@ namespace bbai {
     bool overDesktop(double lx, double ly);                 // background, not a view/chrome
     void beginInteractive(View *v, CursorMode mode, uint32_t edges);
     void beginScreenshot();   // arm region-select mode (crosshair); aborts any grab
+    void cancelScreenshot();           // tear down, restore cursor, no capture
+    void updateScreenshotOverlay();    // reposition the four dim rects to the drag
+    void destroyScreenshotOverlay();   // destroy the overlay tree
+    void finishScreenshot();           // capture on a real release -> clipboard (T7)
     void processMove();
     void processResize();
     void focusView(View *v);
@@ -196,6 +201,12 @@ namespace bbai {
     int grab_geo_w = 0, grab_geo_h = 0;         // content size at grab start
     uint32_t resize_edges = 0;                  // wlr_edges bitmask
     uint32_t next_time = 1;                      // monotonic event time seam
+
+    // ScreenshotSelect drag state + GNOME-dim overlay (under layer_overlay).
+    bool screenshot_dragging_ = false;
+    int  screenshot_ax_ = 0, screenshot_ay_ = 0;       // anchor corner A
+    wlr_scene_tree *screenshot_overlay_ = nullptr;
+    wlr_scene_rect *screenshot_dim_[4] = { nullptr, nullptr, nullptr, nullptr };
 
     // title-bar button press state: track which view+button was pressed so we
     // can dispatch on release-inside and ignore release-outside (F4.3+).
