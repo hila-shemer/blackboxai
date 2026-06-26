@@ -187,6 +187,13 @@ clipboard_image_exe = executable('clipboard-image-test',
 test('clipboard_image', clipboard_image_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Region screenshot: ScreenshotSelect state machine + dim overlay + cancel paths.
+screenshot_select_exe = executable('screenshot-select-test',
+  files('system/screenshot_select_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('screenshot_select', screenshot_select_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
 view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
   dependencies : [harness_dep, doctest_dep])

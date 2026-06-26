@@ -6,6 +6,7 @@
 #include "Menu.hh"
 #include "Rootmenu.hh"
 #include "Frame.hh"
+#include "Screenshot.hh"
 
 #include <algorithm>
 #include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
@@ -322,6 +323,50 @@ namespace bbai {
     wlr_cursor_set_xcursor(cursor, xcursor_mgr, "crosshair");
   }
 
+  void Server::updateScreenshotOverlay() {
+    if (!screenshot_overlay_) return;
+    int ow = 1280, oh = 720;
+    activeOutputSize(ow, oh);
+    screenshot::Rect sel = screenshot::clampToOutput(
+      screenshot::fromCorners(screenshot_ax_, screenshot_ay_,
+                              static_cast<int>(cursor->x), static_cast<int>(cursor->y)),
+      ow, oh);
+    screenshot::DimRects d = screenshot::dimRects(ow, oh, sel);
+    const screenshot::Rect *boxes[4] = { &d.above, &d.below, &d.left, &d.right };
+    for (int i = 0; i < 4; ++i) {
+      const screenshot::Rect &b = *boxes[i];
+      if (b.w <= 0 || b.h <= 0) {
+        wlr_scene_node_set_enabled(&screenshot_dim_[i]->node, false);
+        continue;
+      }
+      wlr_scene_node_set_enabled(&screenshot_dim_[i]->node, true);
+      wlr_scene_rect_set_size(screenshot_dim_[i], b.w, b.h);
+      wlr_scene_node_set_position(&screenshot_dim_[i]->node, b.x, b.y);
+    }
+  }
+
+  void Server::destroyScreenshotOverlay() {
+    if (!screenshot_overlay_) return;
+    wlr_scene_node_destroy(&screenshot_overlay_->node);   // destroys the rects too
+    screenshot_overlay_ = nullptr;
+    for (auto &r : screenshot_dim_) r = nullptr;
+  }
+
+  void Server::cancelScreenshot() {
+    destroyScreenshotOverlay();
+    screenshot_dragging_ = false;
+    cursor_mode = CursorMode::Passthrough;
+    wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
+  }
+
+  // T6: tear down + exit (no capture). Replaced by the real capture path in T7.
+  void Server::finishScreenshot() {
+    destroyScreenshotOverlay();
+    screenshot_dragging_ = false;
+    cursor_mode = CursorMode::Passthrough;
+    wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
+  }
+
   void Server::beginInteractive(View *v, CursorMode mode, uint32_t edges) {
     grabbed_view = v;
     cursor_mode  = mode;
@@ -378,6 +423,10 @@ namespace bbai {
       if (Menu *lm = liveMenu()) lm->setActive(-1);
       return;
     }
+    if (cursor_mode == CursorMode::ScreenshotSelect) {
+      if (screenshot_dragging_) updateScreenshotOverlay();
+      return;   // modal: no client/toolbar/grab handling while selecting
+    }
     if (toolbar_) toolbar_->handlePointerMotion(cursor->x, cursor->y);   // auto-hide edge trigger (no-op when off)
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
     if (cursor_mode == CursorMode::Resize) { processResize(); return; }
@@ -409,6 +458,26 @@ namespace bbai {
   void Server::onPointerButton(uint32_t time, uint32_t button,
                                wl_pointer_button_state state) {
     if (active_menu_) { handleMenuButton(button, state); return; }  // modal gate
+
+    if (cursor_mode == CursorMode::ScreenshotSelect) {
+      if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+        if (button == BTN_RIGHT) { cancelScreenshot(); return; }   // right-click cancels
+        if (button == BTN_LEFT && !screenshot_dragging_) {
+          screenshot_dragging_ = true;
+          screenshot_ax_ = static_cast<int>(cursor->x);
+          screenshot_ay_ = static_cast<int>(cursor->y);
+          screenshot_overlay_ = wlr_scene_tree_create(layer_overlay);
+          const float dim[4] = { 0.f, 0.f, 0.f, 0.35f };   // premultiplied black
+          for (auto &r : screenshot_dim_)
+            r = wlr_scene_rect_create(screenshot_overlay_, 1, 1, dim);
+          updateScreenshotOverlay();
+        }
+        return;
+      }
+      // RELEASED
+      if (button == BTN_LEFT && screenshot_dragging_) finishScreenshot();
+      return;   // own all releases while modal
+    }
 
     if (state == WL_POINTER_BUTTON_STATE_RELEASED) {
       if (cursor_mode != CursorMode::Passthrough) {  // end a move/resize grab
@@ -533,6 +602,12 @@ namespace bbai {
         swallowed_keycodes_.insert(keycode);
         return;
       }
+      if (cursor_mode == CursorMode::ScreenshotSelect) {  // modal: Escape cancels
+        for (int i = 0; i < nsyms; ++i)
+          if (syms[i] == XKB_KEY_Escape) { cancelScreenshot(); break; }
+        swallowed_keycodes_.insert(keycode);   // swallow the key (and its release)
+        return;
+      }
       for (int i = 0; i < nsyms; ++i) {
         if (dispatchBinding(mods, syms[i])) {
           swallowed_keycodes_.insert(keycode);  // also swallow the matching release
@@ -647,6 +722,10 @@ namespace bbai {
 
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
     if (active_menu_) { if (pressed) handleMenuKey(sym); return; }
+    if (cursor_mode == CursorMode::ScreenshotSelect) {
+      if (pressed && sym == XKB_KEY_Escape) cancelScreenshot();
+      return;
+    }
     if (pressed) dispatchBinding(mods, sym);
   }
 
