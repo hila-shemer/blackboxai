@@ -78,3 +78,16 @@ TEST_CASE("Mod4+q sends xdg_toplevel.close to the focused window") {
   for (int i = 0; i < 100 && !c.gotCloseRequest(); ++i) { c.flush(); server.dispatch(); c.pump(); }
   CHECK(c.gotCloseRequest());
 }
+
+TEST_CASE("Super+F7 fires Screenshot and arms the select mode") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+  CHECK_FALSE(server.screenshotActiveForTest());
+  server.injectKeyForTest(XKB_KEY_F7, SUPER, true);
+  CHECK(server.lastActionForTest() == Action::Screenshot);
+  CHECK(server.screenshotActiveForTest());
+}

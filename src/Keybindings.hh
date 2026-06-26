@@ -17,7 +17,7 @@ namespace bbai {
     enum Kind {
       None, WorkspaceNext, WorkspacePrev, WorkspaceTo,
       OpenMenu, CloseWindow, CycleNext, CyclePrev,
-      IconMenu
+      IconMenu, Screenshot
     };
     Kind kind = None;
     int arg = 0;     // workspace index for WorkspaceTo

@@ -19,6 +19,7 @@ namespace bbai {
       { SUPER | SHIFT, XKB_KEY_Tab,         { Action::CyclePrev } },
       { SUPER | SHIFT, XKB_KEY_ISO_Left_Tab,{ Action::CyclePrev } },  // real Shift+Tab sym
       { SUPER | ALT,   XKB_KEY_t,     { Action::IconMenu } },
+      { SUPER,         XKB_KEY_F7,    { Action::Screenshot } },
     };
   }
 

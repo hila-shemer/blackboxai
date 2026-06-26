@@ -309,6 +309,19 @@ namespace bbai {
     if (toolbar_) toolbar_->redrawWindowLabel(v->toplevel()->title);
   }
 
+  void Server::beginScreenshot() {
+    // Abort any in-progress move/resize grab before arming (same as openRootMenu),
+    // so the grab's terminating release can't strand the window.
+    if (cursor_mode != CursorMode::Passthrough) {
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+    cursor_mode = CursorMode::ScreenshotSelect;
+    wlr_cursor_set_xcursor(cursor, xcursor_mgr, "crosshair");
+  }
+
   void Server::beginInteractive(View *v, CursorMode mode, uint32_t edges) {
     grabbed_view = v;
     cursor_mode  = mode;
@@ -566,6 +579,7 @@ namespace bbai {
       break;
     case Action::OpenMenu:  openRootMenu(cursor->x, cursor->y); break;
     case Action::IconMenu:  openIconMenu(cursor->x, cursor->y); break;
+    case Action::Screenshot: beginScreenshot(); break;
     case Action::CycleNext: break;  // cycle focus within the workspace (future)
     case Action::CyclePrev: break;
     case Action::None:      break;
