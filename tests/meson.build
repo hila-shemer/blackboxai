@@ -180,6 +180,13 @@ screenshot_capture_exe = executable('screenshot-capture-test',
 test('screenshot_capture', screenshot_capture_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Region screenshot: server-side image/png data source + async writer.
+clipboard_image_exe = executable('clipboard-image-test',
+  files('system/clipboard_image_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('clipboard_image', clipboard_image_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
 view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
   dependencies : [harness_dep, doctest_dep])
