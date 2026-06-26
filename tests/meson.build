@@ -18,6 +18,7 @@ unit_sources = files(
   'unit/clock_test.cc',
   'unit/timer_test.cc',
   'unit/toolbar_geom_test.cc',
+  'unit/screenshot_geom_test.cc',
   'unit/keycode_test.cc',
   'unit/keybinding_test.cc',
   'unit/menu_geometry_test.cc',
