@@ -166,6 +166,13 @@ close_button_exe = executable('close-button-test', files('system/close_button_te
 test('close_button', close_button_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Region screenshot: in-memory PNG encoder round-trip.
+screenshot_png_exe = executable('screenshot-png-test',
+  files('system/screenshot_png_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('screenshot_png', screenshot_png_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # F1.2 View focus state: carry + relayout guard (nonvisual, no golden).
 view_focus_exe = executable('view-focus-test', files('system/view_focus_test.cc'),
   dependencies : [harness_dep, doctest_dep])
