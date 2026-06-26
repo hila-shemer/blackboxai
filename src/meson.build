@@ -3,6 +3,7 @@
 src_inc = include_directories('.')
 bbai_lib = static_library('bbai',
   files(
+    'ClipboardImage.cc',
     'DataBuffer.cc',
     'Screenshot.cc',
     'Server.cc',
