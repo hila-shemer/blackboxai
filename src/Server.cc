@@ -7,6 +7,9 @@
 #include "Rootmenu.hh"
 #include "Frame.hh"
 #include "Screenshot.hh"
+#include "ClipboardImage.hh"
+
+#include <memory>
 
 #include <algorithm>
 #include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
@@ -256,8 +259,14 @@ namespace bbai {
     return wl_event_loop_dispatch(loop, 0) >= 0;
   }
 
-  wlr_scene_output *Server::activeSceneOutputForTest() const {
+  wlr_scene_output *Server::activeSceneOutput() const {
     return active_output ? active_output->sceneOutput() : nullptr;
+  }
+
+  const char *Server::seatSelectionMimeForTest() const {
+    wlr_data_source *s = seat->selection_source;
+    if (!s || s->mime_types.size == 0) return nullptr;
+    return *static_cast<char *const *>(s->mime_types.data);
   }
 
   const std::string &Server::toolbarWindowTitleForTest() const {
@@ -359,12 +368,30 @@ namespace bbai {
     wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
   }
 
-  // T6: tear down + exit (no capture). Replaced by the real capture path in T7.
   void Server::finishScreenshot() {
-    destroyScreenshotOverlay();
+    destroyScreenshotOverlay();                 // dim must be gone BEFORE the readback
     screenshot_dragging_ = false;
     cursor_mode = CursorMode::Passthrough;
     wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
+
+    int ow = 1280, oh = 720;
+    activeOutputSize(ow, oh);
+    screenshot::Rect sel = screenshot::clampToOutput(
+      screenshot::fromCorners(screenshot_ax_, screenshot_ay_,
+                              static_cast<int>(cursor->x), static_cast<int>(cursor->y)),
+      ow, oh);
+    if (sel.w < 4 || sel.h < 4) return;         // sub-pixel drag: treat as cancel
+
+    int rw = 0, rh = 0;
+    std::vector<uint32_t> px =
+      screenshot::captureRegion(activeSceneOutput(), renderer, sel, rw, rh);
+    if (px.empty()) return;                     // capture failed (e.g. GL read_pixels)
+    std::vector<uint8_t> bytes = screenshot::encodePng(px, rw, rh);
+    if (bytes.empty()) return;
+
+    auto blob = std::make_shared<const std::vector<uint8_t>>(std::move(bytes));
+    ClipboardImage *ci = ClipboardImage::create(display, blob);   // wlroots owns it
+    wlr_seat_set_selection(seat, &ci->base, wl_display_next_serial(display));
   }
 
   void Server::beginInteractive(View *v, CursorMode mode, uint32_t edges) {
