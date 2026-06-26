@@ -42,3 +42,10 @@ TEST_CASE("an unbound combo returns no action") {
   CHECK(kb.dispatch(SUPER, XKB_KEY_z).kind == Action::None);
   CHECK(kb.dispatch(WLR_MODIFIER_CTRL, XKB_KEY_c).kind == Action::None);
 }
+
+TEST_CASE("Mod4+F7 maps to Action::Screenshot, modifier-exact") {
+  Keybindings kb;
+  CHECK(kb.dispatch(SUPER, XKB_KEY_F7).kind == Action::Screenshot);
+  // Modifier EQUALITY: Mod4+Shift+F7 must NOT match.
+  CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_F7).kind == Action::None);
+}

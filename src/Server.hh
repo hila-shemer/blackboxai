@@ -70,6 +70,7 @@ namespace bbai {
     void closeMenus();
     void activeOutputSize(int &w, int &h) const;
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
+    bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     int activeMenuItemForTest() const;
     Menu *rootMenuForTest() const { return active_menu_.get(); }
 
@@ -132,7 +133,7 @@ namespace bbai {
 
   private:
     friend struct Keyboard;
-    enum class CursorMode { Passthrough, Move, Resize };
+    enum class CursorMode { Passthrough, Move, Resize, ScreenshotSelect };
 
     // Pointer handlers shared by real cursor events and test injection.
     void onPointerMotion(uint32_t time);
@@ -152,6 +153,7 @@ namespace bbai {
     void activateMenuItem(const MenuItem &it);               // dispatch + dismiss whole chain
     bool overDesktop(double lx, double ly);                 // background, not a view/chrome
     void beginInteractive(View *v, CursorMode mode, uint32_t edges);
+    void beginScreenshot();   // arm region-select mode (crosshair); aborts any grab
     void processMove();
     void processResize();
     void focusView(View *v);
