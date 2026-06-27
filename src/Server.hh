@@ -64,6 +64,11 @@ namespace bbai {
     CommandRunner &commandRunner() { return *command_runner_; }
     void setCommandRunnerForTest(CommandRunner *r) { command_runner_ = r; }
 
+    // XDG autostart test levers: override the dirs to scan and drive the run
+    // explicitly (the ctor only runs it on the real backend).
+    void setAutostartDirsForTest(const std::vector<std::string> &dirs) { autostart_dirs_ = dirs; }
+    void runAutostartForTest() { runAutostart(); }
+
     // Modal root menu (compositor chrome on layer_overlay).
     void openRootMenu(double lx, double ly);
     void openIconMenu(double lx, double ly);
@@ -228,6 +233,11 @@ namespace bbai {
 
     void iconifyView(View *v);
     void dispatchButtonRelease(View *v, Part part);
+
+    // XDG autostart: scan autostart_dirs_ (or the default user/system pair),
+    // filter via Autostart.hh, and spawn survivors through commandRunner().
+    void runAutostart();
+    std::vector<std::string> autostart_dirs_;   // test override; empty -> defaults
   };
 
 } // namespace bbai
