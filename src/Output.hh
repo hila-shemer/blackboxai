@@ -19,6 +19,10 @@ namespace bbai {
     wlr_scene_output *sceneOutput() const { return scene_output; }
     wlr_output *wlrOutput() const { return output; }
 
+    // Ask for a fresh frame - used on VT-switch resume so the screen repaints
+    // instead of coming back stale (M7).
+    void scheduleFrame();
+
   private:
     void renderBackground();
 

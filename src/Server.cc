@@ -66,11 +66,24 @@ namespace bbai {
     wl_event_loop *loop = wl_display_get_event_loop(display);
 
     backend = headless ? wlr_headless_backend_create(loop)
-                       : wlr_backend_autocreate(loop, nullptr);
+                       : wlr_backend_autocreate(loop, &session_);
     if (!backend) {
       wl_display_destroy(display);
       display = nullptr;
       return;
+    }
+
+    // Retain the libseat session (DRM path only; null under nested/headless) and
+    // re-render every output when we VT-switch back. Without this the screen can
+    // return blank/stale on resume because nothing repaints. libseat already
+    // pauses/resumes the devices - the missing piece is the repaint on the way
+    // back. The active path is hand-verified on a TTY (Task 8): headless has no
+    // session, so this whole block stays inert there.
+    if (session_) {
+      session_active.connect(&session_->events.active, [this](void *) {
+        if (session_ && session_->active)
+          for (Output *o : outputs_) o->scheduleFrame();
+      });
     }
 
     renderer = wlr_renderer_autocreate(backend);
@@ -244,6 +257,7 @@ namespace bbai {
     // Tear down our scene-tracking objects before the wlroots stack: their
     // listeners point into backend/surface signals that wlr_*_finish asserts
     // are empty.
+    session_active.disconnect();   // points into session->events; drop before backend finish
     new_output.disconnect();
     new_xdg_toplevel.disconnect();
     new_toplevel_decoration.disconnect();

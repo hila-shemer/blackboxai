@@ -43,6 +43,10 @@ namespace bbai {
     if (bg) wlr_scene_node_destroy(&bg->node);
   }
 
+  void Output::scheduleFrame() {
+    wlr_output_schedule_frame(output);
+  }
+
   void Output::renderBackground() {
     const int w = output->width, h = output->height;
 
