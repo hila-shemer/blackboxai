@@ -168,6 +168,12 @@ namespace bbai {
         active_output = new Output(*this, wlr_out);
         // The toolbar spans this output; create it now that the mode is set.
         toolbar_ = std::make_unique<Toolbar>(*this, wlr_out->width, wlr_out->height);
+        // Give the pointer an image from frame one - otherwise it's invisible
+        // over our own chrome until the Super+F7 flow happens to latch one.
+        // Real-output only: headless asserts byte-exact goldens and has no
+        // screen to point at.
+        if (!headless)
+          wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
       }
     });
 
