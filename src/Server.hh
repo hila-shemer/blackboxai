@@ -13,6 +13,7 @@
 #include "Timer.hh"
 #include "Workspace.hh"
 #include "Keybindings.hh"
+#include "ServerOk.hh"
 #include "StackingList.hh"
 #include "CommandRunner.hh"
 #include "Decoration.hh"   // bbai::Part
@@ -36,7 +37,9 @@ namespace bbai {
     explicit Server(bool headless);
     ~Server();
 
-    bool ok() const { return display != nullptr && backend != nullptr; }
+    bool ok() const {
+      return serverStarted(display != nullptr, backend != nullptr, started_);
+    }
     void run();        // wl_display_run (blocking)
     void terminate();  // wl_display_terminate
     bool dispatch();   // single non-blocking event-loop iteration (for tests)
@@ -174,6 +177,7 @@ namespace bbai {
     uint32_t nowMsec() { return next_time++; }
 
     bool headless = false;
+    bool started_ = false;          // wlr_backend_start succeeded (ok() gate)
     std::string socket_name;
     bt::Listener new_output;
     bt::Listener new_xdg_toplevel;
