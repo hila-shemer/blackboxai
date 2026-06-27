@@ -24,9 +24,12 @@ unit_sources = files(
   'unit/menu_geometry_test.cc',
   'unit/command_runner_test.cc',
   'unit/rootmenu_submenu_test.cc',
+  'unit/menu_parser_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
-  dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
+  dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep],
+  cpp_args : ['-DBBAI_MENU_FIXTURE="@0@"'.format(
+    meson.current_source_dir() / 'fixtures' / 'menu.in')])
 test('unit', unit_exe, suite : 'unit')
 
 # Isolated fontconfig: tests that render title text point FONTCONFIG_FILE here
