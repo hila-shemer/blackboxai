@@ -126,6 +126,35 @@ namespace bbai::menuparser {
           m.action = MenuItem::Act::Exit;
           m.label = bt::decodeUtf8(label.c_str());
           out.push_back(std::move(m));
+        } else if (tag == "restart") {
+          if (label.empty()) {
+            diag.push_back(note(lineNo, "[restart] needs a label - skipped"));
+            continue;
+          }
+          MenuItem m;
+          m.kind = MenuItem::Kind::Command;
+          m.action = MenuItem::Act::Restart;       // restarts the compositor itself
+          m.label = bt::decodeUtf8(label.c_str());
+          if (haveCmd && !cmd.empty())             // alternate-WM start: no RestartOther action
+            diag.push_back(note(lineNo,
+              "[restart] alternate command '" + cmd +
+              "' dropped (no RestartOther action; restarts self instead)"));
+          out.push_back(std::move(m));
+        } else if (tag == "workspaces" || tag == "config") {
+          // Runtime-populated menus: the parser can't enumerate workspaces or the
+          // config options, so emit a labelled empty placeholder submenu for the
+          // foreground thread to fill at wire-up. Keeps position + label intact.
+          if (label.empty()) {
+            diag.push_back(note(lineNo, "[" + tag + "] needs a label - skipped"));
+            continue;
+          }
+          MenuItem m;
+          m.kind = MenuItem::Kind::Submenu;
+          m.label = bt::decodeUtf8(label.c_str());
+          diag.push_back(note(lineNo,
+            "[" + tag + "] is a runtime-populated menu - emitted empty placeholder "
+            "submenu; populate at wire-up"));
+          out.push_back(std::move(m));
         } else if (tag == "submenu") {
           if (label.empty()) {
             diag.push_back(note(lineNo, "[submenu] needs a label - skipped (its body still parses)"));
