@@ -270,6 +270,13 @@ multi_output_exe = executable('multi-output-test', files('system/multi_output_te
 test('multi_output', multi_output_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# M7 autostart wiring: glob + filter + spawn .desktop entries via the fake runner.
+autostart_wiring_exe = executable('autostart-wiring-test',
+  files('system/autostart_wiring_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('autostart_wiring', autostart_wiring_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

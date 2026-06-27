@@ -8,11 +8,18 @@
 #include "Frame.hh"
 #include "Screenshot.hh"
 #include "ClipboardImage.hh"
+#include "Autostart.hh"
 
 #include <memory>
 
 #include <algorithm>
 #include <cstdio>                      // fprintf(stderr) loud-fail line
+#include <cstdlib>                     // getenv/setenv (autostart)
+#include <fstream>                     // read .desktop files
+#include <set>                         // basename dedup (user shadows system)
+#include <sstream>
+#include <dirent.h>                    // opendir/readdir glob
+#include <unistd.h>                    // access(X_OK) for TryExec
 #include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
 
 namespace {
@@ -22,6 +29,31 @@ namespace {
     for (wlr_scene_tree *t = node->parent; t; t = t->node.parent)
       if (t == layer) return true;
     return false;
+  }
+
+  // TryExec resolution: an absolute/relative path is X_OK-checked as-is; a bare
+  // name is searched along PATH. Mirrors what a launcher does before spawning.
+  bool onPath(const std::string &exe) {
+    if (exe.empty()) return false;
+    if (exe.find('/') != std::string::npos)
+      return access(exe.c_str(), X_OK) == 0;
+    const char *path = getenv("PATH");
+    if (!path) return false;
+    std::stringstream ss(path);
+    std::string dir;
+    while (std::getline(ss, dir, ':')) {
+      if (dir.empty()) continue;
+      if (access((dir + "/" + exe).c_str(), X_OK) == 0) return true;
+    }
+    return false;
+  }
+
+  std::string readFileToString(const std::string &path) {
+    std::ifstream f(path);
+    if (!f.good()) return "";
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
   }
 }
 
@@ -200,6 +232,12 @@ namespace bbai {
     // fixed 1280x720 test output so the background actually composites.
     if (headless)
       wlr_headless_add_output(backend, 1280, 720);
+
+    // Bring up the user's usual agents on a real login. Skipped under headless
+    // (CI must not spawn the host's tray/polkit) - the wiring is driven there by
+    // runAutostartForTest with a FakeCommandRunner instead.
+    if (!headless)
+      runAutostart();
   }
 
   Server::~Server() {
@@ -282,6 +320,42 @@ namespace bbai {
 
   void Server::addHeadlessOutputForTest(int w, int h) {
     wlr_headless_add_output(backend, w, h);   // fires new_output on the next dispatch
+  }
+
+  void Server::runAutostart() {
+    // Children resolve OnlyShowIn/NotShowIn against our id; set it before spawn.
+    setenv("XDG_CURRENT_DESKTOP", "Blackbox", 1);
+
+    std::vector<std::string> dirs = autostart_dirs_;
+    if (dirs.empty()) {                        // production default: user shadows system
+      if (const char *home = getenv("HOME"))
+        dirs.push_back(std::string(home) + "/.config/autostart");
+      dirs.push_back("/etc/xdg/autostart");
+    }
+
+    std::set<std::string> seen;                // basenames claimed by an earlier dir
+    for (const std::string &dir : dirs) {
+      DIR *d = opendir(dir.c_str());
+      if (!d) continue;                        // a missing autostart dir is normal
+      std::vector<std::string> names;
+      while (dirent *ent = readdir(d)) {
+        std::string name = ent->d_name;
+        if (name.size() > 8 && name.compare(name.size() - 8, 8, ".desktop") == 0)
+          names.push_back(name);
+      }
+      closedir(d);
+      std::sort(names.begin(), names.end());   // deterministic spawn order
+
+      for (const std::string &name : names) {
+        if (!seen.insert(name).second) continue;   // shadowed by an earlier dir
+        DesktopEntry e = parseDesktopEntry(readFileToString(dir + "/" + name));
+        if (!shouldAutostart(e, "Blackbox")) continue;
+        if (!e.try_exec.empty() && !onPath(e.try_exec)) continue;
+        std::string cmd = stripFieldCodes(e.exec);
+        if (cmd.empty()) continue;             // no Exec line -> nothing to run
+        commandRunner().run({"/bin/sh", "-c", cmd});
+      }
+    }
   }
 
   const char *Server::seatSelectionMimeForTest() const {
