@@ -102,8 +102,11 @@ namespace bbai {
     unsigned currentWorkspaceForTest() const { return workspaces_.current(); }
     View *focusedViewForTest() const { return focused_view; }
 
-    // test-only accessors (M1 has a single output)
+    // test-only accessors. activeOutput is the primary (first) head; the count
+    // covers every lit head (M7).
     Output *activeOutputForTest() const { return active_output; }
+    int outputCountForTest() const { return static_cast<int>(outputs_.size()); }
+    void addHeadlessOutputForTest(int w, int h);
     Toolbar *toolbarForTest() const { return toolbar_.get(); }
     const std::string &toolbarWindowTitleForTest() const;
     wlr_scene_output *activeSceneOutput() const;     // production accessor
@@ -184,7 +187,8 @@ namespace bbai {
     bt::Listener new_toplevel_decoration;
     bt::Listener new_input;
     bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame;
-    Output *active_output = nullptr;            // M1: single output
+    Output *active_output = nullptr;            // the primary (first) head: toolbar + work-area
+    std::vector<Output *> outputs_;             // every lit head (M7); each self-deletes on its output's destroy
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
     StackingList stacking_;                     // Z-order across all views (M4)
     bt::TextRenderer title_font;                // titlebar label font (M3)
