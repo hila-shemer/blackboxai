@@ -180,3 +180,118 @@ TEST_CASE("escaped delimiters survive in labels and commands") {
   CHECK(r.items[0].label == u("(cool) {x}"));
   CHECK(r.items[0].argv == sh("echo (hi)"));
 }
+
+// ---- Robustness: malformed input must degrade, never crash -----------------
+
+TEST_CASE("empty input yields an empty menu, no crash") {
+  Result r = menuparser::parse("");
+  CHECK(r.items.empty());
+  CHECK(r.title.empty());
+}
+
+TEST_CASE("exec missing its command brace is skipped, not fatal") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exec] (no command here)\n"      // no { } field
+    "  [exec] (ok) {ok}\n"
+    "[end]\n");
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].label == u("ok"));
+  CHECK(anyDiagContains(r, "exec"));
+}
+
+TEST_CASE("a stray extra [end] stops cleanly without underflowing") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exec] (a) {a}\n"
+    "[end]\n"
+    "[end]\n"                            // unbalanced - must not crash
+    "[exec] (never) {never}\n");         // past the top-level [end], ignored
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].label == u("a"));
+}
+
+TEST_CASE("a submenu left open at EOF still keeps the items it got") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [submenu] (Open)\n"
+    "    [exec] (a) {a}\n"
+    "    [exec] (b) {b}\n");             // no [end], no top [end] - just EOF
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[0].submenu_items.size() == 2);
+}
+
+TEST_CASE("garbage lines and lines without a [tag] are ignored") {
+  Result r = menuparser::parse(
+    "this is not a menu line\n"
+    "[begin] (m)\n"
+    "  # a comment with [exec] (trap) {trap}\n"
+    "  plain text, no brackets\n"
+    "  [exec] (real) {real}\n"
+    "[end]\n");
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].label == u("real"));
+}
+
+// ---- The real reference fixture parses with the expected shape -------------
+
+#ifdef BBAI_MENU_FIXTURE
+namespace {
+  const MenuItem *findByLabel(const std::vector<MenuItem> &items, const char *lbl) {
+    std::u32string want = bt::decodeUtf8(lbl);
+    for (const auto &it : items)
+      if (it.label == want) return &it;
+    return nullptr;
+  }
+}
+
+TEST_CASE("the real data/menu.in fixture parses with sane known entries") {
+  Result r = menuparser::parseFile(BBAI_MENU_FIXTURE);
+
+  CHECK(r.diagnostics.size() >= 0);    // never throws regardless of content
+  CHECK(r.title == u("Blackbox"));
+  REQUIRE(r.items.size() > 5);
+
+  // First entry: [exec] (xterm) {xterm -ls}.
+  CHECK(r.items[0].action == MenuItem::Act::Exec);
+  CHECK(r.items[0].label == u("xterm"));
+  CHECK(r.items[0].argv == sh("xterm -ls"));
+
+  // A nested submenu: Graphics -> The GIMP {gimp}.
+  const MenuItem *graphics = findByLabel(r.items, "Graphics");
+  REQUIRE(graphics != nullptr);
+  CHECK(graphics->kind == MenuItem::Kind::Submenu);
+  const MenuItem *gimp = findByLabel(graphics->submenu_items, "The GIMP");
+  REQUIRE(gimp != nullptr);
+  CHECK(gimp->argv == sh("gimp"));
+
+  // Two levels deep: Mozilla -> More... -> Mozilla Mail {mozilla -mail}.
+  const MenuItem *moz = findByLabel(r.items, "Mozilla");
+  REQUIRE(moz != nullptr);
+  const MenuItem *more = findByLabel(moz->submenu_items, "More...");
+  REQUIRE(more != nullptr);
+  const MenuItem *mail = findByLabel(more->submenu_items, "Mozilla Mail");
+  REQUIRE(mail != nullptr);
+  CHECK(mail->argv == sh("mozilla -mail"));
+
+  // [stylesdir] inside the Styles submenu is skipped -> empty cascade.
+  const MenuItem *styles = findByLabel(r.items, "Styles");
+  REQUIRE(styles != nullptr);
+  CHECK(styles->submenu_items.empty());
+
+  // [workspaces] / [config] -> placeholder submenus.
+  const MenuItem *wsl = findByLabel(r.items, "Workspace List");
+  REQUIRE(wsl != nullptr);
+  CHECK(wsl->kind == MenuItem::Kind::Submenu);
+  CHECK(wsl->submenu_items.empty());
+
+  // Tail actions: Restart -> Act::Restart, Exit -> Act::Exit.
+  const MenuItem *restart = findByLabel(r.items, "Restart");
+  REQUIRE(restart != nullptr);
+  CHECK(restart->action == MenuItem::Act::Restart);
+  const MenuItem *exit = findByLabel(r.items, "Exit");
+  REQUIRE(exit != nullptr);
+  CHECK(exit->action == MenuItem::Act::Exit);
+}
+#endif  // BBAI_MENU_FIXTURE
