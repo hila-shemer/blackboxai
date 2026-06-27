@@ -22,7 +22,7 @@ namespace {
   }
 }
 
-TEST_CASE("clicking the foot entry runs it via the CommandRunner (no spawn)") {
+TEST_CASE("clicking the kitty entry runs it via the CommandRunner (no spawn)") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
 
@@ -39,14 +39,14 @@ TEST_CASE("clicking the foot entry runs it via the CommandRunner (no spawn)") {
   server.injectPointerButtonForTest(BTN_RIGHT, true);
   REQUIRE(server.menuOpenForTest());
 
-  // Item 0 is "foot" (title height = 20). Click its row.
+  // Item 0 is "kitty" (title height = 20). Click its row.
   const int y = itemY(oy, /*title_h=*/menu::titleHeight(18), 0);
   server.injectPointerMotionForTest(ox + 30, y);
   server.injectPointerButtonForTest(BTN_LEFT, true);
 
   CHECK_FALSE(server.menuOpenForTest());           // menu dismissed on activate
   CHECK(runner.runCount() == 1);
-  CHECK(runner.lastCommand() == std::vector<std::string>{"foot"});
+  CHECK(runner.lastCommand() == std::vector<std::string>{"kitty"});
 }
 
 // "clicking a workspace entry" moved into the Workspaces submenu - re-tested in F3.4.
@@ -104,13 +104,13 @@ TEST_CASE("a click beside the menu (item-aligned Y, outside its X) dismisses, ne
   REQUIRE(server.menuOpenForTest());
 
   // x=1000 is far to the right of the ~135px-wide menu, but level with item 0
-  // ("foot"). The hit-test must reject it on X: dismiss, do NOT run the action.
+  // ("kitty"). The hit-test must reject it on X: dismiss, do NOT run the action.
   const int y = itemY(oy, /*title_h=*/menu::titleHeight(18), 0);
   server.injectPointerMotionForTest(1000, y);
   server.injectPointerButtonForTest(BTN_LEFT, true);
 
   CHECK_FALSE(server.menuOpenForTest());   // dismissed by the outside click
-  CHECK(runner.runCount() == 0);           // and did NOT launch foot
+  CHECK(runner.runCount() == 0);           // and did NOT launch kitty
 }
 
 TEST_CASE("dismissing the menu over a client delivers no orphan button release") {

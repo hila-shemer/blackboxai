@@ -42,7 +42,7 @@ namespace bbai::rootmenu {
 
   std::vector<MenuItem> build(const WorkspaceModel &ws) {
     std::vector<MenuItem> items;
-    items.push_back(exec("foot", {"foot"}));
+    items.push_back(exec("kitty", {"kitty"}));
     items.push_back(exec("xterm", {"xterm"}));
     items.push_back(separator());
     MenuItem wsm;
