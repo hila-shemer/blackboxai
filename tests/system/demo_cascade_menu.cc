@@ -67,7 +67,7 @@ TEST_CASE("demo: cascade_menu — right-click desktop, hover submenu, dismiss wi
   rec.shot(server);
 
   // --- Hover the "Workspaces" row (index 3) to open the submenu ---
-  // Root menu: 0=foot, 1=xterm, 2=sep, 3=Workspaces, 4=sep, 5=Restart, 6=Exit
+  // Root menu: 0=kitty, 1=xterm, 2=sep, 3=Workspaces, 4=sep, 5=Restart, 6=Exit
   const int ws_y = itemCentreY(oy, 3);
   server.injectPointerMotionForTest(ox + 30, ws_y);
 

@@ -69,7 +69,7 @@ TEST_CASE("menu keyboard navigation: Down/Up skip separators, Return activates")
   server.injectPointerButtonForTest(BTN_RIGHT, true);
   REQUIRE(server.menuOpenForTest());
 
-  // Items: 0=foot 1=xterm 2=sep 3=Workspaces(submenu) 4=sep 5=Restart 6=Exit
+  // Items: 0=kitty 1=xterm 2=sep 3=Workspaces(submenu) 4=sep 5=Restart 6=Exit
   server.injectKeyForTest(XKB_KEY_Down, 0, true);
   CHECK(server.activeMenuItemForTest() == 0);          // foot
   server.injectKeyForTest(XKB_KEY_Down, 0, true);

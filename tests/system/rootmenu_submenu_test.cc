@@ -48,7 +48,7 @@ TEST_CASE("hovering the Workspaces row opens the child submenu to the right") {
   server.injectPointerButtonForTest(BTN_RIGHT, /*pressed=*/true);
   REQUIRE(server.menuOpenForTest());
 
-  // Workspaces is item index 3 (0=foot, 1=xterm, 2=sep, 3=Workspaces).
+  // Workspaces is item index 3 (0=kitty, 1=xterm, 2=sep, 3=Workspaces).
   const int ws_y = itemCentreY(oy, 3);
   server.injectPointerMotionForTest(ox + 30, ws_y);
 
