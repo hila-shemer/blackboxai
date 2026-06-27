@@ -264,6 +264,12 @@ toolbar_autohide_golden_exe = executable('toolbar-autohide-golden-test',
 test('toolbar_autohide_golden', toolbar_autohide_golden_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# M7 multi-output: every head becomes an Output; toolbar stays primary (nonvisual).
+multi_output_exe = executable('multi-output-test', files('system/multi_output_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('multi_output', multi_output_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

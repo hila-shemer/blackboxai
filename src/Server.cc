@@ -165,9 +165,15 @@ namespace bbai {
 
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
-      if (!active_output) {                     // M1: a single output
-        active_output = new Output(*this, wlr_out);
-        // The toolbar spans this output; create it now that the mode is set.
+      // Light up every head: an Output per monitor, laid out left-to-right by
+      // the output_layout the Output ctor adds itself to. The first head
+      // enumerated stays primary - it carries the toolbar and the work area;
+      // the rest just render their background and can host windows.
+      Output *o = new Output(*this, wlr_out);
+      outputs_.push_back(o);
+      if (!active_output) {
+        active_output = o;
+        // The toolbar spans the primary output; create it now that the mode is set.
         toolbar_ = std::make_unique<Toolbar>(*this, wlr_out->width, wlr_out->height);
         // Give the pointer an image from frame one - otherwise it's invisible
         // over our own chrome until the Super+F7 flow happens to latch one.
@@ -272,6 +278,10 @@ namespace bbai {
 
   wlr_scene_output *Server::activeSceneOutput() const {
     return active_output ? active_output->sceneOutput() : nullptr;
+  }
+
+  void Server::addHeadlessOutputForTest(int w, int h) {
+    wlr_headless_add_output(backend, w, h);   // fires new_output on the next dispatch
   }
 
   const char *Server::seatSelectionMimeForTest() const {
