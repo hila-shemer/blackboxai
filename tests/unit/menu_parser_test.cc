@@ -101,3 +101,82 @@ TEST_CASE("nested submenu builds the right tree, closed by [end]") {
   // The [exit] after the submenu's [end] belongs back at the top level.
   CHECK(r.items[2].action == MenuItem::Act::Exit);
 }
+
+namespace {
+  bool anyDiagContains(const Result &r, const std::string &needle) {
+    for (const auto &d : r.diagnostics)
+      if (d.find(needle) != std::string::npos) return true;
+    return false;
+  }
+}
+
+TEST_CASE("restart: bare restarts self, with a command degrades to self + note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [restart] (Restart)\n"
+    "  [restart] (Start FVWM) {fvwm}\n"
+    "[end]\n");
+
+  REQUIRE(r.items.size() == 2);
+  CHECK(r.items[0].action == MenuItem::Act::Restart);
+  CHECK(r.items[0].label == u("Restart"));
+
+  // No RestartOther action exists; the {fvwm} target is dropped, not invented.
+  CHECK(r.items[1].action == MenuItem::Act::Restart);
+  CHECK(r.items[1].label == u("Start FVWM"));
+  CHECK(r.items[1].argv.empty());
+  CHECK(anyDiagContains(r, "fvwm"));
+}
+
+TEST_CASE("workspaces and config become empty placeholder submenus + a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [workspaces] (Workspace List)\n"
+    "  [config] (Configuration)\n"
+    "[end]\n");
+
+  REQUIRE(r.items.size() == 2);
+
+  CHECK(r.items[0].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[0].label == u("Workspace List"));
+  CHECK(r.items[0].submenu_items.empty());
+
+  CHECK(r.items[1].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[1].label == u("Configuration"));
+  CHECK(r.items[1].submenu_items.empty());
+
+  CHECK(anyDiagContains(r, "workspaces"));
+  CHECK(anyDiagContains(r, "config"));
+}
+
+TEST_CASE("unsupported style/include/reconfig tags are skipped with a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exec] (keep) {keep}\n"
+    "  [style] (Some Style) {~/.blackbox/styles/x}\n"
+    "  [stylesdir] (~/.blackbox/styles)\n"
+    "  [include] (~/.blackbox/other)\n"
+    "  [reconfig] (Reconfigure)\n"
+    "  [frobnicate] (bogus)\n"
+    "[end]\n");
+
+  // Only the [exec] survives; the rest degrade without producing items.
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].label == u("keep"));
+
+  CHECK(anyDiagContains(r, "style"));
+  CHECK(anyDiagContains(r, "include"));
+  CHECK(anyDiagContains(r, "reconfig"));
+  CHECK(anyDiagContains(r, "frobnicate"));
+}
+
+TEST_CASE("escaped delimiters survive in labels and commands") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exec] (\\(cool\\) \\{x\\}) {echo \\(hi\\)}\n"
+    "[end]\n");
+
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].label == u("(cool) {x}"));
+  CHECK(r.items[0].argv == sh("echo (hi)"));
+}
