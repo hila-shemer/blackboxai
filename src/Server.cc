@@ -12,6 +12,7 @@
 #include <memory>
 
 #include <algorithm>
+#include <cstdio>                      // fprintf(stderr) loud-fail line
 #include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
 
 namespace {
@@ -184,7 +185,10 @@ namespace bbai {
     default_runner_ = std::make_unique<PosixCommandRunner>(socket_name);
     command_runner_ = default_runner_.get();
 
-    wlr_backend_start(backend);
+    started_ = wlr_backend_start(backend);
+    if (!started_)
+      fprintf(stderr, "blackboxai: backend failed to start - no seat, or DRM "
+                      "master held by another session\n");
 
     // The headless backend never emits new_output on its own; ask it for the
     // fixed 1280x720 test output so the background actually composites.
