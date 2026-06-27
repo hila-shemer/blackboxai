@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=BlackboxAI
+Comment=Blackbox, reborn on Wayland
+Exec=blackboxai
+Type=Application
+DesktopNames=Blackbox

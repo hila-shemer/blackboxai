@@ -25,8 +25,11 @@ unit_sources = files(
   'unit/command_runner_test.cc',
   'unit/rootmenu_submenu_test.cc',
   'unit/autostart_test.cc',
+  'unit/desktop_file_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
+  cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
+              meson.project_source_root() / 'data' / 'blackboxai.desktop' + '"'],
   dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
 test('unit', unit_exe, suite : 'unit')
 
