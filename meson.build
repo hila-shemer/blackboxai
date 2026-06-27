@@ -78,6 +78,11 @@ wlr_dep = declare_dependency(
                   xkbcommon_dep, server_protos_dep],
   sources      : [wlr_scene_compat, wlr_color_compat])
 
+# A display manager finds the session here; logind sets up the seat before our
+# Exec runs.
+install_data('data/blackboxai.desktop',
+  install_dir : get_option('datadir') / 'wayland-sessions')
+
 subdir('toolkit')
 subdir('src')
 if get_option('tests')
