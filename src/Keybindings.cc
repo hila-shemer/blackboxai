@@ -6,6 +6,7 @@ namespace bbai {
     const uint32_t SUPER = WLR_MODIFIER_LOGO;
     const uint32_t ALT   = WLR_MODIFIER_ALT;
     const uint32_t SHIFT = WLR_MODIFIER_SHIFT;
+    const uint32_t CTRL  = WLR_MODIFIER_CTRL;
     bindings_ = {
       { SUPER,         XKB_KEY_Right, { Action::WorkspaceNext } },
       { SUPER,         XKB_KEY_Left,  { Action::WorkspacePrev } },
@@ -20,6 +21,7 @@ namespace bbai {
       { SUPER | SHIFT, XKB_KEY_ISO_Left_Tab,{ Action::CyclePrev } },  // real Shift+Tab sym
       { SUPER | ALT,   XKB_KEY_t,     { Action::IconMenu } },
       { SUPER,         XKB_KEY_F7,    { Action::Screenshot } },
+      { CTRL | ALT,    XKB_KEY_BackSpace, { Action::Quit } },  // escape a wedged session
     };
   }
 

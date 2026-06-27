@@ -713,6 +713,7 @@ namespace bbai {
     case Action::OpenMenu:  openRootMenu(cursor->x, cursor->y); break;
     case Action::IconMenu:  openIconMenu(cursor->x, cursor->y); break;
     case Action::Screenshot: beginScreenshot(); break;
+    case Action::Quit:      terminate(); break;
     case Action::CycleNext: break;  // cycle focus within the workspace (future)
     case Action::CyclePrev: break;
     case Action::None:      break;
