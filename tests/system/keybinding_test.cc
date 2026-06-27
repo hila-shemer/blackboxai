@@ -79,6 +79,19 @@ TEST_CASE("Mod4+q sends xdg_toplevel.close to the focused window") {
   CHECK(c.gotCloseRequest());
 }
 
+TEST_CASE("Ctrl+Alt+Backspace fires Quit and terminates the display") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+
+  server.injectKeyForTest(XKB_KEY_BackSpace, WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT, true);
+  CHECK(server.lastActionForTest() == Action::Quit);
+  // terminate() asked the loop to stop; the next dispatch drains to a clean exit
+  // (the manual loop returns rather than blocking in wl_display_run).
+  server.dispatch();
+}
+
 TEST_CASE("Super+F7 fires Screenshot and arms the select mode") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);

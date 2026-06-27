@@ -49,3 +49,9 @@ TEST_CASE("Mod4+F7 maps to Action::Screenshot, modifier-exact") {
   // Modifier EQUALITY: Mod4+Shift+F7 must NOT match.
   CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_F7).kind == Action::None);
 }
+
+TEST_CASE("Ctrl+Alt+Backspace is the session-quit chord") {
+  Keybindings kb;
+  Action a = kb.dispatch(WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT, XKB_KEY_BackSpace);
+  CHECK(a.kind == Action::Quit);
+}
