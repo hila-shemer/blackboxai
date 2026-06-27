@@ -16,6 +16,12 @@ namespace bbai {
       if (fork() == 0) {
         if (!wayland_display_.empty())
           setenv("WAYLAND_DISPLAY", wayland_display_.c_str(), 1);
+        // Drop the host's DISPLAY: we run no XWayland of our own, so an X11
+        // child (xterm, old GTK/Qt) would otherwise connect to whatever X
+        // server we inherited - i.e. escape onto the host desktop. Drop it so
+        // they fail where you can see them. When XWayland lands this becomes a
+        // setenv to our own :N.
+        unsetenv("DISPLAY");
         std::vector<char *> args;
         args.reserve(argv.size() + 1);
         for (const std::string &s : argv) args.push_back(const_cast<char *>(s.c_str()));
