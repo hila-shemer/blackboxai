@@ -1,0 +1,17 @@
+! Sample session resource file for the M5 typed-config parse tests.
+! Mixes session-level and per-screen (screen0) keys, plus a comment and a blank
+! line, to exercise the bt::Resource parser underneath bbai::Config.
+
+session.focusModel:            SloppyFocus AutoRaise
+session.focusNewWindows:       False
+session.doubleClickInterval:   300
+session.autoRaiseDelay:        250
+session.windowPlacement:       CascadePlacement
+
+session.screen0.workspaces:        6
+session.screen0.workspaceNames:    web,code,chat,media,vm,scratch
+session.screen0.enableToolbar:     True
+session.screen0.toolbar.placement: TopCenter
+session.screen0.toolbar.autoHide:  True
+session.screen0.toolbar.onTop:     True
+session.screen0.toolbar.widthPercent: 80
