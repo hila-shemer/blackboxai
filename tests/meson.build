@@ -28,13 +28,16 @@ unit_sources = files(
   'unit/autostart_test.cc',
   'unit/desktop_file_test.cc',
   'unit/server_ok_test.cc',
+  'unit/menu_parser_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
               meson.project_source_root() / 'data' / 'blackboxai.desktop' + '"',
               # config_test.cc loads a .blackboxrc fixture by absolute path.
               '-DBBAI_TEST_FIXTURE_DIR="'
-              + meson.project_source_root() / 'tests' / 'fixtures' + '"'],
+              + meson.project_source_root() / 'tests' / 'fixtures' + '"',
+              '-DBBAI_MENU_FIXTURE="@0@"'.format(
+                meson.current_source_dir() / 'fixtures' / 'menu.in')],
   dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
 test('unit', unit_exe, suite : 'unit')
 
