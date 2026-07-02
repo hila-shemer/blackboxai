@@ -15,6 +15,7 @@
 #include "Keybindings.hh"
 #include "ServerOk.hh"
 #include "StackingList.hh"
+#include "Mru.hh"
 #include "CommandRunner.hh"
 #include "Decoration.hh"   // bbai::Part
 #include "MenuItem.hh"
@@ -107,6 +108,16 @@ namespace bbai {
     unsigned currentWorkspaceForTest() const { return workspaces_.current(); }
     View *focusedViewForTest() const { return focused_view; }
 
+    // Alt-tab cycle seams: drive the same session state machine the CycleNext/
+    // CyclePrev bindings and the onModifiers commit / Escape cancel funnels use.
+    // The device-only "starting modifier went up" release is hand-verified (spec
+    // §4); everything it calls is reachable here.
+    void cycleForTest(int dir) { cycleStep(dir); }
+    void commitCycleForTest() { commitCycle(); }
+    void cancelCycleForTest() { cancelCycle(); }
+    bool cyclingForTest() const { return cycling_; }
+    const std::vector<View *> &mruForTest() const { return mru_.snapshot(); }
+
     // test-only accessors. activeOutput is the primary (first) head; the count
     // covers every lit head (M7).
     Output *activeOutputForTest() const { return active_output; }
@@ -176,8 +187,15 @@ namespace bbai {
     void finishScreenshot();           // capture on a real release -> clipboard (T7)
     void processMove();
     void processResize();
-    void focusView(View *v);
+    void focusView(View *v, bool update_mru = true);
     void clearFocus();                              // deactivate + clear keyboard focus
+    // Alt-tab MRU cycle (spec §3.2). cycleStep starts or advances the modal
+    // session; commit/cancel end it. visibleRing is the frozen candidate set:
+    // mapped, non-iconified, across all workspaces, in MRU order.
+    void cycleStep(int dir);
+    void commitCycle();
+    void cancelCycle();
+    std::vector<View *> visibleRing() const;
     View *viewForHandle(void *handle);              // a live View matching the stored focus handle
     View *topmostViewOnWorkspace(unsigned ws);
     View *viewFromNode(wlr_scene_node *node);
@@ -198,6 +216,14 @@ namespace bbai {
     std::vector<Output *> outputs_;             // every lit head (M7); each self-deletes on its output's destroy
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
     StackingList stacking_;                     // Z-order across all views (M4)
+    Mru<View> mru_;                             // last-used order for alt-tab (spec §3.1)
+
+    // Alt-tab cycle session — modal while the starting modifier is held (spec §3.2).
+    bool cycling_ = false;
+    std::vector<View *> cycle_ring_;            // frozen candidate ring, MRU order
+    std::size_t cycle_index_ = 0;               // current position in cycle_ring_
+    View *cycle_start_ = nullptr;               // focus to restore on cancel
+    uint32_t cycle_mod_ = 0;                    // raw held modifier bit that opened the session
     bt::TextRenderer title_font;                // titlebar label font (M3)
     std::unique_ptr<bt::Clock> clock_;          // wall/monotonic time (M4)
     std::unique_ptr<TimerRegistry> timer_registry_;

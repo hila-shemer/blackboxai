@@ -16,9 +16,12 @@ namespace bbai {
       { SUPER,         XKB_KEY_4,     { Action::WorkspaceTo, 3 } },
       { SUPER,         XKB_KEY_space, { Action::OpenMenu } },
       { SUPER,         XKB_KEY_q,     { Action::CloseWindow } },
-      { SUPER,         XKB_KEY_Tab,   { Action::CycleNext } },
-      { SUPER | SHIFT, XKB_KEY_Tab,         { Action::CyclePrev } },
-      { SUPER | SHIFT, XKB_KEY_ISO_Left_Tab,{ Action::CyclePrev } },  // real Shift+Tab sym
+      { ALT,           XKB_KEY_Tab,   { Action::CycleNext } },
+      { ALT | SHIFT,   XKB_KEY_Tab,         { Action::CyclePrev } },
+      { ALT | SHIFT,   XKB_KEY_ISO_Left_Tab,{ Action::CyclePrev } },  // real Shift+Tab sym
+      { SUPER,         XKB_KEY_Tab,   { Action::CycleNext } },        // alias
+      { SUPER | SHIFT, XKB_KEY_Tab,         { Action::CyclePrev } },  // alias
+      { SUPER | SHIFT, XKB_KEY_ISO_Left_Tab,{ Action::CyclePrev } },  // alias
       { SUPER | ALT,   XKB_KEY_t,     { Action::IconMenu } },
       { SUPER,         XKB_KEY_F7,    { Action::Screenshot } },
       { CTRL | ALT,    XKB_KEY_BackSpace, { Action::Quit } },  // escape a wedged session
