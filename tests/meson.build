@@ -15,6 +15,7 @@ unit_sources = files(
   'unit/wlr_headers_test.cc',
   'unit/frame_geometry_test.cc',
   'unit/stackinglist_test.cc',
+  'unit/mru_test.cc',
   'unit/workspace_test.cc',
   'unit/clock_test.cc',
   'unit/timer_test.cc',
@@ -148,6 +149,13 @@ ws_switch_exe = executable('workspace-switch-test', files('system/workspace_swit
   dependencies : [harness_dep, doctest_dep])
 test('workspace_switch', ws_switch_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# MRU alt-tab: cycle session state machine via injected seams (focus + MRU order,
+# preview vs commit, wraparound, cancel, cross-workspace commit). Nonvisual.
+alttab_exe = executable('alttab-test', files('system/alttab_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('alttab', alttab_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
 
 # M4 root menu: modal chrome on overlay + dismiss + actions.
 rootmenu_exe = executable('rootmenu-test', files('system/rootmenu_test.cc'),

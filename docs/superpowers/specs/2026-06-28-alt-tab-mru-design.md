@@ -1,6 +1,8 @@
 # BlackboxAI — Universal MRU alt-tab — Design
 
-**Status:** approved (design); implementation pending
+**Status:** implemented (2026-07-02) — `src/Mru.hh`, cycle session in `Server`,
+`Alt+Tab`/`Super+Tab` bindings; unit + system tests green. Live Alt-release edge
+hand-verified per §4.
 **Date:** 2026-06-28
 **Branch:** `wayland-rewrite`
 

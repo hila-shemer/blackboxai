@@ -118,6 +118,7 @@ namespace bbai {
       v->setWorkspace(workspaces_.current());
       v->setOnWorkspace(true);                   // new windows open on the current ws
       stacking_.insert(v);                       // top of its layer
+      mru_.touch(v);                             // newest window is most-recently-used
     });
 
     // Decoration policy: request SSD (we draw the Blackbox frame), honor CSD
@@ -291,6 +292,9 @@ namespace bbai {
       pressed_button_part_ = Part::None;
     }
     std::erase(icons_, view);
+    mru_.erase(view);                 // drop from last-used order (and any frozen ring)
+    std::erase(cycle_ring_, view);
+    if (cycle_start_ == view) cycle_start_ = nullptr;
     const bool was_focused = (focused_view == view);
     if (was_focused) focused_view = nullptr;
     workspaces_.clearFocused(view);   // drop from every workspace's focus memory
@@ -413,8 +417,8 @@ namespace bbai {
     return Part::None;
   }
 
-  void Server::focusView(View *v) {
-    if (focused_view == v) return;
+  void Server::focusView(View *v, bool update_mru) {
+    if (focused_view == v) return;   // already at the MRU front; nothing to re-order
     if (focused_view) {
       wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
       focused_view->setFocused(false);
@@ -422,10 +426,113 @@ namespace bbai {
     focused_view = v;
     wlr_xdg_toplevel_set_activated(v->toplevel(), true);
     v->setFocused(true);
+    // Cycle previews focus with update_mru=false so the frozen ring isn't
+    // scrambled on every Tab; only a real focus change (or the commit) reorders.
+    if (update_mru) mru_.touch(v);
     if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
       wlr_seat_keyboard_notify_enter(seat, v->toplevel()->base->surface,
                                      kb->keycodes, kb->num_keycodes, &kb->modifiers);
     if (toolbar_) toolbar_->redrawWindowLabel(v->toplevel()->title);
+  }
+
+  // The alt-tab candidate set: every mapped, non-iconified window across all
+  // workspaces, in MRU order (spec §3). Off-workspace windows are still mapped +
+  // not iconified (setOnWorkspace only toggles the scene node), so they belong.
+  std::vector<View *> Server::visibleRing() const {
+    std::vector<View *> r;
+    for (View *v : mru_.snapshot())
+      if (v->isMapped() && !v->isIconified()) r.push_back(v);
+    return r;
+  }
+
+  void Server::cycleStep(int dir) {
+    if (!cycling_) {
+      // Start (spec §3.2): freeze the ring; 0 or 1 window is nothing to cycle.
+      cycle_ring_ = visibleRing();
+      if (cycle_ring_.size() < 2) { cycle_ring_.clear(); return; }
+      cycle_start_ = focused_view;
+      cycling_ = true;
+      // Record the raw held modifier that opened the session so releasing *that*
+      // one commits (§3.3) — the raw depressed bit, not the cleaned binding mask.
+      cycle_mod_ = 0;
+      if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat)) {
+        const uint32_t d = kb->modifiers.depressed;
+        cycle_mod_ = (d & WLR_MODIFIER_ALT)  ? WLR_MODIFIER_ALT
+                   : (d & WLR_MODIFIER_LOGO) ? WLR_MODIFIER_LOGO : 0;
+      }
+      // Anchor the index on the currently-focused window (the MRU front), then
+      // fall through to step off it — forward lands on the next-most-recent.
+      // With nothing focused (e.g. the current workspace was emptied) there is
+      // no window to step *off*: anchor one behind the edge so the first step
+      // lands on the ring front (forward) or back (backward), not past it.
+      auto it = std::find(cycle_ring_.begin(), cycle_ring_.end(), cycle_start_);
+      cycle_index_ = (it == cycle_ring_.end())
+                   ? (dir >= 0 ? cycle_ring_.size() - 1 : 0)
+                   : static_cast<std::size_t>(it - cycle_ring_.begin());
+    }
+    if (cycle_ring_.empty()) { cycling_ = false; return; }   // ring emptied mid-cycle
+    // Step, skipping entries that went invisible after the freeze (unmapped or
+    // iconified mid-session; destroy is already pruned by removeView). If no
+    // visible candidate remains the session dissolves.
+    const std::size_t n = cycle_ring_.size();
+    for (std::size_t hops = 0; hops < n; ++hops) {
+      cycle_index_ = Mru<View>::step(cycle_index_, dir, n);
+      View *v = cycle_ring_[cycle_index_];
+      if (!v->isMapped() || v->isIconified()) continue;
+      raiseView(v);
+      focusView(v, /*update_mru=*/false);   // preview only — do not reorder mru_
+      return;
+    }
+    cycling_ = false;
+    cycle_ring_.clear();
+    cycle_start_ = nullptr;
+    cycle_mod_ = 0;
+  }
+
+  void Server::commitCycle() {
+    if (!cycling_) return;
+    cycling_ = false;
+    View *v = focused_view;
+    View *start = cycle_start_;
+    cycle_ring_.clear();
+    cycle_start_ = nullptr;
+    cycle_mod_ = 0;
+    // Nothing sane to commit onto a window that went invisible mid-hold; the
+    // step path already skips those, this covers "previewed, then vanished."
+    if (!v || !v->isMapped() || v->isIconified()) return;
+    const unsigned old_ws = workspaces_.current();
+    if (v->workspace() != old_ws) {
+      // The preview focused v while the old workspace was still current, so a
+      // bare setCurrentWorkspace would (a) restore the incoming workspace's
+      // *remembered* view — focusing and MRU-fronting the wrong window before
+      // we correct it — and (b) record v, a foreign window, as the outgoing
+      // workspace's memory. Point the incoming memory at v so the restore lands
+      // on the commit target itself...
+      workspaces_.setFocused(v->workspace(), v);
+      setCurrentWorkspace(v->workspace());
+      // ...and repair the outgoing memory to the session-start window (what was
+      // actually in use there when the cycle began).
+      workspaces_.setFocused(old_ws,
+                             (start && start->workspace() == old_ws) ? start : nullptr);
+    }
+    focusView(v);   // no-op if the switch's restore already landed here
+    // The preview focused v with the MRU suppressed, so focusView can early-
+    // return without reordering — front it explicitly; touch is idempotent.
+    mru_.touch(v);
+  }
+
+  void Server::cancelCycle() {
+    if (!cycling_) return;
+    cycling_ = false;
+    View *start = cycle_start_;
+    cycle_ring_.clear();
+    cycle_start_ = nullptr;
+    cycle_mod_ = 0;
+    if (start) focusView(start);            // restore focus to the session-start window (§3.2)
+    // Re-sync the seat so a modifier released during the modal session isn't left
+    // stuck-down in the client (mirrors closeMenus / resyncSeatAfterScreenshot).
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
   }
 
   void Server::beginScreenshot() {
@@ -761,6 +868,22 @@ namespace bbai {
         swallowed_keycodes_.insert(keycode);   // swallow the key (and its release)
         return;
       }
+      if (cycling_) {  // modal: cycle steps and Escape act, every other key is swallowed
+        for (int i = 0; i < nsyms; ++i) {
+          if (syms[i] == XKB_KEY_Escape) { cancelCycle(); break; }
+          // Only the cycle's own bindings run mid-session — a Super-opened cycle
+          // must not fire WorkspaceNext/OpenMenu/Screenshot and stack a second
+          // modal mode on top of this one.
+          const Action a = keybindings_.dispatch(mods, syms[i]);
+          if (a.kind == Action::CycleNext || a.kind == Action::CyclePrev) {
+            last_action_ = a;
+            executeAction(a);
+            break;
+          }
+        }
+        swallowed_keycodes_.insert(keycode);
+        return;
+      }
       for (int i = 0; i < nsyms; ++i) {
         if (dispatchBinding(mods, syms[i])) {
           swallowed_keycodes_.insert(keycode);  // also swallow the matching release
@@ -775,6 +898,10 @@ namespace bbai {
   }
 
   void Server::onModifiers(wlr_keyboard *kb) {
+    // Commit the alt-tab cycle the moment the modifier that opened it goes up
+    // (spec §3.3). commitCycle clears cycling_, so the notify below re-syncs the
+    // seat with the released modifier — no separate re-sync needed on this path.
+    if (cycling_ && cycle_mod_ && !(kb->modifiers.depressed & cycle_mod_)) commitCycle();
     // Modal modes own the keyboard: don't leak modifier state to the focused
     // client (the menu gate and the screenshot mode both rely on this). The exit
     // paths re-sync, so a modifier released while modal isn't left stuck-down.
@@ -812,8 +939,8 @@ namespace bbai {
     case Action::IconMenu:  openIconMenu(cursor->x, cursor->y); break;
     case Action::Screenshot: beginScreenshot(); break;
     case Action::Quit:      terminate(); break;
-    case Action::CycleNext: break;  // cycle focus within the workspace (future)
-    case Action::CyclePrev: break;
+    case Action::CycleNext: cycleStep(+1); break;
+    case Action::CyclePrev: cycleStep(-1); break;
     case Action::None:      break;
     }
   }
@@ -881,6 +1008,16 @@ namespace bbai {
     if (active_menu_) { if (pressed) handleMenuKey(sym); return; }
     if (cursor_mode == CursorMode::ScreenshotSelect) {
       if (pressed && sym == XKB_KEY_Escape) cancelScreenshot();
+      return;
+    }
+    if (cycling_) {  // mirror onKey's modal block: step/Escape act, all else swallowed
+      if (!pressed) return;
+      if (sym == XKB_KEY_Escape) { cancelCycle(); return; }
+      const Action a = keybindings_.dispatch(mods, sym);
+      if (a.kind == Action::CycleNext || a.kind == Action::CyclePrev) {
+        last_action_ = a;
+        executeAction(a);
+      }
       return;
     }
     if (pressed) dispatchBinding(mods, sym);
