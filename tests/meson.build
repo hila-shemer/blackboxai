@@ -324,3 +324,13 @@ demo_toolbar_exe = executable('demo-toolbar',
   dependencies : [harness_dep, doctest_dep])
 test('demo_toolbar', demo_toolbar_exe, suite : 'demo',
   workdir : meson.project_source_root(), env : text_env)
+
+# ---- sni-core (suite: 'system') ---------------------------------------------
+# The tray's D-Bus half. dbus-run-session wraps each exe so every run gets its
+# own private bus daemon - claiming org.kde.StatusNotifierWatcher never touches
+# the developer's real session bus.
+dbus_run_session = find_program('dbus-run-session')
+sni_host_exe = executable('sni-host-test', files('system/sni_host_test.cc'),
+  dependencies : [bbai_dep, doctest_dep, libsystemd_dep])
+test('sni_host', dbus_run_session, args : ['--', sni_host_exe], suite : 'system',
+  workdir : meson.project_source_root())
