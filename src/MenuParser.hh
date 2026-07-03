@@ -18,8 +18,9 @@
 //   [nop]   (l?)            -> disabled Command (inert spacer/label)
 //   [workspaces]/[config]   -> empty placeholder Submenu (runtime-populated at
 //                              wire-up; the parser cannot enumerate workspaces)
-//   [style]/[stylesdir]/[include]/[reconfig]/unknown -> skipped + noted (no
-//                              backing action/behavior in the compositor)
+//   [style]  (l) {path}     -> Command + Act::SetStyle, argv[0]=expandTilde(path)
+//   [reconfig] (l) {cmd?}   -> Command + Act::Reconfigure ({cmd} dropped + noted)
+//   [stylesdir]/[include]/unknown -> skipped + noted (wired in later tasks)
 //
 // The tokenizer mirrors blackbox's string_within: backslash escapes the next
 // character inside a field, a leading '#' is a comment, malformed lines are
