@@ -91,7 +91,7 @@ namespace bbai {
     locked_ = false;
     removeBlanks();
     fallback_.stop();
-    // Focus restore (Server::handleSessionUnlocked) arrives in Task 6.
+    server_.handleSessionUnlocked();
   }
 
   void SessionLock::onLockDestroy() {

@@ -1005,8 +1005,17 @@ namespace bbai {
   }
 
   void Server::handleSessionUnlocked() {
-    // Body lands in Task 6 with its test; keeping the symbol so SessionLock
-    // links from day one.
+    // The pre-lock window may have died under the lock - re-validate the
+    // handle, else fall back to the topmost survivor (mirrors removeView).
+    if (View *v = viewForHandle(focus_before_lock_)) focusView(v);
+    else if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+    else clearFocus();
+    focus_before_lock_ = nullptr;
+    // Re-resolve pointer focus + re-sync modifiers, same as every other modal
+    // exit (closeMenus / resyncSeatAfterScreenshot).
+    onPointerMotion(nowMsec());
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
   }
 
   View *Server::viewForHandle(void *handle) {
