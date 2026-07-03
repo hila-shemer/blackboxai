@@ -141,9 +141,11 @@ namespace bbai::menuparser {
               "' dropped (no RestartOther action; restarts self instead)"));
           out.push_back(std::move(m));
         } else if (tag == "workspaces" || tag == "config") {
-          // Runtime-populated menus: the parser can't enumerate workspaces or the
-          // config options, so emit a labelled empty placeholder submenu for the
-          // foreground thread to fill at wire-up. Keeps position + label intact.
+          // Runtime-populated menus: the parser can't enumerate workspaces or
+          // config options, so it emits an empty placeholder Submenu carrying
+          // an Act marker (dead weight on Kind::Submenu - zero layout impact)
+          // that the wire-up resolves at open time. [config] stays a disabled
+          // placeholder until wave-2 configmenu mounts on it.
           if (label.empty()) {
             diag.push_back(note(lineNo, "[" + tag + "] needs a label - skipped"));
             continue;
@@ -151,9 +153,11 @@ namespace bbai::menuparser {
           MenuItem m;
           m.kind = MenuItem::Kind::Submenu;
           m.label = bt::decodeUtf8(label.c_str());
-          diag.push_back(note(lineNo,
-            "[" + tag + "] is a runtime-populated menu - emitted empty placeholder "
-            "submenu; populate at wire-up"));
+          m.action = (tag == "workspaces") ? MenuItem::Act::WorkspacesMenu
+                                           : MenuItem::Act::ConfigMenu;
+          if (tag == "config")
+            diag.push_back(note(lineNo,
+              "[config] menu is not populated yet - shown disabled"));
           out.push_back(std::move(m));
         } else if (tag == "submenu") {
           if (label.empty()) {

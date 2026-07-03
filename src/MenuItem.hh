@@ -13,7 +13,13 @@ namespace bbai {
     enum class Kind { Command, Separator, Submenu };
     enum class Act {
       None, Exec, WorkspaceSwitch, NewWorkspace, RemoveWorkspace, Restart, Exit,
-      Deiconify
+      Deiconify,
+      // M5 menu-file actions:
+      SetStyle,        // argv[0] = tilde-expanded style file path
+      Reconfigure,     // classic [reconfig]; a documented {cmd} is dropped + noted
+      RestartOther,    // argv = {"/bin/sh", "-c", "exec " + cmd}
+      WorkspacesMenu,  // marker on the [workspaces] placeholder Submenu
+      ConfigMenu       // marker on the [config] placeholder Submenu (wave-2 mount)
     };
 
     std::u32string label;

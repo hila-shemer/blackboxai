@@ -1382,6 +1382,11 @@ namespace bbai {
     case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
     case MenuItem::Act::Exit:            terminate(); break;
     case MenuItem::Act::Restart:         break;  // stub in M4
+    case MenuItem::Act::SetStyle:        break;  // wired in the dispatch task
+    case MenuItem::Act::Reconfigure:     break;  // wired in the dispatch task
+    case MenuItem::Act::RestartOther:    break;  // wired in the dispatch task
+    case MenuItem::Act::WorkspacesMenu:          // submenu markers - a Submenu is
+    case MenuItem::Act::ConfigMenu:      break;  // never dispatched as a command
     case MenuItem::Act::Deiconify:
       if (View *v = viewForHandle(copy.target)) deiconifyView(v);
       break;
