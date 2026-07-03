@@ -177,6 +177,13 @@ rootmenu_submenu_exe = executable('rootmenu-submenu-test',
 test('rootmenu_submenu', rootmenu_submenu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# M5 menu-wire: file-driven root menu - tree + goldens, stat-on-open reload,
+# include end-to-end, fallback; action dispatch joins in the next task.
+menu_file_exe = executable('menu-file-test', files('system/menu_file_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('menu_file', menu_file_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F4.2 View iconified state: composes with workspace visibility (nonvisual, no golden).
 iconify_exe = executable('iconify-test', files('system/iconify_test.cc'),
   dependencies : [harness_dep, doctest_dep])
