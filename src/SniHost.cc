@@ -334,6 +334,24 @@ namespace bbai::sni {
     if (events_.itemAdded) events_.itemAdded(Item(items_.back()));
   }
 
+  void Host::callItem(const Item &it, const char *method, int x, int y) {
+    if (!bus_) return;
+    sd_bus_call_method_async(bus_, nullptr, it.service.c_str(), it.path.c_str(),
+                             kItemIface, method, nullptr, nullptr, "ii", x, y);
+  }
+
+  void Host::activate(const Item &it, int x, int y) {
+    callItem(it, "Activate", x, y);
+  }
+
+  void Host::secondaryActivate(const Item &it, int x, int y) {
+    callItem(it, "SecondaryActivate", x, y);
+  }
+
+  void Host::contextMenu(const Item &it, int x, int y) {
+    callItem(it, "ContextMenu", x, y);
+  }
+
   void Host::dropRegistration(const std::string &service, const std::string &path) {
     for (auto it = regs_.begin(); it != regs_.end(); ++it)
       if ((*it)->service == service && (*it)->path == path) {

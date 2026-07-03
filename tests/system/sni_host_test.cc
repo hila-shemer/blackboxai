@@ -389,3 +389,22 @@ TEST_CASE("clean quit unregisters too") {
   mock.quit();
   REQUIRE(pumpUntil(host, {}, [&] { return host.items().empty(); }));
 }
+
+TEST_CASE("activate/secondaryActivate/contextMenu land on the item with (x,y)") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  bbai::test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  REQUIRE(mock.waitReport(5000, [&] { host.processForTest(); }) == "registered");
+  REQUIRE(pumpUntil(host, {}, [&] { return !host.items().empty(); }));
+  const Item it = host.items()[0];      // copy - the proxies only need names
+
+  auto pump = [&] { host.processForTest(); };
+  host.activate(it, 10, 20);
+  CHECK(mock.waitReport(5000, pump) == "Activate 10 20");
+  host.secondaryActivate(it, 1, 2);
+  CHECK(mock.waitReport(5000, pump) == "SecondaryActivate 1 2");
+  host.contextMenu(it, 5, 6);
+  CHECK(mock.waitReport(5000, pump) == "ContextMenu 5 6");
+  mock.quit();
+}
