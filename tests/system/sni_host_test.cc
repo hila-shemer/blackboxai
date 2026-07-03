@@ -111,6 +111,15 @@ namespace {
     return watcherProp(host, conn, "RegisteredStatusNotifierItems").strings;
   }
 
+  // A bare item object so the Host's post-registration GetAll succeeds with an
+  // empty dict (sd-bus serves org.freedesktop.DBus.Properties for any vtable).
+  // Without it sd-bus auto-replies UnknownObject and the Host - correctly, per
+  // its materialize-or-drop rule - unregisters the item before we can assert.
+  const sd_bus_vtable kEmptyItemVtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_VTABLE_END
+  };
+
 } // namespace
 
 TEST_CASE("Host claims the watcher name on the private bus") {
@@ -173,6 +182,9 @@ TEST_CASE("path-variant registration: signal fires, property lists service+path"
 
   sd_bus *item_conn = nullptr;                 // plays the app
   REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kEmptyItemVtable, nullptr) >= 0);
   // Async, not blocking: the watcher lives in THIS process and only serves the
   // call when we pump it - a blocking call here would deadlock.
   REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
@@ -207,6 +219,9 @@ TEST_CASE("name-variant registration resolves to the well-known name") {
 
   sd_bus *item_conn = nullptr;
   REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kEmptyItemVtable, nullptr) >= 0);
   REQUIRE(sd_bus_request_name(item_conn, "org.test.RawItem", 0) >= 0);
   REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
                                    "org.kde.StatusNotifierWatcher",
@@ -262,4 +277,48 @@ TEST_CASE("mock publisher registers with the watcher and serves its icon") {
 
   mock.quit();
   sd_bus_flush_close_unref(probe);
+}
+
+TEST_CASE("registration materializes a full sni::Item") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  std::vector<Item> added;
+  HostEvents ev;
+  ev.itemAdded = [&](const Item &it) { added.push_back(it); };
+  host.setEvents(std::move(ev));
+
+  bbai::test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  REQUIRE(mock.waitReport(5000, [&] { host.processForTest(); }) == "registered");
+
+  REQUIRE(pumpUntil(host, {}, [&] { return !host.items().empty(); }));
+  REQUIRE(added.size() == 1);
+  const Item &it = host.items()[0];
+  CHECK(it.service[0] == ':');            // path-variant: unique name
+  CHECK(it.path == "/StatusNotifierItem");
+  CHECK(it.id == "sni-mock");
+  CHECK(it.title == "Mock Item");
+  CHECK(it.status == "Active");
+  CHECK(it.icon_name == "mock-icon");
+  CHECK(it.icon_theme_path == "/tmp/mock-theme");
+  CHECK(it.menu_path == "/MenuBar");
+  CHECK(it.item_is_menu);
+  CHECK(it.tooltip == "Mock Tooltip");
+  REQUIRE(it.icon_pixmaps.size() == 1);
+  CHECK(it.icon_pixmaps[0].width == 2);
+  CHECK(it.icon_pixmaps[0].height == 2);
+  REQUIRE(it.icon_pixmaps[0].data.size() == 16);
+  CHECK(memcmp(it.icon_pixmaps[0].data.data(), bbai::test::kSniMockIcon, 16) == 0);
+  mock.quit();
+}
+
+TEST_CASE("name-variant registration materializes under the well-known name") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  bbai::test::SniMockChild mock(/*register_by_name=*/true);
+  REQUIRE(mock.ok());
+  REQUIRE(mock.waitReport(5000, [&] { host.processForTest(); }) == "registered");
+  REQUIRE(pumpUntil(host, {}, [&] { return !host.items().empty(); }));
+  CHECK(host.items()[0].service == "org.test.SniMock");
+  mock.quit();
 }

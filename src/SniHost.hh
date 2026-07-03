@@ -23,6 +23,10 @@ struct sd_bus_track;
 
 namespace bbai::sni {
 
+  struct HostEvents {
+    std::function<void(const Item&)> itemAdded, itemChanged, itemRemoved;
+  };
+
   class Host {
   public:
     // loop may be null: tests then pump processForTest() by hand (the same
@@ -33,6 +37,9 @@ namespace bbai::sni {
     Host &operator=(const Host &) = delete;
 
     bool ok() const { return bus_ != nullptr; }
+
+    const std::vector<Item> &items() const { return items_; }
+    void setEvents(HostEvents ev) { events_ = std::move(ev); }
 
     // Drain sd_bus_process exactly like the production fd source does.
     void processForTest();
@@ -53,8 +60,14 @@ namespace bbai::sni {
     void addRegistration(const std::string &service, const std::string &path,
                          const std::string &owner);
 
+    void fetchAll(Reg &reg);           // async Properties.GetAll -> Cb::onGetAll
+    void storeItem(Item item);         // upsert + fire itemAdded/itemChanged
+    void dropRegistration(const std::string &service, const std::string &path);
+
     std::vector<std::unique_ptr<Reg>> regs_;
     bool host_registered_ = false;   // any StatusNotifierHost announced (task 9: us)
+    std::vector<Item> items_;
+    HostEvents events_;
 
     wl_event_loop *loop_ = nullptr;
     wl_event_source *fd_source_ = nullptr;
