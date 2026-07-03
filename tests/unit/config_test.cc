@@ -1,10 +1,12 @@
 #include <doctest/doctest.h>
 #include "Config.hh"
 
+#include <cstdlib>
+
 using bbai::Config;
 using bbai::FocusModel;
 using bbai::WindowPlacement;
-using bbai::ToolbarPlacement;
+using bbai::toolbar::Placement;
 
 // Build a Config from an in-memory resource body so cases stay self-contained.
 static Config parse(const std::string &body, unsigned screen = 0) {
@@ -25,7 +27,7 @@ TEST_CASE("absent keys take the blackboxwm reference defaults") {
   CHECK(c.workspaceCount == 4u);
   CHECK(c.workspaceNames.empty());
   CHECK(c.toolbar.enabled == true);
-  CHECK(c.toolbar.placement == ToolbarPlacement::BottomCenter);
+  CHECK(c.toolbar.placement == Placement::BottomCenter);
   CHECK(c.toolbar.alwaysOnTop == false);
   CHECK(c.toolbar.autoHide == false);
   CHECK(c.toolbar.widthPercent == 66);
@@ -55,7 +57,7 @@ TEST_CASE("present keys parse to their typed values") {
   CHECK(c.workspaceNames[0] == "one");
   CHECK(c.workspaceNames[2] == "three");
   CHECK(c.toolbar.enabled == false);
-  CHECK(c.toolbar.placement == ToolbarPlacement::TopLeft);
+  CHECK(c.toolbar.placement == Placement::TopLeft);
   CHECK(c.toolbar.autoHide == true);
   CHECK(c.toolbar.alwaysOnTop == true);
   CHECK(c.toolbar.widthPercent == 90);
@@ -86,7 +88,7 @@ TEST_CASE("focus/placement enums fall back on unknown values") {
   CHECK(c.autoRaise == false);
   CHECK(c.clickRaise == false);
   CHECK(c.windowPlacement == WindowPlacement::RowSmart);
-  CHECK(c.toolbar.placement == ToolbarPlacement::BottomCenter);
+  CHECK(c.toolbar.placement == Placement::BottomCenter);
 }
 
 TEST_CASE("placement and toolbar enum matching is case-insensitive") {
@@ -94,7 +96,7 @@ TEST_CASE("placement and toolbar enum matching is case-insensitive") {
     "session.windowPlacement: cascadeplacement\n"
     "session.screen0.toolbar.placement: topRIGHT\n");
   CHECK(c.windowPlacement == WindowPlacement::Cascade);
-  CHECK(c.toolbar.placement == ToolbarPlacement::TopRight);
+  CHECK(c.toolbar.placement == Placement::TopRight);
 }
 
 TEST_CASE("malformed numerics fall back to the default") {
@@ -120,7 +122,7 @@ TEST_CASE("workspaceNames splits on comma and keeps empty fields") {
 TEST_CASE("classname fallback resolves a per-screen toolbar key") {
   // Only the X-resource class form is present; bt::Resource resolves via it.
   Config c = parse("Session.screen0.Toolbar.Placement: TopCenter\n");
-  CHECK(c.toolbar.placement == ToolbarPlacement::TopCenter);
+  CHECK(c.toolbar.placement == Placement::TopCenter);
 }
 
 TEST_CASE("screen index selects the matching per-screen block") {
@@ -129,7 +131,7 @@ TEST_CASE("screen index selects the matching per-screen block") {
     "session.screen1.workspaces: 9\n"
     "session.screen1.toolbar.placement: TopRight\n", /*screen=*/1);
   CHECK(c.workspaceCount == 9u);
-  CHECK(c.toolbar.placement == ToolbarPlacement::TopRight);
+  CHECK(c.toolbar.placement == Placement::TopRight);
 }
 
 TEST_CASE("Config::load reads a fixture file from disk") {
@@ -144,7 +146,7 @@ TEST_CASE("Config::load reads a fixture file from disk") {
   REQUIRE(c.workspaceNames.size() == 6u);
   CHECK(c.workspaceNames[0] == "web");
   CHECK(c.workspaceNames[5] == "scratch");
-  CHECK(c.toolbar.placement == ToolbarPlacement::TopCenter);
+  CHECK(c.toolbar.placement == Placement::TopCenter);
   CHECK(c.toolbar.autoHide == true);
   CHECK(c.toolbar.alwaysOnTop == true);
   CHECK(c.toolbar.widthPercent == 80);
@@ -154,5 +156,49 @@ TEST_CASE("Config::load on a missing file yields all defaults") {
   Config c = Config::load("/nonexistent/path/.blackboxrc");
   CHECK(c.focusModel == FocusModel::ClickToFocus);
   CHECK(c.workspaceCount == 4u);
-  CHECK(c.toolbar.placement == ToolbarPlacement::BottomCenter);
+  CHECK(c.toolbar.placement == Placement::BottomCenter);
+}
+
+TEST_CASE("style/menu file keys expand tilde; absent keys take the compiled defaults") {
+  setenv("HOME", "/home/tester", 1);
+  Config c = parse(
+    "session.styleFile: ~/.blackbox/styles/Night\n"
+    "session.menuFile:  ~/.bbmenu\n");
+  CHECK(c.styleFile == "/home/tester/.blackbox/styles/Night");
+  CHECK(c.menuFile == "/home/tester/.bbmenu");
+
+  Config d = parse("");
+  // Defaults come from the meson defines (install paths); pin the tails.
+  CHECK(d.styleFile.find("styles/Results") != std::string::npos);
+  CHECK(d.menuFile.find("blackboxai/menu") != std::string::npos);
+}
+
+TEST_CASE("rc rootCommand and strftimeFormat parse") {
+  Config c = parse(
+    "rootCommand: feh --bg-fill ~/wall.png\n"
+    "session.screen0.strftimeFormat: %H:%M\n");
+  CHECK(c.rootCommand == "feh --bg-fill ~/wall.png");   // NOT tilde-expanded; /bin/sh gets it whole
+  CHECK(c.strftimeFormat == "%H:%M");
+  Config d = parse("");
+  CHECK(d.rootCommand.empty());
+  CHECK(d.strftimeFormat == "%I:%M %p");
+}
+
+TEST_CASE("slit.* pre-parse (wave-2 slit never opens Config.cc)") {
+  using bbai::SlitPlacement;
+  using bbai::SlitDirection;
+  Config c = parse(
+    "session.screen0.slit.placement: TopCenter\n"
+    "session.screen0.slit.direction: Horizontal\n"
+    "session.screen0.slit.onTop: True\n"
+    "session.screen0.slit.autoHide: True\n");
+  CHECK(c.slit.placement == SlitPlacement::TopCenter);
+  CHECK(c.slit.direction == SlitDirection::Horizontal);
+  CHECK(c.slit.alwaysOnTop == true);
+  CHECK(c.slit.autoHide == true);
+  Config d = parse("");
+  CHECK(d.slit.placement == SlitPlacement::CenterRight);   // reference default
+  CHECK(d.slit.direction == SlitDirection::Vertical);
+  CHECK(d.slit.alwaysOnTop == false);
+  CHECK(d.slit.autoHide == false);
 }
