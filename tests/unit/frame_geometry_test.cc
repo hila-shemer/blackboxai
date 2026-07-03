@@ -57,3 +57,28 @@ TEST_CASE("small content still yields a positive label width") {
     CHECK(label(200, 150).w == 135);       // 202 - 67
     CHECK(label(200, 150).w >= 1);
 }
+
+TEST_CASE("frame geometry with non-default metrics") {
+  using namespace bbai::frame;
+  FrameMetrics m;
+  m.border = 2; m.titleHeight = 30; m.handleHeight = 8;
+  m.gripWidth = 44; m.buttonWidth = 22; m.labelHeight = 26; m.titleMargin = 3;
+  CHECK(frameWidth(200, m) == 204);
+  CHECK(frameHeight(150, m) == 188);           // 150 + 30 + 8
+  CHECK(clientX(m) == 2);
+  CHECK(clientY(m) == 30);
+  Rect t = title(200, 150, m);
+  CHECK(t.h == 30);
+  CHECK(t.w == 204);
+  Rect h = handle(200, 150, m);
+  CHECK(h.y == 180);                            // titleHeight + H
+  CHECK(h.h == 8);
+  Rect g = rightGrip(200, 150, m);
+  CHECK(g.x == 204 - 44);
+  Rect c = closeButton(200, 150, m);
+  CHECK(c.x == 204 - (22 + 3));                 // frameWidth - buttonStep
+  CHECK(c.w == 22);
+  // defaults still equal the pinned constants
+  CHECK(frameWidth(200) == 202);
+  CHECK(title(200, 150).h == 23);
+}

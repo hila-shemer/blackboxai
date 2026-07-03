@@ -19,22 +19,23 @@ namespace bt { class Texture; class TextRenderer; }
 
 namespace bbai {
 
+  class Style;   // Decoration.cc includes Style.hh; keep this header light
+
   enum class Part { None, Titlebar, Label, IconifyButton, MaximizeButton, CloseButton, LeftGrip, RightGrip, Client };
 
   class Decoration {
   public:
-    // `parent` is the View's frame scene tree; `font` renders the title label
-    // (may be null / not ok() — then the label shows no text).
-    Decoration(wlr_scene_tree *parent, bt::TextRenderer *font);
+    // `parent` is the View's frame scene tree. Fonts/textures/metrics all come
+    // from the Style passed to rebuild() - a re-theme swaps the Style and
+    // rebuilds; the Decoration holds no style state between rebuilds.
+    explicit Decoration(wlr_scene_tree *parent);
     ~Decoration();
     Decoration(const Decoration &) = delete;
     Decoration &operator=(const Decoration &) = delete;
 
-    // (Re)build every decoration buffer for a client content size W x H and
-    // window title (may be null). Destroys the previous buffers. `focused`
-    // selects the active palette (default true); active values are byte-identical
-    // to the M3 constants so existing callers see no pixel change.
-    void rebuild(int W, int H, const char *titleText, bool focused = true);
+    // (Re)build every decoration buffer for content W x H, window title and
+    // focus state, from `st`. Destroys the previous buffers.
+    void rebuild(const Style &st, int W, int H, const char *titleText, bool focused);
     // Drop all decoration buffers (CSD client / unmapped window).
     void clear();
 
@@ -47,7 +48,6 @@ namespace bbai {
     void emitRect(frame::Rect r, const bt::Color &c);
 
     wlr_scene_tree *parent;
-    bt::TextRenderer *font;
     std::vector<wlr_scene_node *> nodes;  // every node we created (to destroy on rebuild)
   };
 
