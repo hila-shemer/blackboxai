@@ -90,3 +90,26 @@ TEST_CASE("drawText edge cases: empty string and full clip") {
   tr.drawText(buf, W, H, 0, -1000, U"Ag1", bt::Color(0, 0, 0));
   CHECK(buf == pristine);
 }
+
+TEST_CASE("fcft accepts full style-file fontconfig patterns") {
+  // Under the isolated fontconfig every family resolves to the bundled
+  // LiberationMono, so what this pins is the PATTERN path: fcft_from_name
+  // must parse ':size=', ':bold' and the 'Family-N' dash syntax, and the
+  // size must actually take effect (equal heights across families at one
+  // size; different heights across sizes).
+  bt::TextRenderer a("Lucida Sans:size=10:bold");
+  REQUIRE(a.ok());
+  CHECK(a.height() > 0);
+
+  bt::TextRenderer b("Completely Other Family:size=10");
+  REQUIRE(b.ok());
+  CHECK(b.height() == a.height());       // same size -> same raster height
+
+  bt::TextRenderer c("Sans Serif-9");     // Gray's dash-size syntax
+  REQUIRE(c.ok());
+  bt::TextRenderer d("AnyName:size=9");
+  REQUIRE(d.ok());
+  CHECK(c.height() == d.height());       // '-9' == ':size=9'
+
+  CHECK(d.height() != a.height());       // size actually flows through
+}
