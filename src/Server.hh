@@ -207,6 +207,9 @@ namespace bbai {
     void processResize();
     void focusView(View *v, bool update_mru = true);
     void clearFocus();                              // deactivate + clear keyboard focus
+    // Session-lock hooks (called by the friend SessionLock).
+    void handleSessionLocked();     // park focus + swallow-state; Task 7 adds modal aborts
+    void handleSessionUnlocked();   // Task 6: restore focus + re-sync the seat
     // Alt-tab MRU cycle (spec §3.2). cycleStep starts or advances the modal
     // session; commit/cancel end it. visibleRing is the frozen candidate set:
     // mapped, non-iconified, across all workspaces, in MRU order.
@@ -262,6 +265,7 @@ namespace bbai {
     CursorMode cursor_mode = CursorMode::Passthrough;
     View *grabbed_view = nullptr;
     View *focused_view = nullptr;
+    void *focus_before_lock_ = nullptr;   // handle; re-validated on unlock
     double grab_x = 0, grab_y = 0;              // cursor layout pos at grab start
     int grab_geo_x = 0, grab_geo_y = 0;         // view top-left at grab start
     int grab_geo_w = 0, grab_geo_h = 0;         // content size at grab start

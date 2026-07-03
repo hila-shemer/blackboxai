@@ -98,6 +98,15 @@ namespace bbai::test {
   static const wl_registry_listener s_lk_registry_listener = {
     lk_reg_global, lk_reg_remove };
 
+  static void lock_locked(void *data, ext_session_lock_v1 *) {
+    static_cast<LockTestClient::Impl *>(data)->locked = true;
+  }
+  static void lock_finished(void *data, ext_session_lock_v1 *) {
+    static_cast<LockTestClient::Impl *>(data)->finished = true;
+  }
+  static const ext_session_lock_v1_listener s_lock_listener = {
+    .locked = lock_locked, .finished = lock_finished };
+
   LockTestClient::LockTestClient(const std::string &socket) {
     impl = new Impl();
     impl->display = wl_display_connect(socket.c_str());
@@ -136,11 +145,22 @@ namespace bbai::test {
   bool LockTestClient::sawLockManager() const { return impl->manager != nullptr; }
   bool LockTestClient::sawIdleNotifier() const { return impl->saw_idle_notifier; }
 
-  // Grown in Task 3.
-  void LockTestClient::lock() {}
+  void LockTestClient::lock() {
+    if (!impl->manager || impl->lock) return;
+    impl->lock = ext_session_lock_manager_v1_lock(impl->manager);
+    ext_session_lock_v1_add_listener(impl->lock, &s_lock_listener, impl);
+    wl_display_flush(impl->display);
+  }
   bool LockTestClient::lockedReceived() const { return impl->locked; }
   bool LockTestClient::finishedReceived() const { return impl->finished; }
-  void LockTestClient::unlockAndDestroy() {}
+
+  void LockTestClient::unlockAndDestroy() {
+    if (!impl->lock) return;
+    ext_session_lock_v1_unlock_and_destroy(impl->lock);
+    impl->lock = nullptr;
+    impl->locked = false;
+    wl_display_flush(impl->display);
+  }
 
   // Grown in Task 4.
   void LockTestClient::createLockSurface(int, uint32_t) {}

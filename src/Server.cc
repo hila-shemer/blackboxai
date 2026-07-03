@@ -979,6 +979,21 @@ namespace bbai {
     if (toolbar_) toolbar_->redrawWindowLabel(nullptr);
   }
 
+  void Server::handleSessionLocked() {
+    // A binding pressed just before the lock must not leak its release to a
+    // client after unlock - and the release erase in onKey is gated off while
+    // locked, so drop the swallow set here.
+    swallowed_keycodes_.clear();
+    focus_before_lock_ = focused_view;
+    clearFocus();
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
+  void Server::handleSessionUnlocked() {
+    // Body lands in Task 6 with its test; keeping the symbol so SessionLock
+    // links from day one.
+  }
+
   View *Server::viewForHandle(void *handle) {
     if (!handle) return nullptr;
     for (auto &v : views)
