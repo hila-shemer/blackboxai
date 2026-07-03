@@ -9,9 +9,11 @@
 #include "LockTestClient.hh"
 #include "Server.hh"
 #include "SessionLock.hh"
+#include "View.hh"
 
 #include <cstdlib>
 #include <unistd.h>
+#include <linux/input-event-codes.h>
 
 using namespace bbai;
 
@@ -187,4 +189,68 @@ TEST_CASE("a lock surface is configured to output size, rendered, and keyboard-f
         if ((p & 0x00FFFFFFu) != 0x0000FF00u) ++non_green;
     // Every pixel is the locker's green: desktop, toolbar, everything hidden.
     CHECK(non_green == 0u);
+}
+
+TEST_CASE("locked session: clients get no input, bindings are dead, quit key suppressed") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    // A normal client window, mapped and focused before the lock.
+    test::TestClient app(server.socketName(), 0xFFFF0000u, 200, 150);
+    REQUIRE(app.ok());
+    auto appMapped = [&] {
+        const auto &v = server.viewsForTest();
+        return !v.empty() && v[0]->isMapped();
+    };
+    REQUIRE(pumpUntil(server, appMapped, [&] { app.flush(); app.pump(); }));
+    for (int i = 0; i < 40; ++i) { app.flush(); server.dispatch(); app.pump(); }
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    REQUIRE(server.focusedViewForTest() == server.viewsForTest()[0].get());
+    // Drain: deliver the pre-lock button events so the counter baseline is set.
+    for (int i = 0; i < 40; ++i) { app.flush(); server.dispatch(); app.pump(); }
+    const int buttons_before = app.pointerButtonEvents();
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    auto pumpBoth = [&] { app.flush(); app.pump(); lc.flush(); lc.pump(); };
+    REQUIRE(pumpUntil(server, [&] { return lc.sawLockManager(); }, pumpBoth));
+    lc.lock();
+    REQUIRE(pumpUntil(server, [&] { return server.sessionLockForTest()->locked(); },
+                      pumpBoth));
+    CHECK(server.focusedViewForTest() == nullptr);   // focus parked on lock
+
+    // Pointer: press+release over where the app sits - the client must see nothing.
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    for (int i = 0; i < 40; ++i) { pumpBoth(); server.dispatch(); }
+    CHECK(app.pointerButtonEvents() == buttons_before);
+    CHECK(server.focusedPointerSurfaceForTest() == nullptr);
+
+    // Bindings: workspace switch dead while locked.
+    const unsigned ws_before = server.currentWorkspaceForTest();
+    server.injectKeyForTest(XKB_KEY_Right, WLR_MODIFIER_LOGO, true);
+    server.injectKeyForTest(XKB_KEY_Right, WLR_MODIFIER_LOGO, false);
+    CHECK(server.currentWorkspaceForTest() == ws_before);
+
+    // THE policy test: Ctrl+Alt+Backspace (Action::Quit) is suppressed. No
+    // binding fired since the lock, so last_action_ is still the ctor default
+    // (dispatch() keeps working after wl_display_terminate, so it can't be
+    // the detector here - the action introspection is).
+    server.injectKeyForTest(XKB_KEY_BackSpace,
+                            WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT, true);
+    server.injectKeyForTest(XKB_KEY_BackSpace,
+                            WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT, false);
+    CHECK(server.lastActionForTest() == Action::None);
+    CHECK(server.sessionLockForTest()->locked());
+
+    // Menu binding dead too: Super+Space must not open the root menu.
+    server.injectKeyForTest(XKB_KEY_space, WLR_MODIFIER_LOGO, true);
+    CHECK_FALSE(server.menuOpenForTest());
 }
