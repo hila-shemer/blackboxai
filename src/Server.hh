@@ -128,6 +128,20 @@ namespace bbai {
     // rc-style's Config::menuFile lands - production wiring is one ctor line.
     void setMenuFileForTest(const std::string &path);
 
+    // rc-style seams (menu SetStyle/[reconfig] route through these). Stub
+    // bodies until rc-style lands - see the MERGE-TRAIN STUB note in Server.cc.
+    bool applyStyleFile(const std::string &path);
+    bool reconfigure(const std::string &rc_override = {});
+
+    // Restart leaves through main.cc: requestRestart stashes the argv (empty =
+    // re-exec self) and terminates the loop; main execs after full teardown.
+    void requestRestart(std::vector<std::string> argv_or_empty);
+    bool restartRequested() const { return restart_requested_; }
+    const std::vector<std::string> &restartArgv() const { return restart_argv_; }
+    const std::vector<std::string> &pendingRestartForTest() const { return restart_argv_; }
+    const std::string &lastStyleRequestForTest() const { return last_style_request_; }
+    int reconfigureRequestsForTest() const { return reconfigure_requests_; }
+
     // --- test-only input injection + hit-test introspection (headless has no
     // real input devices, so tests drive the SAME onPointer* handlers the real
     // cursor events use) ---
@@ -319,6 +333,10 @@ namespace bbai {
     std::vector<MenuStamp> menu_stamps_;
     void loadMenuFile();                    // parse + stamps + stderr diagnostics
     bool menuFilesChanged() const;          // classic checkMenu (stat-on-open)
+    bool restart_requested_ = false;
+    std::vector<std::string> restart_argv_;   // empty = re-exec self
+    std::string last_style_request_;          // dispatch-side recorder (survives the stub swap)
+    int reconfigure_requests_ = 0;
 
     // interactive grab state
     CursorMode cursor_mode = CursorMode::Passthrough;
