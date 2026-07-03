@@ -146,3 +146,45 @@ TEST_CASE("a second lock while one is active is denied with finished") {
     CHECK_FALSE(second.lockedReceived());
     CHECK(server.sessionLockForTest()->locked());   // first still holds it
 }
+
+TEST_CASE("a lock surface is configured to output size, rendered, and keyboard-focused") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    REQUIRE(pumpUntil(server,
+        [&] { return lc.sawLockManager() && lc.outputCount() >= 1; },
+        [&] { lc.flush(); lc.pump(); }));
+
+    lc.lock();
+    REQUIRE(pumpUntil(server, [&] { return server.sessionLockForTest()->locked(); },
+                      [&] { lc.flush(); lc.pump(); }));
+
+    lc.createLockSurface(0, 0xFF00FF00u);   // opaque green
+    bool configured = pumpUntil(server,
+        [&] { return lc.configuredWidth(0) == 1280 && lc.configuredHeight(0) == 720; },
+        [&] { lc.flush(); lc.pump(); });
+    REQUIRE(configured);
+
+    // Buffer attached + committed -> mapped -> keyboard focus + full green frame.
+    bool mapped = pumpUntil(server,
+        [&] { return server.sessionLockForTest()->focusedLockSurface() != nullptr; },
+        [&] { lc.flush(); lc.pump(); });
+    REQUIRE(mapped);
+    CHECK(server.focusedKeyboardSurfaceForTest() ==
+          server.sessionLockForTest()->focusedLockSurface());
+
+    test::Frame f = test::captureFrame(server);
+    REQUIRE(f.w == 1280u);
+    REQUIRE(f.h == 720u);
+    size_t non_green = 0;
+    for (uint32_t p : f.pixels)
+        if ((p & 0x00FFFFFFu) != 0x0000FF00u) ++non_green;
+    // Every pixel is the locker's green: desktop, toolbar, everything hidden.
+    CHECK(non_green == 0u);
+}
