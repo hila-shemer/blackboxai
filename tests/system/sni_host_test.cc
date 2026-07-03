@@ -322,3 +322,28 @@ TEST_CASE("name-variant registration materializes under the well-known name") {
   CHECK(host.items()[0].service == "org.test.SniMock");
   mock.quit();
 }
+
+TEST_CASE("NewIcon / NewStatus re-fetch and fire itemChanged") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  int changed = 0;
+  HostEvents ev;
+  ev.itemChanged = [&](const Item &) { ++changed; };
+  host.setEvents(std::move(ev));
+
+  bbai::test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  REQUIRE(mock.waitReport(5000, [&] { host.processForTest(); }) == "registered");
+  REQUIRE(pumpUntil(host, {}, [&] { return !host.items().empty(); }));
+
+  mock.updateIcon();
+  REQUIRE(pumpUntil(host, {}, [&] { return changed >= 1; }));
+  REQUIRE(host.items()[0].icon_pixmaps.size() == 1);
+  CHECK(memcmp(host.items()[0].icon_pixmaps[0].data.data(),
+               bbai::test::kSniMockIcon2, 16) == 0);
+
+  mock.updateStatus();
+  REQUIRE(pumpUntil(host, {}, [&] { return changed >= 2; }));
+  CHECK(host.items()[0].status == "NeedsAttention");
+  mock.quit();
+}

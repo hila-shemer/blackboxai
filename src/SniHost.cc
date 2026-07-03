@@ -65,6 +65,7 @@ namespace bbai::sni {
     static int getVersion(sd_bus *, const char *, const char *, const char *,
                           sd_bus_message *reply, void *userdata, sd_bus_error *);
     static int onGetAll(sd_bus_message *reply, void *userdata, sd_bus_error *);
+    static int onItemSignal(sd_bus_message *m, void *userdata, sd_bus_error *);
   };
 
   const sd_bus_vtable Host::Cb::watcher_vtable[] = {
@@ -202,6 +203,20 @@ namespace bbai::sni {
     return 0;
   }
 
+  int Host::Cb::onItemSignal(sd_bus_message *m, void *userdata, sd_bus_error *) {
+    auto *host = static_cast<Host *>(userdata);
+    const char *sender = sd_bus_message_get_sender(m);
+    const char *path = sd_bus_message_get_path(m);
+    if (!sender || !path) return 0;
+    for (auto &reg : host->regs_)
+      if (reg->path == path &&
+          (reg->owner == sender || reg->service == sender)) {
+        host->fetchAll(*reg);          // storeItem's upsert fires itemChanged
+        break;
+      }
+    return 0;
+  }
+
   Host::Host(wl_event_loop *loop) : loop_(loop) {
     sd_bus *bus = nullptr;
     if (sd_bus_open_user(&bus) < 0) {
@@ -224,6 +239,15 @@ namespace bbai::sni {
       return;
     }
     bus_ = bus;
+
+    // Item change signals, one wildcard match each (any sender/path with the
+    // item interface); onItemSignal resolves whose they are. A match failing
+    // just means no live updates for that signal - not worth dying over.
+    static const char *const kChangeSignals[] = { "NewIcon", "NewTitle",
+                                                  "NewStatus", "NewToolTip" };
+    for (const char *sig : kChangeSignals)
+      sd_bus_match_signal(bus_, nullptr, nullptr, nullptr, kItemIface, sig,
+                          Cb::onItemSignal, this);
   }
 
   Host::~Host() { teardownBus(); }
