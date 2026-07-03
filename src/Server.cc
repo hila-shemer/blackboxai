@@ -9,6 +9,7 @@
 #include "Screenshot.hh"
 #include "ClipboardImage.hh"
 #include "Autostart.hh"
+#include "SessionLock.hh"
 
 #include <memory>
 
@@ -94,6 +95,7 @@ namespace bbai {
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_single_pixel_buffer_manager_v1_create(display);
+    idle_notifier_ = wlr_idle_notifier_v1_create(display);
 
     scene = wlr_scene_create();
     output_layout = wlr_output_layout_create(display);
@@ -104,6 +106,7 @@ namespace bbai {
     layer_window     = wlr_scene_tree_create(&scene->tree);
     layer_top        = wlr_scene_tree_create(&scene->tree);
     layer_overlay    = wlr_scene_tree_create(&scene->tree);
+    layer_lock       = wlr_scene_tree_create(&scene->tree);
 
     // Default desktop style (overridable later by a real .blackboxrc).
     style.loadFromString("BlackboxAI.desktop: flat gradient diagonal\n"
@@ -209,6 +212,8 @@ namespace bbai {
       clock_ = std::make_unique<bt::SystemClock>();
     timer_registry_ = std::make_unique<TimerRegistry>(*clock_, headless ? nullptr : loop);
 
+    session_lock_ = std::make_unique<SessionLock>(*this, layer_lock);
+
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
       // Light up every head: an Output per monitor, laid out left-to-right by
@@ -272,6 +277,7 @@ namespace bbai {
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
+    session_lock_.reset();    // its Timer deregisters + listeners drop before the registry/display die
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
     if (cursor) wlr_cursor_destroy(cursor);
     if (xcursor_mgr) wlr_xcursor_manager_destroy(xcursor_mgr);
