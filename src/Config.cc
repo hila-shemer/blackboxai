@@ -8,8 +8,18 @@
 // matched with substring find() and is case-sensitive, again per the reference.
 
 #include "Config.hh"
+#include "Util.hh"
 
 #include <cctype>
+
+// Install-path defaults injected by src/meson.build; empty fallbacks keep
+// stray compiles (and the unlikely no-define build) honest.
+#ifndef BBAI_DEFAULT_STYLE
+#define BBAI_DEFAULT_STYLE ""
+#endif
+#ifndef BBAI_DEFAULT_MENU
+#define BBAI_DEFAULT_MENU ""
+#endif
 
 namespace {
 
@@ -60,6 +70,12 @@ namespace bbai {
 
   Config Config::fromResource(const bt::Resource &res, unsigned screen) {
     Config cfg;
+
+    cfg.styleFile = bt::expandTilde(
+      res.read("session.styleFile", "Session.StyleFile", BBAI_DEFAULT_STYLE));
+    cfg.menuFile = bt::expandTilde(
+      res.read("session.menuFile", "Session.MenuFile", BBAI_DEFAULT_MENU));
+    cfg.rootCommand = res.read("rootCommand", "RootCommand", "");
 
     // --- focus model ---
     // session.focusModel falls back to the per-screen key, then "ClickToFocus".
@@ -129,17 +145,44 @@ namespace bbai {
                               screenClass(screen, "Toolbar.Placement"),
                               "BottomCenter");
     if (iequals(tp, "TopLeft"))
-      cfg.toolbar.placement = ToolbarPlacement::TopLeft;
+      cfg.toolbar.placement = toolbar::Placement::TopLeft;
     else if (iequals(tp, "BottomLeft"))
-      cfg.toolbar.placement = ToolbarPlacement::BottomLeft;
+      cfg.toolbar.placement = toolbar::Placement::BottomLeft;
     else if (iequals(tp, "TopCenter"))
-      cfg.toolbar.placement = ToolbarPlacement::TopCenter;
+      cfg.toolbar.placement = toolbar::Placement::TopCenter;
     else if (iequals(tp, "TopRight"))
-      cfg.toolbar.placement = ToolbarPlacement::TopRight;
+      cfg.toolbar.placement = toolbar::Placement::TopRight;
     else if (iequals(tp, "BottomRight"))
-      cfg.toolbar.placement = ToolbarPlacement::BottomRight;
+      cfg.toolbar.placement = toolbar::Placement::BottomRight;
     else
-      cfg.toolbar.placement = ToolbarPlacement::BottomCenter;
+      cfg.toolbar.placement = toolbar::Placement::BottomCenter;
+
+    // --- per-screen slit + clock format ---
+    cfg.strftimeFormat = res.read(screenName(screen, "strftimeFormat"),
+                                  screenClass(screen, "StrftimeFormat"),
+                                  "%I:%M %p");
+
+    std::string sp = res.read(screenName(screen, "slit.placement"),
+                              screenClass(screen, "Slit.Placement"),
+                              "CenterRight");
+    if (iequals(sp, "TopLeft"))            cfg.slit.placement = SlitPlacement::TopLeft;
+    else if (iequals(sp, "CenterLeft"))    cfg.slit.placement = SlitPlacement::CenterLeft;
+    else if (iequals(sp, "BottomLeft"))    cfg.slit.placement = SlitPlacement::BottomLeft;
+    else if (iequals(sp, "TopCenter"))     cfg.slit.placement = SlitPlacement::TopCenter;
+    else if (iequals(sp, "BottomCenter"))  cfg.slit.placement = SlitPlacement::BottomCenter;
+    else if (iequals(sp, "TopRight"))      cfg.slit.placement = SlitPlacement::TopRight;
+    else if (iequals(sp, "BottomRight"))   cfg.slit.placement = SlitPlacement::BottomRight;
+    else                                   cfg.slit.placement = SlitPlacement::CenterRight;
+
+    std::string sd = res.read(screenName(screen, "slit.direction"),
+                              screenClass(screen, "Slit.Direction"),
+                              "Vertical");
+    cfg.slit.direction = iequals(sd, "Horizontal") ? SlitDirection::Horizontal
+                                                   : SlitDirection::Vertical;
+    cfg.slit.alwaysOnTop = res.read(screenName(screen, "slit.onTop"),
+                                    screenClass(screen, "Slit.OnTop"), false);
+    cfg.slit.autoHide = res.read(screenName(screen, "slit.autoHide"),
+                                 screenClass(screen, "Slit.AutoHide"), false);
 
     return cfg;
   }

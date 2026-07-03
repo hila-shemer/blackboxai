@@ -1,6 +1,16 @@
 # The compositor shell. Links the pure bt:: toolkit plus the wlroots stack
 # (wlr_dep also carries the generated wlr_scene_compat.h include path).
 src_inc = include_directories('.')
+
+# Install-path defaults baked into the lib objects (Config.cc reads them);
+# test binaries link the lib, so no test-side defines are needed.
+bbai_cpp_args = [
+  '-DBBAI_DEFAULT_STYLE="@0@"'.format(
+    get_option('prefix') / get_option('datadir') / 'blackboxai' / 'styles' / 'Results'),
+  '-DBBAI_DEFAULT_MENU="@0@"'.format(
+    get_option('prefix') / get_option('datadir') / 'blackboxai' / 'menu'),
+]
+
 bbai_lib = static_library('bbai',
   files(
     'ClipboardImage.cc',
@@ -26,6 +36,7 @@ bbai_lib = static_library('bbai',
     'SniHost.cc',
   ),
   include_directories : [src_inc],
+  cpp_args : bbai_cpp_args,
   dependencies : [bt_dep, bttext_dep, wlr_dep, libsystemd_dep, dependency('libpng')])
 
 bbai_dep = declare_dependency(link_with : bbai_lib,
