@@ -9,6 +9,7 @@
 #include "Screenshot.hh"
 #include "ClipboardImage.hh"
 #include "Autostart.hh"
+#include "SniHost.hh"
 
 #include <memory>
 
@@ -209,6 +210,12 @@ namespace bbai {
       clock_ = std::make_unique<bt::SystemClock>();
     timer_registry_ = std::make_unique<TimerRegistry>(*clock_, headless ? nullptr : loop);
 
+    // SNI tray host. Real backends only: under headless the developer's
+    // session bus must stay untouched (claiming org.kde.StatusNotifierWatcher
+    // there would fight the real tray).
+    if (!headless)
+      sni_host_ = std::make_unique<sni::Host>(loop);
+
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
       // Light up every head: an Output per monitor, laid out left-to-right by
@@ -273,6 +280,7 @@ namespace bbai {
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
+    sni_host_.reset();        // removes its wl_event_sources before the loop dies
     if (cursor) wlr_cursor_destroy(cursor);
     if (xcursor_mgr) wlr_xcursor_manager_destroy(xcursor_mgr);
     if (display) {
@@ -330,6 +338,10 @@ namespace bbai {
     wl_event_loop *loop = wl_display_get_event_loop(display);
     wl_display_flush_clients(display);
     return wl_event_loop_dispatch(loop, 0) >= 0;
+  }
+
+  void Server::createSniHostForTest() {
+    sni_host_ = std::make_unique<sni::Host>(wl_display_get_event_loop(display));
   }
 
   wlr_scene_output *Server::activeSceneOutput() const {

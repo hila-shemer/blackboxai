@@ -32,6 +32,7 @@ namespace bbai {
   class Toolbar;
   class Menu;
   struct Keyboard;
+  namespace sni { class Host; }
 
   class Server {
   public:
@@ -100,6 +101,14 @@ namespace bbai {
     int64_t wallSecondsForTest() const;
     bt::Clock &clock() { return *clock_; }
     TimerRegistry &timerRegistry() { return *timer_registry_; }
+
+    // The tray's D-Bus half (watcher + host). Constructed on real backends
+    // only - a headless Server must not touch the developer's session bus
+    // (same stance as runAutostart); tests build it explicitly under a
+    // private dbus-run-session bus. Inert-never-fatal either way.
+    sni::Host &sniHost() { return *sni_host_; }
+    sni::Host *sniHostForTest() const { return sni_host_.get(); }
+    void createSniHostForTest();
 
     // Deviceless key injection: drives the same binding matcher the real onKey
     // funnel uses (the evdev->XKB seam is covered separately by keycode_test).
@@ -227,6 +236,7 @@ namespace bbai {
     bt::TextRenderer title_font;                // titlebar label font (M3)
     std::unique_ptr<bt::Clock> clock_;          // wall/monotonic time (M4)
     std::unique_ptr<TimerRegistry> timer_registry_;
+    std::unique_ptr<sni::Host> sni_host_;       // tray D-Bus half (sni-core)
     WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
     std::unique_ptr<Toolbar> toolbar_;          // top-layer chrome (M4)
     Keybindings keybindings_;                   // M4 built-in keybinding table
