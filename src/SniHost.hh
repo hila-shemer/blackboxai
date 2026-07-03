@@ -10,6 +10,7 @@
 
 #include "Sni.hh"
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -26,6 +27,19 @@ namespace bbai::sni {
   struct HostEvents {
     std::function<void(const Item&)> itemAdded, itemChanged, itemRemoved;
   };
+
+  // sd_bus_get_events() speaks poll(); wl_event_loop speaks its own mask - and
+  // WL_EVENT_WRITABLE(0x02) != POLLOUT(0x04), so a pass-through corrupts the
+  // mask. Literals here keep wayland headers out of this header; SniHost.cc
+  // static_asserts them against the real enum.
+  inline uint32_t wlMaskFromPoll(int poll_events) {
+    uint32_t mask = 0;
+    if (poll_events > 0) {
+      if (poll_events & 0x001 /*POLLIN*/)  mask |= 0x01;  // WL_EVENT_READABLE
+      if (poll_events & 0x004 /*POLLOUT*/) mask |= 0x02;  // WL_EVENT_WRITABLE
+    }
+    return mask;
+  }
 
   class Host {
   public:
@@ -55,6 +69,7 @@ namespace bbai::sni {
     friend struct Cb;
 
     void drain();        // process until idle, then re-arm fd/timer sources
+    void rearmSources(); // fd mask + timeout timer from sd-bus's view
     void teardownBus();  // drop sources + slots + connection (goes inert)
 
     // One accepted registration. The D-Bus-visible watcher state derives from

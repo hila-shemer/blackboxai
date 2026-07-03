@@ -5,6 +5,7 @@
 #include <doctest/doctest.h>
 #include "SniHost.hh"
 #include "SniMockItem.hh"
+#include "wlr.hpp"
 
 #include <systemd/sd-bus.h>
 
@@ -430,4 +431,27 @@ TEST_CASE("host announces itself: name + property + signal") {
 
   CHECK(watcherProp(host, observer, "IsStatusNotifierHostRegistered").boolean == 1);
   sd_bus_flush_close_unref(observer);
+}
+
+TEST_CASE("Host pumps itself from a wl_event_loop - no manual processForTest") {
+  wl_event_loop *loop = wl_event_loop_create();
+  REQUIRE(loop != nullptr);
+  {
+    Host host(loop);
+    REQUIRE(host.ok());
+    bool added = false;
+    HostEvents ev;
+    ev.itemAdded = [&](const Item &) { added = true; };
+    host.setEvents(std::move(ev));
+
+    bbai::test::SniMockChild mock;
+    REQUIRE(mock.ok());
+    // From here on, ONLY the loop runs the host.
+    for (int i = 0; i < 600 && !added; ++i)
+      wl_event_loop_dispatch(loop, 10);
+    CHECK(added);
+    REQUIRE(host.items().size() == 1);
+    mock.quit();
+  }                                    // ~Host removes its sources first
+  wl_event_loop_destroy(loop);
 }

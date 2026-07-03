@@ -4,10 +4,18 @@
 
 #include <systemd/sd-bus.h>
 
+#include <climits>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <poll.h>
 #include <string>
 #include <unistd.h>
+
+static_assert(WL_EVENT_READABLE == 0x01 && WL_EVENT_WRITABLE == 0x02,
+              "wlMaskFromPoll hardcodes the wl_event_loop mask values");
+static_assert(POLLIN == 0x001 && POLLOUT == 0x004,
+              "wlMaskFromPoll hardcodes the poll() event values");
 
 namespace bbai::sni {
 
@@ -71,7 +79,19 @@ namespace bbai::sni {
     static int onGetAll(sd_bus_message *reply, void *userdata, sd_bus_error *);
     static int onItemSignal(sd_bus_message *m, void *userdata, sd_bus_error *);
     static int onTrack(sd_bus_track *, void *userdata);
+    static int onFd(int fd, uint32_t mask, void *data);
+    static int onTimer(void *data);
   };
+
+  int Host::Cb::onFd(int, uint32_t, void *data) {
+    static_cast<Host *>(data)->drain();
+    return 0;
+  }
+
+  int Host::Cb::onTimer(void *data) {
+    static_cast<Host *>(data)->drain();
+    return 0;
+  }
 
   const sd_bus_vtable Host::Cb::watcher_vtable[] = {
     SD_BUS_VTABLE_START(0),
@@ -276,6 +296,13 @@ namespace bbai::sni {
                        "StatusNotifierHostRegistered", "");
     sd_bus_emit_properties_changed(bus_, kWatcherPath, kWatcherIface,
                                    "IsStatusNotifierHostRegistered", nullptr);
+
+    if (loop_) {
+      fd_source_ = wl_event_loop_add_fd(loop_, sd_bus_get_fd(bus_),
+                                        WL_EVENT_READABLE, Cb::onFd, this);
+      timer_source_ = wl_event_loop_add_timer(loop_, Cb::onTimer, this);
+      drain();   // flush the ctor-time emissions + arm both sources
+    }
   }
 
   Host::~Host() { teardownBus(); }
@@ -298,6 +325,29 @@ namespace bbai::sni {
       }
       if (r == 0) break;
     }
+    rearmSources();
+  }
+
+  void Host::rearmSources() {
+    if (!loop_ || !bus_ || !fd_source_) return;
+    wl_event_source_fd_update(fd_source_, wlMaskFromPoll(sd_bus_get_events(bus_)));
+
+    uint64_t usec = 0;
+    int r = sd_bus_get_timeout(bus_, &usec);   // ABSOLUTE CLOCK_MONOTONIC µs
+    if (r < 0 || usec == UINT64_MAX) {
+      wl_event_source_timer_update(timer_source_, 0);   // 0 disarms
+      return;
+    }
+    uint64_t delay_ms = 1;    // usec==0 means "process again now" - 0 would disarm
+    if (usec > 0) {
+      timespec now{};
+      clock_gettime(CLOCK_MONOTONIC, &now);
+      const uint64_t now_us = uint64_t(now.tv_sec) * 1000000u
+                            + uint64_t(now.tv_nsec) / 1000u;
+      if (usec > now_us) delay_ms = (usec - now_us + 999) / 1000;
+    }
+    if (delay_ms > INT_MAX) delay_ms = INT_MAX;
+    wl_event_source_timer_update(timer_source_, int(delay_ms));
   }
 
   void Host::processForTest() { drain(); }
