@@ -21,6 +21,21 @@ namespace bbai::frame {
   constexpr int kTitleMargin  = 2;                       // by: top inset in titlebar
   constexpr int kButtonStep   = kButtonWidth + kTitleMargin;  // bwid = 21
 
+  // Style-computed frame metrics. Defaults are the pinned M3 constants, so a
+  // default-constructed FrameMetrics reproduces today's geometry exactly (the
+  // builtin style relies on that - see Style::builtin()). titleMargin is the
+  // EFFECTIVE inset: texture borderWidth + marginWidth, folded at load time.
+  struct FrameMetrics {
+    int border       = kBorder;        // 1
+    int titleHeight  = kTitleHeight;   // 23
+    int handleHeight = kHandleHeight;  // 6
+    int gripWidth    = kGripWidth;     // 38
+    int buttonWidth  = kButtonWidth;   // 19
+    int labelHeight  = kLabelHeight;   // 19
+    int titleMargin  = kTitleMargin;   // 2
+    int buttonStep() const { return buttonWidth + titleMargin; }
+  };
+
   struct Rect { int x, y, w, h; };
 
   inline int frameWidth(int W)  { return W + 2 * kBorder; }
