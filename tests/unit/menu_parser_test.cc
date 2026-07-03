@@ -128,7 +128,7 @@ TEST_CASE("restart: bare restarts self, with a command degrades to self + note")
   CHECK(anyDiagContains(r, "fvwm"));
 }
 
-TEST_CASE("workspaces and config become empty placeholder submenus + a note") {
+TEST_CASE("workspaces and config become MARKED placeholder submenus") {
   Result r = menuparser::parse(
     "[begin] (m)\n"
     "  [workspaces] (Workspace List)\n"
@@ -138,14 +138,18 @@ TEST_CASE("workspaces and config become empty placeholder submenus + a note") {
   REQUIRE(r.items.size() == 2);
 
   CHECK(r.items[0].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[0].action == MenuItem::Act::WorkspacesMenu);
   CHECK(r.items[0].label == u("Workspace List"));
   CHECK(r.items[0].submenu_items.empty());
 
   CHECK(r.items[1].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[1].action == MenuItem::Act::ConfigMenu);
   CHECK(r.items[1].label == u("Configuration"));
   CHECK(r.items[1].submenu_items.empty());
 
-  CHECK(anyDiagContains(r, "workspaces"));
+  // [workspaces] is fully handled from here on - no diagnostic. [config]
+  // keeps a note until wave-2 configmenu populates it.
+  CHECK_FALSE(anyDiagContains(r, "workspaces"));
   CHECK(anyDiagContains(r, "config"));
 }
 
@@ -285,6 +289,7 @@ TEST_CASE("the real data/menu.in fixture parses with sane known entries") {
   REQUIRE(wsl != nullptr);
   CHECK(wsl->kind == MenuItem::Kind::Submenu);
   CHECK(wsl->submenu_items.empty());
+  CHECK(wsl->action == MenuItem::Act::WorkspacesMenu);
 
   // Tail actions: Restart -> Act::Restart, Exit -> Act::Exit.
   const MenuItem *restart = findByLabel(r.items, "Restart");
