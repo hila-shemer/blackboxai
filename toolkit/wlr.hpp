@@ -57,6 +57,13 @@ extern "C" {
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
 
+// Session lock + idle notify (productize-v1 lock-idle slice). Both pull only
+// wlr_compositor.h / wayland-server-core transitively - no generated protocol
+// header needed server-side, so protocols/meson.build's server_protocols list
+// stays untouched.
+#include <wlr/types/wlr_session_lock_v1.h>
+#include <wlr/types/wlr_idle_notify_v1.h>
+
 // Keysym constants (XKB_KEY_*) for the M4 keybinding table + menu navigation.
 // wlr_keyboard.h already pulls <xkbcommon/xkbcommon.h> (the xkb_* functions);
 // this adds the symbol names.
