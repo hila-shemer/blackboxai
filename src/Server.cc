@@ -236,11 +236,15 @@ namespace bbai {
       outputs_.push_back(o);
       if (!active_output) {
         active_output = o;
-        // The toolbar spans the primary output; created only if the rc says so.
+        // The toolbar spans the primary output - created only if the rc says
+        // so, then the config knobs apply through the contract setters.
         // (Also the re-plug path: if every head died, active_output is
         // null again and the next head becomes the new primary.)
-        if (config_.toolbar.enabled)
+        if (config_.toolbar.enabled) {
           toolbar_ = std::make_unique<Toolbar>(*this, *o);
+          toolbar_->setPlacement(config_.toolbar.placement);
+          toolbar_->setAutoHide(config_.toolbar.autoHide);
+        }
         // Give the pointer an image from frame one - otherwise it's invisible
         // over our own chrome until the Super+F7 flow happens to latch one.
         // Real-output only: headless asserts byte-exact goldens and has no

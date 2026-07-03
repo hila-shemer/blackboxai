@@ -38,47 +38,55 @@ namespace bbai::toolbar {
     Rect workspace_label, prev_ws, next_ws, window_label, prev_win, next_win, clock;
   };
 
-  inline int barWidth(int OW) { return OW * kWidthPercent / 100; }
+  inline int barWidth(int OW, int width_percent = kWidthPercent)
+  { return OW * width_percent / 100; }
 
   enum class Placement { TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight };
 
-  // The bar's on-screen rect (output coords). Default: BottomCenter (preserves
-  // all existing callers that pass only OW,OH).
-  inline Rect barRect(int OW, int OH, Placement p = Placement::BottomCenter) {
-    const int bw = barWidth(OW);
+  // The bar's on-screen rect (output coords). Defaults: BottomCenter + the
+  // pinned M4 metrics + 66% width (preserves all existing callers).
+  inline Rect barRect(int OW, int OH, Placement p = Placement::BottomCenter,
+                      const ToolbarMetrics &m = {}, int width_percent = kWidthPercent) {
+    const int bw = barWidth(OW, width_percent);
     int x = (OW - bw) / 2;                                   // centered
     if (p == Placement::TopLeft  || p == Placement::BottomLeft)  x = 0;
     else if (p == Placement::TopRight || p == Placement::BottomRight) x = OW - bw;
     const bool top = (p == Placement::TopLeft || p == Placement::TopCenter || p == Placement::TopRight);
-    const int y = top ? 0 : OH - kBarHeight;
-    return { x, y, bw, kBarHeight };
+    const int y = top ? 0 : OH - m.barHeight;
+    return { x, y, bw, m.barHeight };
   }
 
-  // The bar slid mostly off its edge, leaving a kHiddenHeight sliver on-screen.
-  inline Rect hiddenBarRect(Rect shown, Placement p) {
+  // The bar slid mostly off its edge, leaving a hiddenHeight sliver on-screen.
+  inline Rect hiddenBarRect(Rect shown, Placement p, const ToolbarMetrics &m = {}) {
     const bool top = (p == Placement::TopLeft || p == Placement::TopCenter || p == Placement::TopRight);
     Rect r = shown;
-    r.y = top ? shown.y + kHiddenHeight - shown.h    // slide up (negative y)
-              : shown.y + shown.h - kHiddenHeight;    // slide down
+    r.y = top ? shown.y + m.hiddenHeight - shown.h   // slide up (negative y)
+              : shown.y + shown.h - m.hiddenHeight;   // slide down
     return r;
   }
 
   // Equalized workspace-label / clock width = widest text + 2*margin.
-  inline int labelWidth(int max_text_w) { return max_text_w + kLabelMargin * 2; }
+  inline int labelWidth(int max_text_w, const ToolbarMetrics &m = {})
+  { return max_text_w + m.labelMargin * 2; }
 
   // The window-label section fills the remaining interior (Toolbar.cc:297).
-  inline int windowLabelWidth(int bar_w, int label_w, int clock_w) {
-    const int w = bar_w - (clock_w + kButtonWidth * 4 + label_w + kFrameMargin * 8)
+  // kExtra stays a constant: it is the classic overlap-compaction for the
+  // default margin; deriving it from nonstandard margins is a fidelity nit
+  // nobody ships a style for - documented approximation.
+  inline int windowLabelWidth(int bar_w, int label_w, int clock_w,
+                              const ToolbarMetrics &m = {}) {
+    const int w = bar_w - (clock_w + m.buttonWidth * 4 + label_w + m.frameMargin * 8)
                 + kExtra * 6;
     return w < 1 ? 1 : w;
   }
 
   // All section rects relative to the bar origin, given the (runtime-computed)
   // workspace-label width and clock width (blackbox keeps them equal).
-  inline Sections sectionRects(int bar_w, int label_w, int clock_w) {
-    const int fm = kFrameMargin, ex = kExtra, bwb = kButtonWidth;
-    const int y = kFrameMargin, h = kLabelHeight;
-    const int wl = windowLabelWidth(bar_w, label_w, clock_w);
+  inline Sections sectionRects(int bar_w, int label_w, int clock_w,
+                               const ToolbarMetrics &m = {}) {
+    const int fm = m.frameMargin, ex = kExtra, bwb = m.buttonWidth;
+    const int y = m.frameMargin, h = m.labelHeight;
+    const int wl = windowLabelWidth(bar_w, label_w, clock_w, m);
     Sections s;
     s.workspace_label = { fm,                                         y, label_w, h };
     s.prev_ws         = { fm * 2 + label_w - ex,                      y, bwb,     h };
