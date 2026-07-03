@@ -84,6 +84,7 @@ namespace bbai {
     // dynamic lookup, no stored membership, can't go stale.
     Output *outputAt(double lx, double ly);
     Output *outputForView(const View *v);
+    void remaximizeViewsOn(Output *o);
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }

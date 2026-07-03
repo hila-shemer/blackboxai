@@ -356,6 +356,13 @@ namespace bbai {
     return outputAt(v->x() + fw / 2.0, v->y() + fh / 2.0);
   }
 
+  void Server::remaximizeViewsOn(Output *o) {
+    if (!o) return;
+    for (auto &v : views)
+      if (v->isMaximized() && outputForView(v.get()) == o)
+        v->remaximize(o->workArea());
+  }
+
   void Server::runAutostart() {
     // Children resolve OnlyShowIn/NotShowIn against our id; set it before spawn.
     setenv("XDG_CURRENT_DESKTOP", "Blackbox", 1);

@@ -55,6 +55,10 @@ namespace bbai {
     // of the contract, so top toolbars and non-origin heads land right).
     // Saves the pre-maximize rect; un-maximize restores it exactly.
     void setMaximized(bool m, wlr_box work);
+    // Re-apply maximized geometry after the work area changed under us (strut
+    // flip, head migration). Bypasses the maximized_==m guard; the premax rect
+    // is untouched so a later un-maximize still restores the original.
+    void remaximize(wlr_box work);
     bool isMaximized() const { return maximized_; }
 
     // xdg-decoration: a decoration object for this toplevel appeared. Decide and

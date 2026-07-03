@@ -107,6 +107,11 @@ namespace bbai {
     resizeTo(work.x, work.y, contentW, contentH);
   }
 
+  void View::remaximize(wlr_box work) {
+    if (!maximized_) return;
+    applyMaximizedGeometry(work);
+  }
+
   void View::applyVisibility() {
     wlr_scene_node_set_enabled(&frame_tree->node, on_workspace_ && !iconified_);
   }
