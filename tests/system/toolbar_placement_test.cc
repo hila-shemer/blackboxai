@@ -21,7 +21,7 @@ TEST_CASE("toolbar: TopCenter placement golden") {
     server.dispatch();
 
   // Reposition via test seam — triggers rebuild() → barRect(TopCenter) → y=0.
-  server.toolbarForTest()->setPlacementForTest(toolbar::Placement::TopCenter);
+  server.toolbarForTest()->setPlacement(toolbar::Placement::TopCenter);
 
   const toolbar::Rect bar = toolbar::barRect(1280, 720, toolbar::Placement::TopCenter);
   CHECK(bar.x == 218);

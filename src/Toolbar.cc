@@ -180,10 +180,17 @@ namespace bbai {
     hide_timer_->start(kHideDelayMs, /*recurring=*/false);         // one-shot toward the toggle
   }
 
-  void Toolbar::setAutoHideForTest(bool on) {
+  void Toolbar::setPlacement(toolbar::Placement p) {
+    placement_ = p;
+    rebuild();
+    updateStrut();
+  }
+
+  void Toolbar::setAutoHide(bool on) {
     auto_hide_ = on;
     hidden_ = on;
     applyPosition();
+    updateStrut();
   }
 
   // The strut derives from the LIVE bar rect - when rc-style makes the bar
