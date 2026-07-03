@@ -37,6 +37,7 @@ namespace bbai {
     wlr_box workArea() const;
     void addStrut(const Strut *s);
     void removeStrut(const Strut *s);
+    void strutsChanged();   // registrant mutated its Strut - remaximize followers
 
   private:
     void renderBackground();

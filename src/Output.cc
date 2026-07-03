@@ -68,9 +68,11 @@ namespace bbai {
     return workarea::computeWorkArea(fullBox(), struts_);
   }
 
-  void Output::addStrut(const Strut *s) { struts_.push_back(s); }
+  void Output::addStrut(const Strut *s) { struts_.push_back(s); strutsChanged(); }
 
-  void Output::removeStrut(const Strut *s) { std::erase(struts_, s); }
+  void Output::removeStrut(const Strut *s) { std::erase(struts_, s); strutsChanged(); }
+
+  void Output::strutsChanged() { server.remaximizeViewsOn(this); }
 
   void Output::renderBackground() {
     const int w = output->width, h = output->height;

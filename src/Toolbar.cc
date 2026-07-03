@@ -206,6 +206,7 @@ namespace bbai {
     strut_ = Strut{};
     if (top) strut_.top = exposed;
     else     strut_.bottom = exposed;
+    output_.strutsChanged();
   }
 
 } // namespace bbai
