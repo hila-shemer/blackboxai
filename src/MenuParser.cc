@@ -2,9 +2,13 @@
 #include "Text.hh"
 #include "Util.hh"
 
+#include <algorithm>
 #include <cctype>
 #include <fstream>
 #include <sstream>
+
+#include <dirent.h>
+#include <sys/stat.h>
 
 namespace bbai::menuparser {
 
@@ -64,12 +68,23 @@ namespace bbai::menuparser {
       return "line " + std::to_string(lineNo) + ": " + msg;
     }
 
+    constexpr int kMaxIncludeDepth = 16;   // classic has NO cycle guard; we bound it
+
+    // Threaded through the recursion: the injectable filesystem seams plus the
+    // Result fields that are global to the parse (diagnostics, reload files).
+    struct Ctx {
+      const FileLoader &loader;
+      const DirLister &lister;
+      Result &result;
+      int include_depth = 0;
+    };
+
     // Recursive-descent over `lines` from `idx`. Appends items to `out` until a
     // matching `[end]` or end-of-input. `title` is non-null only at the top
     // level, where the first `[begin]` sets it.
     void parseLevel(const std::vector<std::string> &lines, std::size_t &idx,
-                    std::vector<MenuItem> &out, std::vector<std::string> &diag,
-                    std::u32string *title) {
+                    std::vector<MenuItem> &out, Ctx &ctx, std::u32string *title) {
+      std::vector<std::string> &diag = ctx.result.diagnostics;
       while (idx < lines.size()) {
         const std::string &line = lines[idx];
         const std::size_t lineNo = idx + 1;
@@ -169,7 +184,7 @@ namespace bbai::menuparser {
             diag.push_back(note(lineNo, "[submenu] needs a label - skipped (its body still parses)"));
             // Still consume the body so a label-less submenu can't desync [end]s.
             std::vector<MenuItem> drop;
-            parseLevel(lines, idx, drop, diag, nullptr);
+            parseLevel(lines, idx, drop, ctx, nullptr);
             continue;
           }
           MenuItem m;
@@ -179,8 +194,39 @@ namespace bbai::menuparser {
             diag.push_back(note(lineNo,
               "[submenu] title '" + cmd +
               "' not stored (MenuItem has no submenu-title field; cascade uses the label)"));
-          parseLevel(lines, idx, m.submenu_items, diag, nullptr);
+          parseLevel(lines, idx, m.submenu_items, ctx, nullptr);
           out.push_back(std::move(m));
+        } else if (tag == "include") {
+          if (label.empty()) {
+            diag.push_back(note(lineNo, "[include] needs a filename - skipped"));
+            continue;
+          }
+          if (label[0] == '|') {
+            // popen at menu-open would block the compositor loop - explicit v1
+            // non-goal (program plan, locked).
+            diag.push_back(note(lineNo, "[include] pipe menus are not supported - skipped"));
+            continue;
+          }
+          if (ctx.include_depth >= kMaxIncludeDepth) {
+            diag.push_back(note(lineNo, "[include] nested too deep (cycle?) - skipped"));
+            continue;
+          }
+          const std::string path = bt::expandTilde(label);
+          std::string text;
+          if (!ctx.loader(path, text)) {
+            diag.push_back(note(lineNo, "[include] cannot read '" + path + "' - skipped"));
+            continue;
+          }
+          ctx.result.files.push_back(path);
+          // Classic parseMenuFile(file, menu): included items append into the
+          // CURRENT level (works inside a submenu). A [begin] inside the
+          // included file is ignored; a stray top-level [end] there stops that
+          // include's remainder only.
+          const std::vector<std::string> inc = splitLines(text);
+          std::size_t j = 0;
+          ++ctx.include_depth;
+          parseLevel(inc, j, out, ctx, nullptr);
+          --ctx.include_depth;
         } else if (tag == "style") {
           if (label.empty() || cmd.empty()) {
             diag.push_back(note(lineNo, "[style] needs a label and a filename - skipped"));
@@ -213,24 +259,57 @@ namespace bbai::menuparser {
 
   } // namespace
 
-  Result parse(const std::string &text) {
+  FileLoader defaultFileLoader() {
+    return [](const std::string &path, std::string &text) {
+      struct stat st;
+      if (stat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode))
+        return false;                        // classic [include] S_ISREG check
+      std::ifstream f(path, std::ios::binary);
+      if (!f) return false;
+      std::ostringstream ss;
+      ss << f.rdbuf();
+      text = ss.str();
+      return true;
+    };
+  }
+
+  DirLister defaultDirLister() {
+    return [](const std::string &dir, std::vector<std::string> &names) {
+      DIR *d = opendir(dir.c_str());
+      if (!d) return false;
+      while (dirent *p = readdir(d)) {
+        const std::string name = p->d_name;
+        if (name == "." || name == "..") continue;
+        struct stat st;
+        if (stat((dir + "/" + name).c_str(), &st) == 0 && S_ISREG(st.st_mode))
+          names.push_back(name);
+      }
+      closedir(d);
+      return true;
+    };
+  }
+
+  Result parse(const std::string &text,
+               const FileLoader &loader, const DirLister &lister) {
     Result r;
+    Ctx ctx{loader, lister, r, 0};
     const std::vector<std::string> lines = splitLines(text);
     std::size_t idx = 0;
-    parseLevel(lines, idx, r.items, r.diagnostics, &r.title);
+    parseLevel(lines, idx, r.items, ctx, &r.title);
     return r;
   }
 
-  Result parseFile(const std::string &path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) {
+  Result parseFile(const std::string &path,
+                   const FileLoader &loader, const DirLister &lister) {
+    std::string text;
+    if (!loader(path, text)) {
       Result r;
       r.diagnostics.push_back("cannot open menu file: " + path);
       return r;
     }
-    std::ostringstream ss;
-    ss << f.rdbuf();
-    return parse(ss.str());
+    Result r = parse(text, loader, lister);
+    r.files.insert(r.files.begin(), path);   // main file first, includes after
+    return r;
   }
 
 } // namespace bbai::menuparser

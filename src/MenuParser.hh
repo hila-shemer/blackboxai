@@ -20,7 +20,10 @@
 //                              wire-up; the parser cannot enumerate workspaces)
 //   [style]  (l) {path}     -> Command + Act::SetStyle, argv[0]=expandTilde(path)
 //   [reconfig] (l) {cmd?}   -> Command + Act::Reconfigure ({cmd} dropped + noted)
-//   [stylesdir]/[include]/unknown -> skipped + noted (wired in later tasks)
+//   [include] (path)        -> included items appended into the CURRENT level
+//                              (tilde-expanded; pipe '|cmd' skipped + noted;
+//                              depth-capped at 16; path recorded in Result::files)
+//   [stylesdir]/unknown     -> skipped + noted (stylesdir wired in the next task)
 //
 // The tokenizer mirrors blackbox's string_within: backslash escapes the next
 // character inside a field, a leading '#' is a comment, malformed lines are
@@ -31,23 +34,41 @@
 
 #include "MenuItem.hh"
 
+#include <functional>
 #include <string>
 #include <vector>
 
 namespace bbai::menuparser {
 
+  // Injectable filesystem seams so [include]/[stylesdir] stay pure-testable.
+  // FileLoader: read `path` into `text`; false = unreadable or not a regular
+  // file. DirLister: fill `names` with the REGULAR files in `dir` (names only,
+  // any order); false = missing or not a directory.
+  using FileLoader = std::function<bool(const std::string &path, std::string &text)>;
+  using DirLister  = std::function<bool(const std::string &dir, std::vector<std::string> &names)>;
+
+  FileLoader defaultFileLoader();  // fopen + S_ISREG (classic [include] check)
+  DirLister  defaultDirLister();   // opendir/readdir + S_ISREG per entry
+
   struct Result {
     std::u32string title;                  // [begin] title; empty if none given
     std::vector<MenuItem> items;           // parsed top-level tree
     std::vector<std::string> diagnostics;  // one note per degraded/skipped line
+    std::vector<std::string> files;        // main file + every [include]d file +
+                                           // stylesdirs - the stat-on-open reload set
   };
 
   // Parse the whole menu-file text. Never throws; malformed input degrades.
-  Result parse(const std::string &text);
+  Result parse(const std::string &text,
+               const FileLoader &loader = defaultFileLoader(),
+               const DirLister &lister = defaultDirLister());
 
-  // Read `path` and parse it. On open failure returns an empty Result carrying a
-  // single diagnostic (no throw).
-  Result parseFile(const std::string &path);
+  // Load `path` through `loader` and parse it; `path` lands first in
+  // Result::files. On open failure returns an empty Result carrying a single
+  // diagnostic (no throw).
+  Result parseFile(const std::string &path,
+                   const FileLoader &loader = defaultFileLoader(),
+                   const DirLister &lister = defaultDirLister());
 
 } // namespace bbai::menuparser
 
