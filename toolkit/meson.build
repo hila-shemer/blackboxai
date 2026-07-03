@@ -9,6 +9,7 @@ bt_lib = static_library('bt',
     'Texture.cc',
     'Image.cc',
     'Clock.cc',
+    'Util.cc',
   ),
   include_directories : bt_inc)
 bt_dep = declare_dependency(link_with : bt_lib, include_directories : bt_inc)
