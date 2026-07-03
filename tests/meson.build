@@ -334,3 +334,10 @@ sni_host_exe = executable('sni-host-test',
   include_directories : include_directories('harness'))
 test('sni_host', dbus_run_session, args : ['--', sni_host_exe], suite : 'system',
   workdir : meson.project_source_root())
+
+sni_server_exe = executable('sni-server-test',
+  files('system/sni_server_test.cc', 'harness/SniMockItem.cc'),
+  dependencies : [bbai_dep, doctest_dep, libsystemd_dep],
+  include_directories : include_directories('harness'))
+test('sni_server', dbus_run_session, args : ['--', sni_server_exe], suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
