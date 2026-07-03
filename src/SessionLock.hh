@@ -30,6 +30,7 @@ namespace bbai {
     void timeout() override;   // fallback deadline: send locked anyway
 
     wlr_surface *focusedLockSurface() const;   // first mapped lock surface, or null
+    void handleNewOutput(Output *o);   // blank a head that appears mid-lock
 
     // test introspection
     bool lockedSentForTest() const { return locked_sent_; }
@@ -43,6 +44,7 @@ namespace bbai {
       wlr_scene_rect *blank = nullptr;
       bool committed = false;      // a post-blank frame reached this head
       bt::Listener commit;         // wlr_output.events.commit
+      bt::Listener output_destroy; // hot-unplug: drop this entry + recount
     };
 
     // One client lock surface. The scene tree is wlroots-owned: it destroys

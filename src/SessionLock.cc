@@ -73,8 +73,31 @@ namespace bbai {
         maybeSendLocked();
       }
     });
+    // Hot-unplug while locked: wlroots destroys the head's lock surface itself
+    // (it listens on output destroy), but this entry would keep a dangling
+    // Output* and a listener into the dying wlr_output. Drop it, then recount
+    // - one fewer head to wait on can be what sends `locked`. Defensive-only:
+    // headless outputs can't be destroyed from a test, so this path is
+    // review-verified, not test-verified.
+    po->output_destroy.connect(&o->wlrOutput()->events.destroy,
+                               [this, p = po.get()](void *) {
+      if (p->blank) wlr_scene_node_destroy(&p->blank->node);
+      std::erase_if(per_output_, [p](const std::unique_ptr<PerOutput> &q) {
+        return q.get() == p;
+      });
+      maybeSendLocked();
+    });
     per_output_.push_back(std::move(po));
     o->scheduleFrame();   // don't wait for organic damage-driven scheduling
+  }
+
+  void SessionLock::handleNewOutput(Output *o) {
+    if (!locked_) return;
+    // Pre-send: the new head joins the wait set (locked needs a blanked frame
+    // on EVERY output). Post-send: the blank alone satisfies the obligation to
+    // keep blanking heads that lack a lock surface; the client covers it with
+    // a late get_lock_surface through the normal onNewSurface path.
+    blankOutput(o);
   }
 
   void SessionLock::maybeSendLocked() {
