@@ -6,6 +6,8 @@
 
 #include <cstdio>
 #include <cstring>
+#include <string>
+#include <unistd.h>
 
 namespace bbai::sni {
 
@@ -262,6 +264,18 @@ namespace bbai::sni {
     for (const char *sig : kChangeSignals)
       sd_bus_match_signal(bus_, nullptr, nullptr, nullptr, kItemIface, sig,
                           Cb::onItemSignal, this);
+
+    // Announce ourselves as the host. libappindicator checks
+    // IsStatusNotifierHostRegistered before speaking SNI at all - false means
+    // it falls back to XEmbed, which we don't have. Not optional polish.
+    const std::string host_name =
+        "org.kde.StatusNotifierHost-" + std::to_string(getpid());
+    sd_bus_request_name(bus_, host_name.c_str(), 0);
+    host_registered_ = true;
+    sd_bus_emit_signal(bus_, kWatcherPath, kWatcherIface,
+                       "StatusNotifierHostRegistered", "");
+    sd_bus_emit_properties_changed(bus_, kWatcherPath, kWatcherIface,
+                                   "IsStatusNotifierHostRegistered", nullptr);
   }
 
   Host::~Host() { teardownBus(); }
