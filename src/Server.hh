@@ -137,6 +137,7 @@ namespace bbai {
     // covers every lit head (M7).
     Output *activeOutputForTest() const { return active_output; }
     int outputCountForTest() const { return static_cast<int>(outputs_.size()); }
+    Output *outputForTest(int i) const { return outputs_[static_cast<size_t>(i)]; }
     void addHeadlessOutputForTest(int w, int h);
     Toolbar *toolbarForTest() const { return toolbar_.get(); }
     const std::string &toolbarWindowTitleForTest() const;

@@ -58,6 +58,12 @@ namespace bbai {
     wlr_output_schedule_frame(output);
   }
 
+  wlr_box Output::fullBox() const {
+    wlr_box box{};
+    wlr_output_layout_get_box(server.output_layout, output, &box);
+    return box;
+  }
+
   void Output::renderBackground() {
     const int w = output->width, h = output->height;
 

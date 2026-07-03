@@ -23,6 +23,11 @@ namespace bbai {
     // instead of coming back stale (M7).
     void scheduleFrame();
 
+    // This head's box in layout coordinates (the Output added itself to the
+    // layout in the ctor, so the lookup always resolves). Wave-2 fullscreen
+    // consumes this directly - never workArea().
+    wlr_box fullBox() const;
+
   private:
     void renderBackground();
 
