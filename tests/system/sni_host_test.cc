@@ -8,8 +8,11 @@
 #include <systemd/sd-bus.h>
 
 #include <cstdlib>
+#include <cstring>
+#include <initializer_list>
 #include <string>
 #include <unistd.h>
+#include <vector>
 
 using namespace bbai::sni;
 
@@ -30,6 +33,81 @@ namespace {
     }
     sd_bus_error_free(&err);
     return owner;
+  }
+
+  struct SigWatch {
+    bool fired = false;
+    std::string arg;
+  };
+
+  int onSig(sd_bus_message *m, void *userdata, sd_bus_error *) {
+    auto *w = static_cast<SigWatch *>(userdata);
+    const char *s = nullptr;
+    if (sd_bus_message_read(m, "s", &s) >= 0 && s) w->arg = s;
+    w->fired = true;
+    return 0;
+  }
+
+  // Pump the host + any raw connections until pred() or ~3s. Non-blocking
+  // throughout - the host and the observers all live in this process.
+  template <typename P>
+  bool pumpUntil(Host &host, std::initializer_list<sd_bus *> conns, P pred) {
+    for (int i = 0; i < 600; ++i) {
+      host.processForTest();
+      for (sd_bus *c : conns)
+        while (sd_bus_process(c, nullptr) > 0) {}
+      if (pred()) return true;
+      usleep(5000);
+    }
+    return false;
+  }
+
+  // Reading a WATCHER property is special: the watcher lives in THIS process,
+  // so a blocking sd_bus_get_property would deadlock (nobody pumps the host
+  // while the caller waits - the reply can never be produced). Async + pump.
+  struct PropReply {
+    bool done = false;
+    std::vector<std::string> strings;   // filled for an 'as' property
+    int boolean = -1;                   // filled for a 'b' property
+  };
+
+  int onPropReply(sd_bus_message *reply, void *userdata, sd_bus_error *) {
+    auto *pr = static_cast<PropReply *>(userdata);
+    pr->done = true;
+    if (sd_bus_message_is_method_error(reply, nullptr)) return 0;
+    char type = 0;
+    const char *contents = nullptr;
+    if (sd_bus_message_peek_type(reply, &type, &contents) < 0 || !contents) return 0;
+    if (sd_bus_message_enter_container(reply, 'v', contents) < 0) return 0;
+    if (strcmp(contents, "as") == 0) {
+      sd_bus_message_enter_container(reply, 'a', "s");
+      const char *s = nullptr;
+      while (sd_bus_message_read(reply, "s", &s) > 0)
+        pr->strings.push_back(s);
+      sd_bus_message_exit_container(reply);
+    } else if (strcmp(contents, "b") == 0) {
+      int b = 0;
+      if (sd_bus_message_read(reply, "b", &b) >= 0) pr->boolean = b;
+    }
+    sd_bus_message_exit_container(reply);
+    return 0;
+  }
+
+  PropReply watcherProp(Host &host, sd_bus *conn, const char *prop) {
+    PropReply pr;
+    sd_bus_slot *slot = nullptr;
+    sd_bus_call_method_async(conn, &slot, "org.kde.StatusNotifierWatcher",
+                             "/StatusNotifierWatcher",
+                             "org.freedesktop.DBus.Properties", "Get",
+                             onPropReply, &pr, "ss",
+                             "org.kde.StatusNotifierWatcher", prop);
+    pumpUntil(host, {conn}, [&] { return pr.done; });
+    if (slot) sd_bus_slot_unref(slot);   // cancels the callback on timeout - &pr dies here
+    return pr;
+  }
+
+  std::vector<std::string> registeredItems(Host &host, sd_bus *conn) {
+    return watcherProp(host, conn, "RegisteredStatusNotifierItems").strings;
   }
 
 } // namespace
@@ -79,4 +157,68 @@ TEST_CASE("no session bus at all -> inert") {
   if (saved_xrd) setenv("XDG_RUNTIME_DIR", xrd.c_str(), 1);
   else unsetenv("XDG_RUNTIME_DIR");
   rmdir(tmpl);
+}
+
+TEST_CASE("path-variant registration: signal fires, property lists service+path") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch reg_sig;
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierItemRegistered", onSig, &reg_sig) >= 0);
+
+  sd_bus *item_conn = nullptr;                 // plays the app
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  // Async, not blocking: the watcher lives in THIS process and only serves the
+  // call when we pump it - a blocking call here would deadlock.
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "/StatusNotifierItem") >= 0);
+
+  CHECK(pumpUntil(host, {observer, item_conn}, [&] { return reg_sig.fired; }));
+
+  std::vector<std::string> items = registeredItems(host, observer);
+  REQUIRE(items.size() == 1);
+  CHECK(items[0][0] == ':');                   // sender's unique name...
+  CHECK(items[0].find("/StatusNotifierItem") != std::string::npos);  // ...+ path
+  CHECK(reg_sig.arg == items[0]);
+
+  sd_bus_flush_close_unref(item_conn);
+  sd_bus_flush_close_unref(observer);
+}
+
+TEST_CASE("name-variant registration resolves to the well-known name") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch reg_sig;
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierItemRegistered", onSig, &reg_sig) >= 0);
+
+  sd_bus *item_conn = nullptr;
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_request_name(item_conn, "org.test.RawItem", 0) >= 0);
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "org.test.RawItem") >= 0);
+
+  CHECK(pumpUntil(host, {observer, item_conn}, [&] { return reg_sig.fired; }));
+  std::vector<std::string> items = registeredItems(host, observer);
+  REQUIRE(items.size() == 1);
+  CHECK(items[0] == "org.test.RawItem/StatusNotifierItem");
+
+  sd_bus_flush_close_unref(observer);
+  sd_bus_flush_close_unref(item_conn);
 }
