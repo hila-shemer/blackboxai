@@ -83,6 +83,11 @@ wlr_dep = declare_dependency(
 install_data('data/blackboxai.desktop',
   install_dir : get_option('datadir') / 'wayland-sessions')
 
+# The 19 original Blackbox styles, verbatim - drop-in compatibility is the
+# product. BBAI_DEFAULT_STYLE (src/meson.build) points at styles/Results.
+install_subdir('data/styles',
+  install_dir : get_option('datadir') / 'blackboxai')
+
 subdir('toolkit')
 subdir('src')
 if get_option('tests')
