@@ -1,6 +1,7 @@
 #include "Style.hh"
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace bbai {
 
@@ -35,6 +36,22 @@ namespace {
   // are honored by parent pixel-copy at emit time.
   void sanitizeContainer(bt::Texture &t) {
     if (t.texture() == bt::Texture::Parent_Relative) t = flatBlack();
+  }
+
+  // Whitespace tokenizer with dumb quote stripping ("x" / 'x') - rootCommand
+  // values are simple; this is not a shell.
+  std::vector<std::string> tokenize(const std::string &s) {
+    std::vector<std::string> out;
+    std::string cur;
+    for (char c : s) {
+      if (c == ' ' || c == '\t') {
+        if (!cur.empty()) { out.push_back(cur); cur.clear(); }
+      } else if (c != '"' && c != '\'') {
+        cur += c;
+      }
+    }
+    if (!cur.empty()) out.push_back(cur);
+    return out;
   }
 
   bt::Color color(const bt::Resource &res, const std::string &n,
@@ -121,6 +138,69 @@ namespace {
     "menu.active.textColor: white\n";
 
 } // namespace
+
+namespace bsetroot {
+
+Spec parse(const std::string &command) {
+  Spec spec;
+  std::vector<std::string> argv = tokenize(command);
+  if (argv.empty()) return spec;
+  const std::string &prog = argv[0];
+  const size_t slash = prog.find_last_of('/');
+  const std::string base = slash == std::string::npos ? prog : prog.substr(slash + 1);
+  if (base != "bsetroot" && base != "bsetbg") return spec;
+
+  Spec::Kind kind = Spec::Kind::None;
+  for (size_t i = 1; i < argv.size(); ++i) {
+    const std::string &a = argv[i];
+    auto next = [&]() -> const std::string * {
+      return (i + 1 < argv.size()) ? &argv[++i] : nullptr;
+    };
+    if (a == "-solid") {
+      if (const std::string *v = next()) { spec.fore = *v; kind = Spec::Kind::Solid; }
+    } else if (a == "-mod") {
+      const std::string *x = next(), *y = x ? next() : nullptr;
+      if (y) {
+        spec.modX = std::max(std::atoi(x->c_str()), 1);
+        spec.modY = std::max(std::atoi(y->c_str()), 1);
+        kind = Spec::Kind::Mod;
+      }
+    } else if (a == "-gradient") {
+      if (const std::string *v = next()) { spec.texture = *v; kind = Spec::Kind::Gradient; }
+    } else if (a == "-fg" || a == "-foreground" || a == "-from") {
+      if (const std::string *v = next()) spec.fore = *v;
+    } else if (a == "-bg" || a == "-background" || a == "-to") {
+      if (const std::string *v = next()) spec.back = *v;
+    } else if (a == "-display") {
+      next();   // swallow the argument, like bsetroot does
+    }
+    // unknown flags are skipped - a theme's exotic bsetroot variant should
+    // degrade to flat black, not kill the style load
+  }
+  spec.kind = kind;
+  return spec;
+}
+
+std::vector<uint32_t> renderModula(int w, int h, int x, int y,
+                                   bt::Color fg, bt::Color bg) {
+  const uint32_t FG = 0xFF000000u | (uint32_t(fg.red()) << 16)
+                    | (uint32_t(fg.green()) << 8) | uint32_t(fg.blue());
+  const uint32_t BG = 0xFF000000u | (uint32_t(bg.red()) << 16)
+                    | (uint32_t(bg.green()) << 8) | uint32_t(bg.blue());
+  std::vector<uint32_t> px(static_cast<size_t>(w) * h);
+  for (int py = 0; py < h; ++py) {
+    const bool fg_row = ((py & 15) % y) == 0;
+    for (int pxx = 0; pxx < w; ++pxx) {
+      // bsetroot builds the column pattern MSB-first and X bitmaps read
+      // LSB-first, so column c is foreground when (15 - c) % x == 0.
+      const bool fg_col = ((15 - (pxx & 15)) % x) == 0;
+      px[static_cast<size_t>(py) * w + pxx] = (fg_row || fg_col) ? FG : BG;
+    }
+  }
+  return px;
+}
+
+} // namespace bsetroot
 
 std::shared_ptr<const Style> Style::load(const std::string &path) {
   bt::Resource res(path);
@@ -270,7 +350,40 @@ std::shared_ptr<const Style> Style::fromResource(const bt::Resource &res,
       s->desktop_.kind = DesktopBackground::Kind::TextureBg;
       s->desktop_.texture = d;
     } else {
-      s->desktop_.texture = flatBlack();
+      const bsetroot::Spec spec = bsetroot::parse(s->root_command_);
+      switch (spec.kind) {
+      case bsetroot::Spec::Kind::Solid: {
+        bt::Texture solid;
+        solid.setDescription("flat solid");
+        bt::Color c = bt::Color::fromString(spec.fore);
+        solid.setColor1(c.valid() ? c : bt::Color(0, 0, 0));
+        s->desktop_.texture = solid;
+        break;
+      }
+      case bsetroot::Spec::Kind::Gradient: {
+        bt::Texture g;
+        g.setDescription(spec.texture);   // "flatcrossdiagonalgradient" parses via find()
+        bt::Color c1 = bt::Color::fromString(spec.fore);
+        bt::Color c2 = bt::Color::fromString(spec.back);
+        g.setColor1(c1.valid() ? c1 : bt::Color(0, 0, 0));
+        g.setColor2(c2.valid() ? c2 : bt::Color(0, 0, 0));
+        s->desktop_.texture = g;
+        break;
+      }
+      case bsetroot::Spec::Kind::Mod: {
+        s->desktop_.kind = DesktopBackground::Kind::Modula;
+        s->desktop_.modX = spec.modX;
+        s->desktop_.modY = spec.modY;
+        bt::Color f = bt::Color::fromString(spec.fore);
+        bt::Color b = bt::Color::fromString(spec.back);
+        s->desktop_.modFg = f.valid() ? f : bt::Color(0, 0, 0);
+        s->desktop_.modBg = b.valid() ? b : bt::Color(0, 0, 0);
+        break;
+      }
+      case bsetroot::Spec::Kind::None:
+        s->desktop_.texture = flatBlack();
+        break;
+      }
     }
   }
 
