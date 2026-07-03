@@ -673,6 +673,7 @@ namespace bbai {
   }
 
   void Server::onPointerMotion(uint32_t time) {
+    if (session_lock_ && session_lock_->locked()) return;  // lock owns the seat; pointer discarded
     if (active_menu_) {
       const int x = static_cast<int>(cursor->x), y = static_cast<int>(cursor->y);
       for (Menu *m = liveMenu(); m; m = m->parent()) {
@@ -723,6 +724,7 @@ namespace bbai {
 
   void Server::onPointerButton(uint32_t time, uint32_t button,
                                wl_pointer_button_state state) {
+    if (session_lock_ && session_lock_->locked()) return;  // no client sees buttons under a lock
     if (active_menu_) { handleMenuButton(button, state); return; }  // modal gate
 
     if (cursor_mode == CursorMode::ScreenshotSelect) {
@@ -856,6 +858,14 @@ namespace bbai {
 
   void Server::onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode,
                      wl_keyboard_key_state state) {
+    if (session_lock_ && session_lock_->locked()) {
+      // Every key goes to the lock surface - no bindings, no exceptions.
+      // Ctrl+Alt+Backspace's Quit is deliberately suppressed: lock means lock,
+      // and the wedged-locker escape is the kernel's VT switch, not ours.
+      wlr_seat_set_keyboard(seat, kb);
+      wlr_seat_keyboard_notify_key(seat, time, keycode, state);
+      return;
+    }
     if (!kb->xkb_state) return;   // defensive: a keymap-less device has no syms
     const xkb_keysym_t *syms = nullptr;
     const int nsyms = xkb_state_key_get_syms(kb->xkb_state, evdevToXkb(keycode), &syms);
@@ -904,6 +914,11 @@ namespace bbai {
   }
 
   void Server::onModifiers(wlr_keyboard *kb) {
+    if (session_lock_ && session_lock_->locked()) {
+      wlr_seat_set_keyboard(seat, kb);
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
+      return;
+    }
     // Commit the alt-tab cycle the moment the modifier that opened it goes up
     // (spec §3.3). commitCycle clears cycling_, so the notify below re-syncs the
     // seat with the released modifier — no separate re-sync needed on this path.
@@ -1026,6 +1041,7 @@ namespace bbai {
   }
 
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
+    if (session_lock_ && session_lock_->locked()) return;  // mirror the onKey gate: no bindings
     if (active_menu_) { if (pressed) handleMenuKey(sym); return; }
     if (cursor_mode == CursorMode::ScreenshotSelect) {
       if (pressed && sym == XKB_KEY_Escape) cancelScreenshot();
