@@ -1,6 +1,12 @@
 # BlackboxAI — Resume / Handoff
 
-_Last updated: 2026-06-14. This is the orientation doc for picking the project back
+_Last updated: 2026-07-03 (build-env note + productize-v1 pointer; status table still ends
+at the screenshot feature — the M5 parse layers, M7 login slice and MRU alt-tab landed
+after it, and the current program is
+`docs/superpowers/specs/2026-07-03-productize-v1-program-design.md` +
+`docs/superpowers/plans/2026-07-03-productize-v1-program.md`)._
+
+_This is the orientation doc for picking the project back
 up in a fresh session. For the architecture, read
 `docs/superpowers/specs/2026-06-14-blackboxai-design.md`; for per-milestone plans,
 `docs/superpowers/plans/`; for hard-won gotchas + project context, the auto-memory
@@ -64,6 +70,11 @@ under `~/.claude/projects/-home-hila-proj-blackboxai/memory/`._
   Working tree clean. Demo videos: `demos/*.mp4` (regenerate: `tools/make-demos.sh`).
 
 ## Build / test / verify (the exact commands)
+
+**2026-07-03: the dev box is now Ubuntu 26.04 with NO wlroots — the commands below only
+work inside the `blackboxai-ci:f44` container (fedora:44, CI parity, use builddir
+`build-f44`). Recipe + one-liner: project memory `blackboxai-build-env.md`. A bare-host
+`meson setup` fails at the wlroots-0.20 dependency; don't chase it.**
 
 ```sh
 cd /home/hila/proj/blackboxai
@@ -141,8 +152,8 @@ app) — needs physical input; the serving half is covered by pipe tests.
 
 - The `onKey`/`onModifiers` **handler bodies** (xkb sym lookup, the keycode-based
   `swallowed_keycodes_` swallow-release logic, forward-to-client) and the
-  `new_input` keyboard branch. Headless fires no keyboard device, and wlroots 0.19
-  exposes no public `wlr_keyboard_init` — constructing a standalone `wlr_keyboard`
+  `new_input` keyboard branch. Headless fires no keyboard device, and wlroots (0.19
+  then, still true on 0.20) exposes no public `wlr_keyboard_init` — constructing a standalone `wlr_keyboard`
   to drive `onKey` would be exactly the heavy mock/emulation infra this project
   avoids. What IS covered: the keysym-level binding matcher + actions
   (`keybinding_test`), the `evdev+8`→keysym seam purely (`keycode_test`), and the
