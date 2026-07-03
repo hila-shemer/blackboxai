@@ -33,7 +33,8 @@ namespace bbai {
       return;
     }
     lock_ = lock;
-    locked_sent_ = false;
+    locked_sent_ = false;            // per-lock state: the new lock gets its own send
+    const bool takeover = locked_;   // re-lock after a locker crash
     locked_ = true;
 
     lock_new_surface_.connect(&lock->events.new_surface, [this](void *data) {
@@ -42,13 +43,18 @@ namespace bbai {
     lock_unlock_.connect(&lock->events.unlock, [this](void *) { onUnlock(); });
     lock_destroy_.connect(&lock->events.destroy, [this](void *) { onLockDestroy(); });
 
-    server_.handleSessionLocked();   // park focus; modal aborts arrive in Task 7
+    server_.handleSessionLocked();   // idempotent: modes already dead under a takeover
 
-    for (Output *o : server_.outputs_)
-      blankOutput(o);
+    // Fresh lock: blank every head and wait for one post-blank commit each.
+    // Takeover: the blanks never came down and each head already committed a
+    // blanked frame - locked can go out immediately (the spec's presented-
+    // frame requirement is already satisfied).
+    if (!takeover)
+      for (Output *o : server_.outputs_)
+        blankOutput(o);
 
     fallback_.start(kLockedFallbackMs, /*recurring=*/false);
-    maybeSendLocked();   // zero-output edge: nothing to wait for
+    maybeSendLocked();
   }
 
   void SessionLock::blankOutput(Output *o) {

@@ -12,6 +12,7 @@
 #include "View.hh"
 
 #include <cstdlib>
+#include <memory>
 #include <unistd.h>
 #include <linux/input-event-codes.h>
 
@@ -312,4 +313,63 @@ TEST_CASE("unlock restores the desktop pixel-for-pixel, focus and bindings inclu
     const unsigned ws_before = server.currentWorkspaceForTest();
     server.injectKeyForTest(XKB_KEY_Right, WLR_MODIFIER_LOGO, true);
     CHECK(server.currentWorkspaceForTest() == (ws_before + 1) % 4);
+}
+
+TEST_CASE("a crashed locker leaves the session locked; a new locker takes over") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    auto first = std::make_unique<test::LockTestClient>(server.socketName());
+    REQUIRE(first->ok());
+    REQUIRE(pumpUntil(server, [&] { return first->sawLockManager(); },
+                      [&] { first->flush(); first->pump(); }));
+    first->lock();
+    REQUIRE(pumpUntil(server, [&] { return server.sessionLockForTest()->locked(); },
+                      [&] { first->flush(); first->pump(); }));
+    server.advanceClockForTest(2);
+    REQUIRE(pumpUntil(server, [&] { return first->lockedReceived(); },
+                      [&] { first->flush(); first->pump(); }));
+
+    // Crash the locker: disconnect without unlock (the dtor sends no destroy
+    // for a locked lock on purpose - INVALID_DESTROY would be a protocol error).
+    first.reset();
+    bool abandoned = pumpUntil(server,
+        [&] { return !server.sessionLockForTest()->hasActiveLockForTest(); },
+        [&] {});
+    REQUIRE(abandoned);
+
+    // Still locked: state, pixels, and input gate all hold.
+    CHECK(server.sessionLockForTest()->locked());
+    CHECK(server.sessionLockForTest()->blankRectCountForTest() == 1);
+    test::Frame f = test::captureFrame(server);
+    size_t non_black = 0;
+    for (uint32_t p : f.pixels)
+        if ((p & 0x00FFFFFFu) != 0u) ++non_black;
+    CHECK(non_black == 0u);
+    const unsigned ws_before = server.currentWorkspaceForTest();
+    server.injectKeyForTest(XKB_KEY_Right, WLR_MODIFIER_LOGO, true);
+    CHECK(server.currentWorkspaceForTest() == ws_before);
+
+    // Recovery: a fresh locker locks again. Every head already committed its
+    // post-blank frame, so locked arrives with zero-sleep pumping - the
+    // takeover short-circuit, asserted deterministically.
+    test::LockTestClient second(server.socketName());
+    REQUIRE(second.ok());
+    REQUIRE(pumpUntil(server, [&] { return second.sawLockManager(); },
+                      [&] { second.flush(); second.pump(); }));
+    second.lock();
+    bool relocked = pumpUntil(server, [&] { return second.lockedReceived(); },
+                              [&] { second.flush(); second.pump(); });
+    CHECK(relocked);
+    CHECK_FALSE(second.finishedReceived());
+    CHECK(server.sessionLockForTest()->blankRectCountForTest() == 1);  // no double-blank
+
+    // And the takeover unlocks cleanly.
+    second.unlockAndDestroy();
+    REQUIRE(pumpUntil(server, [&] { return !server.sessionLockForTest()->locked(); },
+                      [&] { second.flush(); second.pump(); }));
 }
