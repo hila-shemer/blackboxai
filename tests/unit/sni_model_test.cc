@@ -2,6 +2,9 @@
 // order icon conversion, best-size pick. No bus anywhere near this TU.
 #include <doctest/doctest.h>
 #include "Sni.hh"
+#include "SniHost.hh"
+
+#include <poll.h>
 
 using namespace bbai::sni;
 
@@ -38,4 +41,12 @@ TEST_CASE("pickBestFrame prefers the smallest frame >= target") {
   CHECK(pickBestFrame(frames, 24) == &frames[2]);  // 22 < target; 48 wins
   CHECK(pickBestFrame(frames, 64) == &frames[2]);  // nothing >= 64: closest wins
   CHECK(pickBestFrame({}, 22) == nullptr);
+}
+
+TEST_CASE("wlMaskFromPoll: POLLOUT(0x04) must become WL_EVENT_WRITABLE(0x02)") {
+  CHECK(wlMaskFromPoll(POLLIN) == 0x01u);
+  CHECK(wlMaskFromPoll(POLLOUT) == 0x02u);
+  CHECK(wlMaskFromPoll(POLLIN | POLLOUT) == 0x03u);
+  CHECK(wlMaskFromPoll(0) == 0u);
+  CHECK(wlMaskFromPoll(-1) == 0u);   // sd_bus_get_events error -> quiesce
 }
