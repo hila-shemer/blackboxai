@@ -22,13 +22,14 @@ bbai_lib = static_library('bbai',
     'Rootmenu.cc',
     'Workspace.cc',
     'Timer.cc',
+    'SniHost.cc',
   ),
   include_directories : [src_inc],
-  dependencies : [bt_dep, bttext_dep, wlr_dep, dependency('libpng')])
+  dependencies : [bt_dep, bttext_dep, wlr_dep, libsystemd_dep, dependency('libpng')])
 
 bbai_dep = declare_dependency(link_with : bbai_lib,
   include_directories : [src_inc, bt_inc],
-  dependencies : [bt_dep, bttext_dep, wlr_dep, dependency('libpng')])
+  dependencies : [bt_dep, bttext_dep, wlr_dep, libsystemd_dep, dependency('libpng')])
 
 executable('blackboxai', files('main.cc'),
   dependencies : [bbai_dep], install : true)
