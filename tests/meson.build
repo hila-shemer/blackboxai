@@ -300,6 +300,13 @@ session_lock_exe = executable('session-lock-test', files('system/session_lock_te
 test('session_lock', session_lock_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# lock-idle: locking mid-modal-mode aborts the mode (menu/screenshot/cycle/grab).
+lock_interactions_exe = executable('lock-interactions-test',
+  files('system/lock_interactions_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('lock_interactions', lock_interactions_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via
