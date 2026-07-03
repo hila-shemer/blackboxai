@@ -35,6 +35,111 @@ namespace {
     for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
       server.dispatch();
   }
+
+  // Menu opens with its top-left at the cursor; centre Y of row `index`
+  // (uniform non-separator rows - the dispatch fixture has no separators).
+  int itemY(int open_y, int index) {
+    const int row_h = menu::itemHeight(18, false);
+    return open_y + menu::titleHeight(18) + menu::kFrameMargin
+         + index * row_h + row_h / 2;
+  }
+
+  // Rows: 0 Clock, 1 Nice(style), 2 Reconfigure, 3 Restart, 4 FVWM, 5 Exit.
+  std::string writeDispatchMenu() {
+    return writeTemp("dispatch.menu",
+      "[begin] (D)\n"
+      "  [exec] (Clock) {xclock}\n"
+      "  [style] (Nice) {/blackbox-styles/Nice}\n"
+      "  [reconfig] (Reconfigure)\n"
+      "  [restart] (Restart)\n"
+      "  [restart] (FVWM) {fvwm}\n"
+      "  [exit] (Exit)\n"
+      "[end]\n");
+  }
+
+  void openDispatchMenu(Server &server, int ox, int oy) {
+    server.setMenuFileForTest(writeDispatchMenu());
+    server.injectPointerMotionForTest(ox, oy);
+    server.injectPointerButtonForTest(BTN_RIGHT, true);
+    REQUIRE(server.menuOpenForTest());
+    REQUIRE(server.titleFont()->height() == 18);
+  }
+
+  void clickRow(Server &server, int ox, int oy, int index) {
+    server.injectPointerMotionForTest(ox + 30, itemY(oy, index));
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+  }
+}
+
+TEST_CASE("[exec] dispatches its /bin/sh argv through the CommandRunner") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  boot(server);
+  FakeCommandRunner runner;
+  server.setCommandRunnerForTest(&runner);
+
+  openDispatchMenu(server, 400, 200);
+  clickRow(server, 400, 200, 0);                       // Clock
+  CHECK_FALSE(server.menuOpenForTest());
+  CHECK(runner.runCount() == 1);
+  CHECK(runner.lastCommand()
+        == std::vector<std::string>{"/bin/sh", "-c", "xclock"});
+}
+
+TEST_CASE("[style] routes the expanded path into the applyStyleFile seam") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  boot(server);
+
+  openDispatchMenu(server, 400, 200);
+  clickRow(server, 400, 200, 1);                       // Nice
+  CHECK_FALSE(server.menuOpenForTest());
+  CHECK(server.lastStyleRequestForTest() == "/blackbox-styles/Nice");
+}
+
+TEST_CASE("[reconfig] hits the reconfigure seam and invalidates the menu cache") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  boot(server);
+
+  openDispatchMenu(server, 400, 200);
+  clickRow(server, 400, 200, 2);                       // Reconfigure
+  CHECK_FALSE(server.menuOpenForTest());
+  CHECK(server.reconfigureRequestsForTest() == 1);
+  // Cache invalidated: the next open re-parses without any file edit.
+  server.injectPointerMotionForTest(400, 200);
+  server.injectPointerButtonForTest(BTN_RIGHT, true);
+  CHECK(server.rootMenuForTest()->itemCount() == 6);   // reparsed fine
+}
+
+TEST_CASE("[restart] bare requests a self-restart and stops the loop") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  boot(server);
+
+  openDispatchMenu(server, 400, 200);
+  REQUIRE_FALSE(server.restartRequested());
+  clickRow(server, 400, 200, 3);                       // Restart
+  CHECK_FALSE(server.menuOpenForTest());
+  CHECK(server.restartRequested());
+  CHECK(server.pendingRestartForTest().empty());       // empty argv = re-exec self
+}
+
+TEST_CASE("[restart] {cmd} carries the shell argv out to main's exec") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  boot(server);
+
+  openDispatchMenu(server, 400, 200);
+  clickRow(server, 400, 200, 4);                       // FVWM
+  CHECK(server.restartRequested());
+  CHECK(server.pendingRestartForTest()
+        == std::vector<std::string>{"/bin/sh", "-c", "exec fvwm"});
 }
 
 TEST_CASE("the root menu is built from the menu file (tree + golden + cascade)") {

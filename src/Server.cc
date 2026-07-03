@@ -328,6 +328,28 @@ namespace bbai {
 
   void Server::terminate() { if (display) wl_display_terminate(display); }
 
+  void Server::requestRestart(std::vector<std::string> argv_or_empty) {
+    restart_requested_ = true;
+    restart_argv_ = std::move(argv_or_empty);
+    terminate();
+  }
+
+  // MERGE-TRAIN STUB: rc-style owns the real bodies (saveStyleFilename + live
+  // re-theme / rc+style reload). When rebasing onto a tree where rc-style has
+  // landed, DELETE both bodies here and keep the landed ones - signatures
+  // match by seam contract, and the test recorders live in activateMenuItem.
+  bool Server::applyStyleFile(const std::string &path) {
+    std::fprintf(stderr, "blackboxai: [style] %s (no-op until rc-style lands)\n",
+                 path.c_str());
+    return false;
+  }
+
+  bool Server::reconfigure(const std::string &rc_override) {
+    (void)rc_override;
+    std::fprintf(stderr, "blackboxai: [reconfig] (no-op until rc-style lands)\n");
+    return false;
+  }
+
   bool Server::dispatch() {
     wl_event_loop *loop = wl_display_get_event_loop(display);
     wl_display_flush_clients(display);
@@ -1190,12 +1212,19 @@ namespace bbai {
     case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
     case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
     case MenuItem::Act::Exit:            terminate(); break;
-    case MenuItem::Act::Restart:         break;  // stub in M4
-    case MenuItem::Act::SetStyle:        break;  // wired in the dispatch task
-    case MenuItem::Act::Reconfigure:     break;  // wired in the dispatch task
-    case MenuItem::Act::RestartOther:    break;  // wired in the dispatch task
-    case MenuItem::Act::WorkspacesMenu:          // submenu markers - a Submenu is
-    case MenuItem::Act::ConfigMenu:      break;  // never dispatched as a command
+    case MenuItem::Act::Restart:         requestRestart({}); break;
+    case MenuItem::Act::RestartOther:    requestRestart(copy.argv); break;
+    case MenuItem::Act::SetStyle:
+      last_style_request_ = copy.argv.empty() ? std::string() : copy.argv[0];
+      applyStyleFile(last_style_request_);   // persist + re-theme (rc-style seam)
+      break;
+    case MenuItem::Act::Reconfigure:
+      ++reconfigure_requests_;
+      reconfigure();                         // rc + style reload (rc-style seam)
+      menu_loaded_ = false;                  // classic reconfigure re-parses the menu too
+      break;
+    case MenuItem::Act::WorkspacesMenu:      // submenu markers - a Submenu is
+    case MenuItem::Act::ConfigMenu:  break;  // never dispatched as a command
     case MenuItem::Act::Deiconify:
       if (View *v = viewForHandle(copy.target)) deiconifyView(v);
       break;
