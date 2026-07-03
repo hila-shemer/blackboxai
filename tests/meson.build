@@ -98,6 +98,12 @@ system_exe = executable('system-tests', files('system/background_test.cc'),
 test('background', system_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# rc/style boot path: -rc -> Config -> style ladder -> styled desktop.
+style_boot_exe = executable('style-boot-test', files('system/style_boot_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('style_boot', style_boot_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 client_exe = executable('client-test', files('system/client_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('client', client_exe, suite : 'system',

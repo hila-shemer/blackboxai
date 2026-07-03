@@ -61,7 +61,18 @@ namespace {
 
 namespace bbai {
 
-  Server::Server(bool hl) : headless(hl), title_font("monospace", 16) {
+  Server::Server(bool hl, std::string rc_path)
+    : headless(hl), rc_path_(std::move(rc_path)) {
+    // Config + style come first - everything below (outputs, toolbar, views)
+    // renders through style_. Headless never discovers ~/.blackboxrc on its
+    // own: tests must opt into an rc explicitly or a dev box's real config
+    // would leak into the golden suite.
+    if (rc_path_.empty() && !headless)
+      if (const char *home = getenv("HOME"))
+        rc_path_ = std::string(home) + "/.blackboxrc";
+    config_ = bbai::Config::load(rc_path_);
+    style_ = loadStyleWithFallback(config_.styleFile);
+
     wlr_log_init(WLR_ERROR, nullptr);
 
     display = wl_display_create();
@@ -108,11 +119,6 @@ namespace bbai {
     layer_top        = wlr_scene_tree_create(&scene->tree);
     layer_overlay    = wlr_scene_tree_create(&scene->tree);
     layer_lock       = wlr_scene_tree_create(&scene->tree);
-
-    // Default desktop style (overridable later by a real .blackboxrc).
-    style.loadFromString("BlackboxAI.desktop: flat gradient diagonal\n"
-                         "BlackboxAI.desktop.color:   #204060\n"
-                         "BlackboxAI.desktop.colorTo: #6080a0\n");
 
     xdg_shell = wlr_xdg_shell_create(display, 6);
     new_xdg_toplevel.connect(&xdg_shell->events.new_toplevel, [this](void *data) {
@@ -230,10 +236,11 @@ namespace bbai {
       outputs_.push_back(o);
       if (!active_output) {
         active_output = o;
-        // The toolbar spans the primary output; create it now that the mode is
-        // set. (Also the re-plug path: if every head died, active_output is
+        // The toolbar spans the primary output; created only if the rc says so.
+        // (Also the re-plug path: if every head died, active_output is
         // null again and the next head becomes the new primary.)
-        toolbar_ = std::make_unique<Toolbar>(*this, *o);
+        if (config_.toolbar.enabled)
+          toolbar_ = std::make_unique<Toolbar>(*this, *o);
         // Give the pointer an image from frame one - otherwise it's invisible
         // over our own chrome until the Super+F7 flow happens to latch one.
         // Real-output only: headless asserts byte-exact goldens and has no
@@ -267,6 +274,31 @@ namespace bbai {
     // runAutostartForTest with a FakeCommandRunner instead.
     if (!headless)
       runAutostart();
+
+    // rc rootCommand on a real login only (headless/CI must not spawn shells;
+    // the wiring is covered by runRootCommandForTest + FakeCommandRunner).
+    if (!headless)
+      runRootCommand();
+  }
+
+  std::shared_ptr<const Style> Server::loadStyleWithFallback(const std::string &path,
+                                                             bool *exact_ok) {
+    if (exact_ok) *exact_ok = true;
+    if (auto s = Style::load(path)) return s;
+    if (exact_ok) *exact_ok = false;
+    fprintf(stderr, "blackboxai: style '%s' unreadable, falling back\n", path.c_str());
+#ifdef BBAI_DEFAULT_STYLE
+    if (auto s = Style::load(BBAI_DEFAULT_STYLE)) return s;
+#endif
+    return Style::builtin();
+  }
+
+  void Server::runRootCommand() {
+    // The RC file's rootCommand is user-authored - it gets /bin/sh (classic
+    // bexec). The STYLE file's rootCommand never reaches here: it was
+    // interpreted into the desktop background by Style (locked policy).
+    if (config_.rootCommand.empty()) return;
+    commandRunner().run({"/bin/sh", "-c", config_.rootCommand});
   }
 
   Server::~Server() {
@@ -453,7 +485,8 @@ namespace bbai {
   }
 
   const std::string &Server::toolbarWindowTitleForTest() const {
-    return toolbar_->windowTitleForTest();
+    static const std::string empty;
+    return toolbar_ ? toolbar_->windowTitleForTest() : empty;
   }
 
   // --- input: hit-test, focus, grab state machine -------------------------------
