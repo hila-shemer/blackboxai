@@ -27,7 +27,7 @@ TEST_CASE("toolbar auto-hide: hidden golden + reveal via pointer motion") {
   REQUIRE(tb != nullptr);
 
   // Enable auto-hide — bar starts hidden.
-  tb->setAutoHideForTest(true);
+  tb->setAutoHide(true);
 
   // HIDDEN golden: only the sliver is visible at the bottom edge.
   CHECK(tb->hiddenForTest());

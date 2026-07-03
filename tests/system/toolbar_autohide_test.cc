@@ -29,7 +29,7 @@ TEST_CASE("toolbar auto-hide: starts hidden, reveals on pointer-over, hides on p
   CHECK_FALSE(tb->hiddenForTest());
 
   // Enable auto-hide — bar starts hidden.
-  tb->setAutoHideForTest(true);
+  tb->setAutoHide(true);
   CHECK(tb->hiddenForTest());
 
   // Pointer enters the bar/sliver -> schedules reveal after kHideDelayMs (250ms).
@@ -56,7 +56,7 @@ TEST_CASE("toolbar auto-hide: debounce delay is real (no immediate flip)") {
   Toolbar *tb = server.toolbarForTest();
   REQUIRE(tb != nullptr);
 
-  tb->setAutoHideForTest(true);
+  tb->setAutoHide(true);
   CHECK(tb->hiddenForTest());          // starts hidden
 
   // Pointer enters: arms the reveal timer, must NOT flip hidden_ immediately.
@@ -86,7 +86,7 @@ TEST_CASE("toolbar auto-hide: cancel branch stops the pending timer") {
 
   // (a) Cancelled reveal: enter then leave before the timer fires.
   //     The reveal must NOT fire.
-  tb->setAutoHideForTest(true);        // hidden_=true
+  tb->setAutoHide(true);        // hidden_=true
   tb->onPointerOverToolbar(true);      // arm reveal
   tb->onPointerOverToolbar(false);     // want_shown(false)==!hidden_(true)? No -> stop() cancels reveal
   server.advanceClockForTest(1);

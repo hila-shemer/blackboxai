@@ -37,11 +37,11 @@ namespace bbai {
     toolbar::Rect barRectForTest(void) const { return toolbar::barRect(ow_, oh_, placement_); }
     toolbar::Placement placementForTest(void) const { return placement_; }
     const std::string &windowTitleForTest(void) const { return window_title_; }
-    void setPlacementForTest(toolbar::Placement p) { placement_ = p; rebuild(); }
+    void setPlacement(toolbar::Placement p);   // rebuilds + updates the strut
 
     void handlePointerMotion(double x, double y);
     void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
-    void setAutoHideForTest(bool on);              // enable auto-hide (no config yet)
+    void setAutoHide(bool on);                 // hidden sliver still struts (2px)
     bool hiddenForTest(void) const { return hidden_; }
 
   private:

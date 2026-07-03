@@ -96,3 +96,41 @@ TEST_CASE("toolbar strut: primary work area = output minus the LIVE bar height")
   CHECK(w.width == 1280);
   CHECK(w.height == 720 - barH);   // today that's 697 - the maximize_test number
 }
+
+TEST_CASE("toolbar strut follows placement and auto-hide") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  settleOutputs(server, 1);
+
+  Toolbar *tb = server.toolbarForTest();
+  REQUIRE(tb != nullptr);
+  Output *primary = server.activeOutputForTest();
+  const int barH = tb->barRectForTest().h;
+
+  // Top placement: strut flips to the top edge.
+  tb->setPlacement(toolbar::Placement::TopCenter);
+  wlr_box w = primary->workArea();
+  CHECK(w.y == barH);
+  CHECK(w.height == 720 - barH);
+
+  // Auto-hide on (still top): classic 2px sliver, not zero.
+  tb->setAutoHide(true);
+  w = primary->workArea();
+  CHECK(w.y == toolbar::kHiddenHeight);
+  CHECK(w.height == 720 - toolbar::kHiddenHeight);
+
+  // Back to bottom with auto-hide still on: sliver moves to the floor.
+  tb->setPlacement(toolbar::Placement::BottomCenter);
+  w = primary->workArea();
+  CHECK(w.y == 0);
+  CHECK(w.height == 720 - toolbar::kHiddenHeight);
+
+  // Auto-hide off: full bar height reserved again.
+  tb->setAutoHide(false);
+  w = primary->workArea();
+  CHECK(w.y == 0);
+  CHECK(w.height == 720 - barH);
+}
