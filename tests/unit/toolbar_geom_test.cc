@@ -102,3 +102,23 @@ TEST_CASE("section rects tile the interior with the extra-subtraction compaction
   // The clock is right-anchored within the bar interior.
   CHECK(s.clock.x + s.clock.w == 844 - kFrameMargin);
 }
+
+TEST_CASE("toolbar geometry with style metrics and config width") {
+  using namespace bbai::toolbar;
+  ToolbarMetrics m;
+  m.barHeight = 30; m.labelHeight = 24; m.buttonWidth = 24;
+  m.frameMargin = 3; m.hiddenHeight = 4;
+  CHECK(barWidth(1280, 80) == 1024);
+  Rect r = barRect(1280, 720, Placement::BottomCenter, m, 80);
+  CHECK(r.w == 1024);
+  CHECK(r.x == 128);
+  CHECK(r.y == 720 - 30);
+  CHECK(r.h == 30);
+  Rect top = barRect(1280, 720, Placement::TopCenter, m, 80);
+  CHECK(top.y == 0);
+  Rect hid = hiddenBarRect(r, Placement::BottomCenter, m);
+  CHECK(hid.y == r.y + r.h - 4);
+  // defaults still equal the pinned constants
+  CHECK(barRect(1280, 720).h == 23);
+  CHECK(barRect(1280, 720).w == 844);
+}

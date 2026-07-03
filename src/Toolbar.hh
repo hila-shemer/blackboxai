@@ -32,10 +32,21 @@ namespace bbai {
     void redrawWorkspaceLabel(void);              // on workspace switch (Phase B)
     void redrawWindowLabel(const char *title);    // on focus change (null/"" -> blank)
 
-    toolbar::Rect barRectForTest(void) const { return toolbar::barRect(ow_, oh_, placement_); }
+    toolbar::Rect barRectForTest(void) const { return currentBarRect(); }
     toolbar::Placement placementForTest(void) const { return placement_; }
     const std::string &windowTitleForTest(void) const { return window_title_; }
     void setPlacementForTest(toolbar::Placement p) { placement_ = p; rebuild(); }
+
+    // CONTRACT setters (work-area owns the real promotion: its versions also
+    // update the registered Strut). These interim shims exist so our config
+    // application is written against the final names - DELETE both at the
+    // merge-train rebase over work-area; call sites stay.
+    void setPlacement(toolbar::Placement p) { setPlacementForTest(p); }
+    void setAutoHide(bool on) { setAutoHideForTest(on); }
+
+    // Live bar geometry: style metrics + config width + current placement.
+    // Work-area's Strut derives from this, never from the constexpr defaults.
+    toolbar::Rect currentBarRect() const;
 
     void handlePointerMotion(double x, double y);
     void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
@@ -69,6 +80,10 @@ namespace bbai {
     toolbar::Sections sections_{};
     std::vector<wlr_scene_node *> nodes_;   // all section nodes except the clock
     wlr_scene_buffer *clock_node_ = nullptr;
+    // Bar buffer kept between rebuild() and redrawClock() so parentrelative
+    // sections (Gray) can crop their pixels out of it.
+    std::vector<uint32_t> bar_px_;
+    toolbar::Rect bar_rect_{0, 0, 1, 1};
     std::string window_title_;
     std::unique_ptr<Timer> clock_timer_;
   };

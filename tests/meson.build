@@ -102,6 +102,13 @@ gray_window_exe = executable('gray-window-test', files('system/gray_window_test.
 test('gray_window', gray_window_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Toolbar knobs from the rc (placement/width/autoHide/enable) - config-driven,
+# not ForTest-driven.
+toolbar_config_exe = executable('toolbar-config-test', files('system/toolbar_config_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('toolbar_config', toolbar_config_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 client_exe = executable('client-test', files('system/client_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('client', client_exe, suite : 'system',
