@@ -65,13 +65,6 @@ test('style', style_test_exe, suite : 'unit',
   workdir : meson.project_source_root(),
   env : ['FONTCONFIG_FILE=' + fontconfig_conf])
 
-# Pure palette selector: focused/unfocused Look + color helpers, no wlroots.
-decoration_palette_exe = executable('decoration_palette',
-  files('unit/decoration_palette_test.cc'),
-  dependencies : [doctest_dep, bt_dep],
-  include_directories : include_directories('../src'))
-test('decoration_palette', decoration_palette_exe, suite : 'unit')
-
 # Reusable headless capture + golden harness, plus the in-process test client.
 # HeadlessFixture.cc is server-side (bbai_dep) and TestClient.cc is client-side
 # (wayland-client + generated client stubs); they never share a TU.
@@ -102,6 +95,12 @@ test('background', system_exe, suite : 'system',
 style_boot_exe = executable('style-boot-test', files('system/style_boot_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('style_boot', style_boot_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Gray style end-to-end: wildcard keys + parentrelative label pixel-copy.
+gray_window_exe = executable('gray-window-test', files('system/gray_window_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('gray_window', gray_window_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
 client_exe = executable('client-test', files('system/client_test.cc'),

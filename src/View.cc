@@ -1,6 +1,7 @@
 #include "View.hh"
 #include "Server.hh"
 #include "Frame.hh"
+#include "Style.hh"
 
 namespace bbai {
 
@@ -15,7 +16,7 @@ namespace bbai {
     // auto-destroys it when the xdg surface dies.
     surface_tree = wlr_scene_xdg_surface_create(frame_tree, tl->base);
 
-    deco = std::make_unique<Decoration>(frame_tree, server.titleFont());
+    deco = std::make_unique<Decoration>(frame_tree);
     wlr_scene_node_set_position(&frame_tree->node, pos_x, pos_y);
 
     wlr_surface *surface = tl->base->surface;
@@ -60,8 +61,9 @@ namespace bbai {
 
   void View::relayout() {
     if (draw_frame) {
-      wlr_scene_node_set_position(&surface_tree->node, frame::clientX(), frame::clientY());
-      deco->rebuild(cw, ch, xdg_toplevel->title, focused_);
+      const frame::FrameMetrics &m = server.currentStyle()->frameMetrics();
+      wlr_scene_node_set_position(&surface_tree->node, frame::clientX(m), frame::clientY(m));
+      deco->rebuild(*server.currentStyle(), cw, ch, xdg_toplevel->title, focused_);
     } else {
       // CSD holdout: no chrome, client surface at the View origin; we still own
       // the scene tree and manage geometry.
@@ -102,8 +104,9 @@ namespace bbai {
   }
 
   void View::applyMaximizedGeometry(wlr_box work) {
-    const int contentW = work.width - 2 * frame::kBorder;
-    const int contentH = work.height - frame::kTitleHeight - frame::kHandleHeight;
+    const frame::FrameMetrics &fm = server.currentStyle()->frameMetrics();
+    const int contentW = work.width - 2 * fm.border;
+    const int contentH = work.height - fm.titleHeight - fm.handleHeight;
     resizeTo(work.x, work.y, contentW, contentH);
   }
 

@@ -501,6 +501,7 @@ namespace bbai {
 
   Part Server::partAt(View *v, double lx, double ly) {
     using namespace frame;
+    const FrameMetrics &m = style_->frameMetrics();
     const int fx = static_cast<int>(lx) - v->x();
     const int fy = static_cast<int>(ly) - v->y();
     const int W = v->contentWidth(), H = v->contentHeight();
@@ -509,14 +510,14 @@ namespace bbai {
       return (fx >= 0 && fy >= 0 && fx < W && fy < H) ? Part::Client : Part::None;
     }
     auto in = [&](Rect r) { return fx >= r.x && fy >= r.y && fx < r.x + r.w && fy < r.y + r.h; };
-    if (fx >= clientX() && fy >= clientY() && fx < clientX() + W && fy < clientY() + H)
+    if (fx >= clientX(m) && fy >= clientY(m) && fx < clientX(m) + W && fy < clientY(m) + H)
       return Part::Client;
-    if (in(leftGrip(W, H)))  return Part::LeftGrip;
-    if (in(rightGrip(W, H))) return Part::RightGrip;
-    if (in(iconifyButton(W, H)))  return Part::IconifyButton;
-    if (in(maximizeButton(W, H))) return Part::MaximizeButton;
-    if (in(closeButton(W, H)))    return Part::CloseButton;
-    if (in(title(W, H)))     return Part::Titlebar;  // incl. the label (drag = move)
+    if (in(leftGrip(W, H, m)))  return Part::LeftGrip;
+    if (in(rightGrip(W, H, m))) return Part::RightGrip;
+    if (in(iconifyButton(W, H, m)))  return Part::IconifyButton;
+    if (in(maximizeButton(W, H, m))) return Part::MaximizeButton;
+    if (in(closeButton(W, H, m)))    return Part::CloseButton;
+    if (in(title(W, H, m)))     return Part::Titlebar;  // incl. the label (drag = move)
     return Part::None;
   }
 
