@@ -110,7 +110,7 @@ namespace {
   }
 }
 
-TEST_CASE("restart: bare restarts self, with a command degrades to self + note") {
+TEST_CASE("restart: bare restarts self, {cmd} becomes RestartOther via the shell") {
   Result r = menuparser::parse(
     "[begin] (m)\n"
     "  [restart] (Restart)\n"
@@ -120,12 +120,14 @@ TEST_CASE("restart: bare restarts self, with a command degrades to self + note")
   REQUIRE(r.items.size() == 2);
   CHECK(r.items[0].action == MenuItem::Act::Restart);
   CHECK(r.items[0].label == u("Restart"));
+  CHECK(r.items[0].argv.empty());
 
-  // No RestartOther action exists; the {fvwm} target is dropped, not invented.
-  CHECK(r.items[1].action == MenuItem::Act::Restart);
+  // Classic RestartOther shape: exec the named WM through the shell, `exec`
+  // so the intermediate sh is replaced.
+  CHECK(r.items[1].action == MenuItem::Act::RestartOther);
   CHECK(r.items[1].label == u("Start FVWM"));
-  CHECK(r.items[1].argv.empty());
-  CHECK(anyDiagContains(r, "fvwm"));
+  CHECK(r.items[1].argv == sh("exec fvwm"));
+  CHECK(r.diagnostics.empty());   // no longer a degradation
 }
 
 TEST_CASE("workspaces and config become MARKED placeholder submenus") {
@@ -290,6 +292,14 @@ TEST_CASE("the real data/menu.in fixture parses with sane known entries") {
   CHECK(wsl->kind == MenuItem::Kind::Submenu);
   CHECK(wsl->submenu_items.empty());
   CHECK(wsl->action == MenuItem::Act::WorkspacesMenu);
+
+  // The "Others" submenu is all RestartOther entries now.
+  const MenuItem *others = findByLabel(r.items, "Others");
+  REQUIRE(others != nullptr);
+  const MenuItem *fvwm = findByLabel(others->submenu_items, "Start FVWM");
+  REQUIRE(fvwm != nullptr);
+  CHECK(fvwm->action == MenuItem::Act::RestartOther);
+  CHECK(fvwm->argv == sh("exec fvwm"));
 
   // Tail actions: Restart -> Act::Restart, Exit -> Act::Exit.
   const MenuItem *restart = findByLabel(r.items, "Restart");

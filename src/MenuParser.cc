@@ -133,12 +133,16 @@ namespace bbai::menuparser {
           }
           MenuItem m;
           m.kind = MenuItem::Kind::Command;
-          m.action = MenuItem::Act::Restart;       // restarts the compositor itself
           m.label = bt::decodeUtf8(label.c_str());
-          if (haveCmd && !cmd.empty())             // alternate-WM start: no RestartOther action
-            diag.push_back(note(lineNo,
-              "[restart] alternate command '" + cmd +
-              "' dropped (no RestartOther action; restarts self instead)"));
+          if (haveCmd && !cmd.empty()) {
+            // Classic RestartOther: exec the named WM through the shell. On
+            // Wayland this still tears every client down first - the
+            // compositor IS the display server (documented in main.cc).
+            m.action = MenuItem::Act::RestartOther;
+            m.argv = {"/bin/sh", "-c", "exec " + cmd};
+          } else {
+            m.action = MenuItem::Act::Restart;   // restarts the compositor itself
+          }
           out.push_back(std::move(m));
         } else if (tag == "workspaces" || tag == "config") {
           // Runtime-populated menus: the parser can't enumerate workspaces or

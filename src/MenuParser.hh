@@ -9,8 +9,8 @@
 //   [end]                  -> closes the current (sub)menu level
 //   [exec]  (l) {cmd}       -> Command + Act::Exec, argv = {"/bin/sh","-c",cmd}
 //   [exit]  (l)             -> Command + Act::Exit
-//   [restart] (l) {cmd?}    -> Command + Act::Restart (the alternate-WM {cmd} has
-//                              no RestartOther action here; it is dropped + noted)
+//   [restart] (l) {cmd?}    -> Command + Act::Restart (bare: restart self) or
+//                              Act::RestartOther, argv={"/bin/sh","-c","exec "+cmd}
 //   [submenu] (l) {title?}  -> Submenu (children parsed to the matching [end]);
 //                              {title} has no MenuItem field - the cascade titles
 //                              itself from the label, so a distinct title is noted
