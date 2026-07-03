@@ -45,8 +45,10 @@ namespace bbai::sni {
     Host *host = nullptr;
     std::string service, path, owner;
     sd_bus_slot *getall_slot = nullptr;   // in-flight GetAll (nullptr = none)
+    sd_bus_track *track = nullptr;        // fires when `service` leaves the bus
     ~Reg() {
       if (getall_slot) sd_bus_slot_unref(getall_slot);
+      if (track) sd_bus_track_unref(track);
     }
   };
 
@@ -66,6 +68,7 @@ namespace bbai::sni {
                           sd_bus_message *reply, void *userdata, sd_bus_error *);
     static int onGetAll(sd_bus_message *reply, void *userdata, sd_bus_error *);
     static int onItemSignal(sd_bus_message *m, void *userdata, sd_bus_error *);
+    static int onTrack(sd_bus_track *, void *userdata);
   };
 
   const sd_bus_vtable Host::Cb::watcher_vtable[] = {
@@ -203,6 +206,17 @@ namespace bbai::sni {
     return 0;
   }
 
+  int Host::Cb::onTrack(sd_bus_track *, void *userdata) {
+    auto *reg = static_cast<Host::Reg *>(userdata);
+    // The tracked name is gone: the item's connection died. Copy the keys out
+    // first - dropRegistration destroys reg (unref-from-own-callback is safe,
+    // sd-bus refs the track during dispatch).
+    Host *host = reg->host;
+    const std::string service = reg->service, path = reg->path;
+    host->dropRegistration(service, path);
+    return 0;
+  }
+
   int Host::Cb::onItemSignal(sd_bus_message *m, void *userdata, sd_bus_error *) {
     auto *host = static_cast<Host *>(userdata);
     const char *sender = sd_bus_message_get_sender(m);
@@ -292,6 +306,9 @@ namespace bbai::sni {
                        (service + path).c_str());
     sd_bus_emit_properties_changed(bus_, kWatcherPath, kWatcherIface,
                                    "RegisteredStatusNotifierItems", nullptr);
+    Reg *r = regs_.back().get();
+    if (sd_bus_track_new(bus_, &r->track, Cb::onTrack, r) >= 0)
+      sd_bus_track_add_name(r->track, service.c_str());
     fetchAll(*regs_.back());
   }
 
