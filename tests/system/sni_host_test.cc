@@ -347,3 +347,45 @@ TEST_CASE("NewIcon / NewStatus re-fetch and fire itemChanged") {
   CHECK(host.items()[0].status == "NeedsAttention");
   mock.quit();
 }
+
+TEST_CASE("SIGKILL'd item unregisters: itemRemoved + signal + property shrink") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  std::vector<std::string> removed;
+  HostEvents ev;
+  ev.itemRemoved = [&](const Item &it) { removed.push_back(it.service + it.path); };
+  host.setEvents(std::move(ev));
+
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch unreg_sig;
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierItemUnregistered", onSig,
+                              &unreg_sig) >= 0);
+
+  bbai::test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  REQUIRE(mock.waitReport(5000, [&] { host.processForTest(); }) == "registered");
+  REQUIRE(pumpUntil(host, {observer}, [&] { return !host.items().empty(); }));
+
+  mock.killHard();                      // no goodbye - only the name drop
+  REQUIRE(pumpUntil(host, {observer}, [&] { return !removed.empty(); }));
+  CHECK(host.items().empty());
+  // itemRemoved fires host-side before the daemon forwards the signal to the
+  // observer - keep pumping for the one extra round trip.
+  CHECK(pumpUntil(host, {observer}, [&] { return unreg_sig.fired; }));
+  CHECK(registeredItems(host, observer).empty());
+  sd_bus_flush_close_unref(observer);
+}
+
+TEST_CASE("clean quit unregisters too") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  bbai::test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  REQUIRE(mock.waitReport(5000, [&] { host.processForTest(); }) == "registered");
+  REQUIRE(pumpUntil(host, {}, [&] { return !host.items().empty(); }));
+  mock.quit();
+  REQUIRE(pumpUntil(host, {}, [&] { return host.items().empty(); }));
+}
