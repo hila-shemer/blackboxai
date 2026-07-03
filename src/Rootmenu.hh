@@ -18,6 +18,14 @@ namespace bbai::rootmenu {
   // Used as the child items for the Workspaces submenu (F3.2+).
   std::vector<MenuItem> buildWorkspacesSubmenu(const WorkspaceModel &ws);
 
+  // Live fixup of a parsed menu-file tree: [workspaces] placeholders get the
+  // real workspace submenu (rebuilt per open, so the current-mark stays
+  // honest), [config] placeholders go disabled until wave-2 configmenu mounts
+  // there, and an empty parse falls back to the in-code menu - a broken first
+  // boot still gets a terminal + workspaces, not classic's bare xterm stub.
+  std::vector<MenuItem> buildFromParsed(const std::vector<MenuItem> &parsed,
+                                        const WorkspaceModel &ws);
+
 } // namespace bbai::rootmenu
 
 #endif // BLACKBOXAI_ROOTMENU_HH
