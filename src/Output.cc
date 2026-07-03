@@ -4,8 +4,10 @@
 #include "Image.hh"
 #include "Texture.hh"
 #include "Color.hh"
+#include "Style.hh"
 
 #include <ctime>
+#include <memory>
 
 namespace bbai {
 
@@ -49,17 +51,16 @@ namespace bbai {
 
   void Output::renderBackground() {
     const int w = output->width, h = output->height;
+    if (bg) { wlr_scene_node_destroy(&bg->node); bg = nullptr; }
 
-    bt::Texture t;
-    t.setDescription(server.style.read("BlackboxAI.desktop", "BlackboxAI.Desktop",
-                                       "flat solid"));
-    t.setColor1(bt::Color::fromString(
-      server.style.read("BlackboxAI.desktop.color", "", "#204060")));
-    t.setColor2(bt::Color::fromString(
-      server.style.read("BlackboxAI.desktop.colorTo", "", "#6080a0")));
+    std::shared_ptr<const Style> st = server.currentStyle();
+    const DesktopBackground &d = st->desktop();
+    std::vector<uint32_t> px =
+      (d.kind == DesktopBackground::Kind::Modula)
+        ? bsetroot::renderModula(w, h, d.modX, d.modY, d.modFg, d.modBg)
+        : bt::Image(w, h).renderBuffer(d.texture);
 
-    bt::Image img(w, h);
-    DataBuffer *buf = DataBuffer::create(w, h, img.renderBuffer(t));
+    DataBuffer *buf = DataBuffer::create(w, h, std::move(px));
     bg = wlr_scene_buffer_create(server.layer_background, buf->base());
     wlr_buffer_drop(buf->base());  // scene_buffer took its own ref
     wlr_scene_node_set_position(&bg->node, 0, 0);

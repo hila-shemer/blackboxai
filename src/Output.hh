@@ -23,9 +23,11 @@ namespace bbai {
     // instead of coming back stale (M7).
     void scheduleFrame();
 
-  private:
+    // (Re)paint the desktop from the server's current Style. Idempotent -
+    // drops the previous buffer first - so reconfigure() can call it live.
     void renderBackground();
 
+  private:
     Server &server;
     wlr_output *output;
     wlr_scene_output *scene_output = nullptr;

@@ -18,6 +18,8 @@
 #include "Mru.hh"
 #include "CommandRunner.hh"
 #include "Decoration.hh"   // bbai::Part
+#include "Config.hh"
+#include "Style.hh"
 #include "MenuItem.hh"
 
 #include <memory>
@@ -35,7 +37,7 @@ namespace bbai {
 
   class Server {
   public:
-    explicit Server(bool headless);
+    explicit Server(bool headless, std::string rc_path = {});
     ~Server();
 
     bool ok() const {
@@ -52,10 +54,14 @@ namespace bbai {
     void raiseView(View *view);
     void lowerView(View *view);
 
-    // Shared title-text renderer for window-label decorations (M3). Loads the
-    // configured font once; under a test's isolated fontconfig it resolves to
-    // the bundled font deterministically.
-    bt::TextRenderer *titleFont() { return &title_font; }
+    // The window-label font, now owned by the Style (the M3-era shared member
+    // is gone). Menu/Toolbar read their own style fonts directly.
+    bt::TextRenderer *titleFont() { return style_->windowFont(); }
+
+    // --- config/style seams (wave-1 contracts) ---
+    const bbai::Config &config() const { return config_; }
+    std::shared_ptr<const Style> currentStyle() const { return style_; }
+    void runRootCommandForTest() { runRootCommand(); }
     WorkspaceModel &workspaces() { return workspaces_; }
 
     // Switch to workspace i (model + toolbar label in B3; view show/hide + focus
@@ -155,8 +161,6 @@ namespace bbai {
     wlr_scene_tree *layer_top = nullptr;
     wlr_scene_tree *layer_overlay = nullptr;
 
-    bt::Resource style;  // desktop style driving the background texture
-
   private:
     friend struct Keyboard;
     enum class CursorMode { Passthrough, Move, Resize, ScreenshotSelect };
@@ -202,6 +206,13 @@ namespace bbai {
     Part partAt(View *v, double lx, double ly);
     uint32_t nowMsec() { return next_time++; }
 
+    std::shared_ptr<const Style> loadStyleWithFallback(const std::string &path,
+                                                       bool *exact_ok = nullptr);
+    void runRootCommand();   // rc-file rootCommand via /bin/sh (user-authored)
+    std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
+    bbai::Config config_;
+    std::shared_ptr<const Style> style_;
+
     bool headless = false;
     bool started_ = false;          // wlr_backend_start succeeded (ok() gate)
     std::string socket_name;
@@ -224,7 +235,6 @@ namespace bbai {
     std::size_t cycle_index_ = 0;               // current position in cycle_ring_
     View *cycle_start_ = nullptr;               // focus to restore on cancel
     uint32_t cycle_mod_ = 0;                    // raw held modifier bit that opened the session
-    bt::TextRenderer title_font;                // titlebar label font (M3)
     std::unique_ptr<bt::Clock> clock_;          // wall/monotonic time (M4)
     std::unique_ptr<TimerRegistry> timer_registry_;
     WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
