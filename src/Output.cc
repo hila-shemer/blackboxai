@@ -47,7 +47,10 @@ namespace bbai {
       clock_gettime(CLOCK_MONOTONIC, &now);
       wlr_scene_output_send_frame_done(scene_output, &now);
     });
-    destroy.connect(&output->events.destroy, [this](void *) { delete this; });
+    destroy.connect(&output->events.destroy, [this](void *) {
+      server.onOutputDestroyed(this);
+      delete this;
+    });
   }
 
   Output::~Output() {

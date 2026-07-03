@@ -294,6 +294,13 @@ work_area_exe = executable('work-area-test', files('system/work_area_test.cc'),
 test('work_area', work_area_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Work-area slice: hot-unplug hygiene (best-effort headless destroy drive).
+output_destroy_exe = executable('output-destroy-test',
+  files('system/output_destroy_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('output_destroy', output_destroy_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # M7 autostart wiring: glob + filter + spawn .desktop entries via the fake runner.
 autostart_wiring_exe = executable('autostart-wiring-test',
   files('system/autostart_wiring_test.cc'),
