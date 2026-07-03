@@ -30,6 +30,7 @@ unit_sources = files(
   'unit/desktop_file_test.cc',
   'unit/server_ok_test.cc',
   'unit/menu_parser_test.cc',
+  'unit/work_area_geom_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
