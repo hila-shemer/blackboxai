@@ -5,6 +5,7 @@
 #include "MenuParser.hh"
 #include "Text.hh"
 
+#include <cstdlib>
 #include <string>
 
 using namespace bbai;
@@ -155,24 +156,58 @@ TEST_CASE("workspaces and config become MARKED placeholder submenus") {
   CHECK(anyDiagContains(r, "config"));
 }
 
-TEST_CASE("unsupported style/include/reconfig tags are skipped with a note") {
+TEST_CASE("[style] becomes a SetStyle item with a tilde-expanded path") {
+  setenv("HOME", "/home/bb", 1);
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [style] (Some Style) {~/.blackbox/styles/x}\n"
+    "  [style] (Absolute) {/usr/share/styles/y}\n"
+    "  [style] (no path)\n"
+    "[end]\n");
+
+  REQUIRE(r.items.size() == 2);
+  CHECK(r.items[0].kind == MenuItem::Kind::Command);
+  CHECK(r.items[0].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[0].label == u("Some Style"));
+  CHECK(r.items[0].argv == std::vector<std::string>{"/home/bb/.blackbox/styles/x"});
+  CHECK(r.items[1].argv == std::vector<std::string>{"/usr/share/styles/y"});
+  CHECK(anyDiagContains(r, "style"));   // the path-less one degrades with a note
+}
+
+TEST_CASE("[reconfig] becomes a Reconfigure item; the documented {cmd} is dropped") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [reconfig] (Reconfigure)\n"
+    "  [reconfig] (With Cmd) {touch /tmp/x}\n"
+    "[end]\n");
+
+  REQUIRE(r.items.size() == 2);
+  CHECK(r.items[0].action == MenuItem::Act::Reconfigure);
+  CHECK(r.items[0].label == u("Reconfigure"));
+  CHECK(r.items[1].action == MenuItem::Act::Reconfigure);
+  CHECK(r.items[1].argv.empty());
+  CHECK(anyDiagContains(r, "touch /tmp/x"));   // dropped loudly, not silently
+}
+
+TEST_CASE("[include] and [stylesdir] are still skipped with a note (wired next)") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [stylesdir] (~/.blackbox/styles)\n"
+    "  [include] (~/.blackbox/other)\n"
+    "[end]\n");
+  CHECK(r.items.empty());
+  CHECK(anyDiagContains(r, "stylesdir"));
+  CHECK(anyDiagContains(r, "include"));
+}
+
+TEST_CASE("unknown tags are skipped with a note") {
   Result r = menuparser::parse(
     "[begin] (m)\n"
     "  [exec] (keep) {keep}\n"
-    "  [style] (Some Style) {~/.blackbox/styles/x}\n"
-    "  [stylesdir] (~/.blackbox/styles)\n"
-    "  [include] (~/.blackbox/other)\n"
-    "  [reconfig] (Reconfigure)\n"
     "  [frobnicate] (bogus)\n"
     "[end]\n");
-
-  // Only the [exec] survives; the rest degrade without producing items.
   REQUIRE(r.items.size() == 1);
   CHECK(r.items[0].label == u("keep"));
-
-  CHECK(anyDiagContains(r, "style"));
-  CHECK(anyDiagContains(r, "include"));
-  CHECK(anyDiagContains(r, "reconfig"));
   CHECK(anyDiagContains(r, "frobnicate"));
 }
 

@@ -1,5 +1,6 @@
 #include "MenuParser.hh"
 #include "Text.hh"
+#include "Util.hh"
 
 #include <cctype>
 #include <fstream>
@@ -179,6 +180,30 @@ namespace bbai::menuparser {
               "[submenu] title '" + cmd +
               "' not stored (MenuItem has no submenu-title field; cascade uses the label)"));
           parseLevel(lines, idx, m.submenu_items, diag, nullptr);
+          out.push_back(std::move(m));
+        } else if (tag == "style") {
+          if (label.empty() || cmd.empty()) {
+            diag.push_back(note(lineNo, "[style] needs a label and a filename - skipped"));
+            continue;
+          }
+          MenuItem m;
+          m.kind = MenuItem::Kind::Command;
+          m.action = MenuItem::Act::SetStyle;
+          m.label = bt::decodeUtf8(label.c_str());
+          m.argv = {bt::expandTilde(cmd)};
+          out.push_back(std::move(m));
+        } else if (tag == "reconfig") {
+          if (label.empty()) {
+            diag.push_back(note(lineNo, "[reconfig] needs a label - skipped"));
+            continue;
+          }
+          MenuItem m;
+          m.kind = MenuItem::Kind::Command;
+          m.action = MenuItem::Act::Reconfigure;
+          m.label = bt::decodeUtf8(label.c_str());
+          if (haveCmd && !cmd.empty())
+            diag.push_back(note(lineNo,
+              "[reconfig] command '" + cmd + "' dropped (classic ignores it too - the man page lies)"));
           out.push_back(std::move(m));
         } else {
           diag.push_back(note(lineNo, "[" + tag + "] not supported - skipped"));
