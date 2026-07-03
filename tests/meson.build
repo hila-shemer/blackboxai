@@ -80,8 +80,10 @@ text_env = test_env + ['FONTCONFIG_FILE=' + fontconfig_conf]
 
 system_exe = executable('system-tests', files('system/background_test.cc'),
   dependencies : [harness_dep, doctest_dep])
+# text_env, not test_env: since M4 the toolbar (clock + workspace label) is in every
+# captured frame, so this golden renders glyphs too - it just predates the rule.
 test('background', system_exe, suite : 'system',
-  workdir : meson.project_source_root(), env : test_env)
+  workdir : meson.project_source_root(), env : text_env)
 
 client_exe = executable('client-test', files('system/client_test.cc'),
   dependencies : [harness_dep, doctest_dep])
