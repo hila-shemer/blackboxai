@@ -208,6 +208,11 @@ namespace bbai::test {
     ext_idle_notifier_v1 *notifier = nullptr;
     ext_idle_notification_v1 *notification = nullptr;
     int idled = 0, resumed = 0;
+    // createNotification may be called before the registry burst bound the
+    // notifier + seat (tests construct-then-pump); park the request and create
+    // it from pump() once both are in hand.
+    bool want_notification = false;
+    uint32_t want_timeout = 0;
   };
 
   static void idle_reg_global(void *data, wl_registry *reg, uint32_t name,
@@ -224,6 +229,15 @@ namespace bbai::test {
   static void idle_reg_remove(void *, wl_registry *, uint32_t) {}
   static const wl_registry_listener s_idle_registry_listener = {
     idle_reg_global, idle_reg_remove };
+
+  static void idle_idled(void *data, ext_idle_notification_v1 *) {
+    static_cast<IdleTestClient::Impl *>(data)->idled++;
+  }
+  static void idle_resumed(void *data, ext_idle_notification_v1 *) {
+    static_cast<IdleTestClient::Impl *>(data)->resumed++;
+  }
+  static const ext_idle_notification_v1_listener s_idle_notification_listener = {
+    .idled = idle_idled, .resumed = idle_resumed };
 
   IdleTestClient::IdleTestClient(const std::string &socket) {
     impl = new Impl();
@@ -245,11 +259,33 @@ namespace bbai::test {
     delete impl;
   }
 
+  static void idle_create_pending(IdleTestClient::Impl *impl);
+
   bool IdleTestClient::ok() const { return impl && impl->display; }
   void IdleTestClient::flush() { if (impl->display) wl_display_flush(impl->display); }
-  void IdleTestClient::pump() { if (impl->display) pumpDisplay(impl->display); }
+  void IdleTestClient::pump() {
+    if (!impl->display) return;
+    pumpDisplay(impl->display);
+    idle_create_pending(impl);   // registry burst may have just landed
+  }
 
-  void IdleTestClient::createNotification(uint32_t) {}
+  static void idle_create_pending(IdleTestClient::Impl *impl) {
+    if (!impl->want_notification || impl->notification ||
+        !impl->notifier || !impl->seat) return;
+    impl->notification = ext_idle_notifier_v1_get_idle_notification(
+      impl->notifier, impl->want_timeout, impl->seat);
+    ext_idle_notification_v1_add_listener(
+      impl->notification, &s_idle_notification_listener, impl);
+    impl->want_notification = false;
+    wl_display_flush(impl->display);
+  }
+
+  void IdleTestClient::createNotification(uint32_t timeout_ms) {
+    if (impl->notification || impl->want_notification) return;
+    impl->want_notification = true;
+    impl->want_timeout = timeout_ms;
+    idle_create_pending(impl);   // no-op until the registry bound notifier+seat
+  }
   int IdleTestClient::idledCount() const { return impl->idled; }
   int IdleTestClient::resumedCount() const { return impl->resumed; }
 
