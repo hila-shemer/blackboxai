@@ -1,5 +1,6 @@
 #include "Toolbar.hh"
 #include "Server.hh"
+#include "Output.hh"
 #include "Workspace.hh"
 #include "DataBuffer.hh"
 
@@ -51,10 +52,13 @@ namespace bbai {
     }
   } // namespace
 
-  Toolbar::Toolbar(Server &server, int output_w, int output_h)
-    : server_(server), ow_(output_w), oh_(output_h) {
+  Toolbar::Toolbar(Server &server, Output &output)
+    : server_(server), output_(output),
+      ow_(output.wlrOutput()->width), oh_(output.wlrOutput()->height) {
     tree_ = wlr_scene_tree_create(server_.layer_top);
     rebuild();
+    output_.addStrut(&strut_);
+    updateStrut();
     // Per-minute clock tick (deterministic in tests via the VirtualClock).
     clock_timer_ = std::make_unique<Timer>(server_.timerRegistry(), *this);
     clock_timer_->start(60000, /*recurring=*/true);
@@ -62,6 +66,7 @@ namespace bbai {
   }
 
   Toolbar::~Toolbar() {
+    output_.removeStrut(&strut_);
     hide_timer_.reset();    // unregister before the registry
     clock_timer_.reset();   // unregister before the registry
     clearNodes();
@@ -179,6 +184,21 @@ namespace bbai {
     auto_hide_ = on;
     hidden_ = on;
     applyPosition();
+  }
+
+  // The strut derives from the LIVE bar rect - when rc-style makes the bar
+  // height style-driven, work areas follow with zero changes here. Auto-hide
+  // reserves the classic 2px sliver (kHiddenHeight), not zero: a maximized
+  // window must not cover the reveal trigger.
+  void Toolbar::updateStrut(void) {
+    const toolbar::Rect bar = toolbar::barRect(ow_, oh_, placement_);
+    const bool top = (placement_ == toolbar::Placement::TopLeft ||
+                      placement_ == toolbar::Placement::TopCenter ||
+                      placement_ == toolbar::Placement::TopRight);
+    const int exposed = auto_hide_ ? toolbar::kHiddenHeight : bar.h;
+    strut_ = Strut{};
+    if (top) strut_.top = exposed;
+    else     strut_.bottom = exposed;
   }
 
 } // namespace bbai

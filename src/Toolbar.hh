@@ -9,6 +9,7 @@
 
 #include "wlr.hpp"
 #include "Toolbar.geom.hh"
+#include "WorkArea.geom.hh"
 #include "Timer.hh"
 
 #include <cstdint>
@@ -19,10 +20,11 @@
 namespace bbai {
 
   class Server;
+  class Output;
 
   class Toolbar : public TimeoutHandler {
   public:
-    Toolbar(Server &server, int output_w, int output_h);
+    Toolbar(Server &server, Output &output);
     ~Toolbar();
     Toolbar(const Toolbar &) = delete;
     Toolbar &operator=(const Toolbar &) = delete;
@@ -49,6 +51,7 @@ namespace bbai {
     std::string clockText(void) const;
     void applyPosition(void);
     void onHideTimeout(void);
+    void updateStrut(void);
 
     static constexpr int kHideDelayMs = 250;
     struct HideTick : TimeoutHandler {
@@ -62,6 +65,8 @@ namespace bbai {
     bool hidden_ = false;
 
     Server &server_;
+    Output &output_;
+    Strut strut_;      // registered on output_ for the Toolbar's lifetime
     wlr_scene_tree *tree_;
     int ow_, oh_;
     toolbar::Placement placement_ = toolbar::Placement::BottomCenter;

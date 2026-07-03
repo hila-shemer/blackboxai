@@ -6,6 +6,7 @@
 #include "HeadlessFixture.hh"
 #include "Server.hh"
 #include "Output.hh"
+#include "Toolbar.hh"
 
 #include <cstdlib>
 
@@ -73,4 +74,25 @@ TEST_CASE("strut registry: registrant-owned struts shrink the work area") {
   w = o2->workArea();
   CHECK(w.y == full.y);
   CHECK(w.height == full.height);
+}
+
+TEST_CASE("toolbar strut: primary work area = output minus the LIVE bar height") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  settleOutputs(server, 1);
+
+  Toolbar *tb = server.toolbarForTest();
+  REQUIRE(tb != nullptr);
+  // The bar's own reported height - NOT toolbar::kBarHeight. When rc-style
+  // makes the metric style-driven this test keeps passing.
+  const int barH = tb->barRectForTest().h;
+
+  const wlr_box w = server.activeOutputForTest()->workArea();
+  CHECK(w.x == 0);
+  CHECK(w.y == 0);                 // BottomCenter default: floor lifts, top stays
+  CHECK(w.width == 1280);
+  CHECK(w.height == 720 - barH);   // today that's 697 - the maximize_test number
 }
