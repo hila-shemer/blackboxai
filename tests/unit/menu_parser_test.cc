@@ -6,9 +6,13 @@
 #include "Text.hh"
 
 #include <cstdlib>
+#include <fstream>
 #include <map>
 #include <string>
 #include <vector>
+
+#include <sys/stat.h>   // mkdir - real-directory case for the default lister
+#include <unistd.h>     // unlink/rmdir cleanup
 
 using namespace bbai;
 using menuparser::Result;
@@ -245,6 +249,53 @@ TEST_CASE("[stylesmenu] wraps the same listing in a titled submenu") {
   CHECK(r.items[0].submenu_items[0].argv
         == std::vector<std::string>{"/home/bb/styles/Results"});
   CHECK(r.files == std::vector<std::string>{"/home/bb/styles"});
+}
+
+TEST_CASE("[stylesmenu] without a directory degrades with a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n  [stylesmenu] (Choose...)\n[end]\n", fakeLoader({}), fakeLister({}));
+  CHECK(r.items.empty());
+  CHECK(anyDiagContains(r, "stylesmenu"));
+}
+
+TEST_CASE("label-less tags degrade with a note, each on its own line") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exit]\n"
+    "  [restart]\n"
+    "  [workspaces]\n"
+    "  [reconfig]\n"
+    "  [include]\n"
+    "  [submenu]\n"
+    "    [exec] (swallowed) {s}\n"
+    "  [end]\n"
+    "[end]\n", fakeLoader({}));
+  CHECK(r.items.empty());   // the label-less submenu's body parses but is dropped
+  CHECK(anyDiagContains(r, "exit"));
+  CHECK(anyDiagContains(r, "restart"));
+  CHECK(anyDiagContains(r, "workspaces"));
+  CHECK(anyDiagContains(r, "reconfig"));
+  CHECK(anyDiagContains(r, "include"));
+  CHECK(anyDiagContains(r, "submenu"));
+}
+
+TEST_CASE("the default dir lister enumerates a real directory (regular files only)") {
+  char tmpl[] = "/tmp/bbai-styles-XXXXXX";
+  REQUIRE(mkdtemp(tmpl) != nullptr);
+  const std::string dir = tmpl;
+  { std::ofstream f(dir + "/One_Style"); f << "x"; }
+  REQUIRE(mkdir((dir + "/subdir").c_str(), 0755) == 0);   // dirs are filtered out
+
+  Result r = menuparser::parse(
+    "[begin] (m)\n  [stylesdir] (" + dir + ")\n[end]\n");
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[0].label == u("One Style"));
+  CHECK(r.items[0].argv == std::vector<std::string>{dir + "/One_Style"});
+
+  unlink((dir + "/One_Style").c_str());
+  rmdir((dir + "/subdir").c_str());
+  rmdir(dir.c_str());
 }
 
 TEST_CASE("[stylesdir] on a missing directory degrades with a note") {
