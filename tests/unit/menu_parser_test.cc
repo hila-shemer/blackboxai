@@ -6,7 +6,9 @@
 #include "Text.hh"
 
 #include <cstdlib>
+#include <map>
 #include <string>
+#include <vector>
 
 using namespace bbai;
 using menuparser::Result;
@@ -109,6 +111,24 @@ namespace {
       if (d.find(needle) != std::string::npos) return true;
     return false;
   }
+
+  menuparser::FileLoader fakeLoader(std::map<std::string, std::string> files) {
+    return [files](const std::string &path, std::string &text) {
+      auto it = files.find(path);
+      if (it == files.end()) return false;
+      text = it->second;
+      return true;
+    };
+  }
+
+  menuparser::DirLister fakeLister(std::map<std::string, std::vector<std::string>> dirs) {
+    return [dirs](const std::string &dir, std::vector<std::string> &names) {
+      auto it = dirs.find(dir);
+      if (it == dirs.end()) return false;
+      names = it->second;
+      return true;
+    };
+  }
 }
 
 TEST_CASE("restart: bare restarts self, {cmd} becomes RestartOther via the shell") {
@@ -189,15 +209,79 @@ TEST_CASE("[reconfig] becomes a Reconfigure item; the documented {cmd} is droppe
   CHECK(anyDiagContains(r, "touch /tmp/x"));   // dropped loudly, not silently
 }
 
-TEST_CASE("[include] and [stylesdir] are still skipped with a note (wired next)") {
+TEST_CASE("[stylesdir] is still skipped with a note (wired next)") {
   Result r = menuparser::parse(
     "[begin] (m)\n"
     "  [stylesdir] (~/.blackbox/styles)\n"
-    "  [include] (~/.blackbox/other)\n"
     "[end]\n");
   CHECK(r.items.empty());
   CHECK(anyDiagContains(r, "stylesdir"));
-  CHECK(anyDiagContains(r, "include"));
+}
+
+TEST_CASE("[include] appends into the current level, even inside a submenu") {
+  auto loader = fakeLoader({
+    {"/menus/extra", "  [exec] (Two) {two}\n  [exec] (Three) {three}\n"},
+  });
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exec] (One) {one}\n"
+    "  [submenu] (Sub)\n"
+    "    [include] (/menus/extra)\n"
+    "  [end]\n"
+    "[end]\n", loader);
+
+  REQUIRE(r.items.size() == 2);
+  const MenuItem &sub = r.items[1];
+  REQUIRE(sub.kind == MenuItem::Kind::Submenu);
+  REQUIRE(sub.submenu_items.size() == 2);          // appended INTO the submenu
+  CHECK(sub.submenu_items[0].label == u("Two"));
+  CHECK(r.files == std::vector<std::string>{"/menus/extra"});
+}
+
+TEST_CASE("[include] expands tilde and reports an unreadable file") {
+  setenv("HOME", "/home/bb", 1);
+  auto loader = fakeLoader({{"/home/bb/extra", "  [exec] (In) {in}\n"}});
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [include] (~/extra)\n"
+    "  [include] (/gone)\n"
+    "[end]\n", loader);
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].label == u("In"));
+  CHECK(anyDiagContains(r, "/gone"));
+  CHECK(r.files == std::vector<std::string>{"/home/bb/extra"});  // only the readable one
+}
+
+TEST_CASE("pipe includes are an explicit v1 non-goal: skipped with a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [include] (|genmenu)\n"
+    "[end]\n", fakeLoader({}));
+  CHECK(r.items.empty());
+  CHECK(anyDiagContains(r, "pipe"));
+}
+
+TEST_CASE("a self-including file hits the depth cap instead of spinning") {
+  const std::string self =
+    "[begin] (m)\n"
+    "  [exec] (a) {a}\n"
+    "  [include] (/menus/self)\n"
+    "[end]\n";
+  Result r = menuparser::parse(self, fakeLoader({{"/menus/self", self}}));
+  // Top level + 16 nested includes parse; the 17th is refused. Classic would
+  // spin forever here.
+  CHECK(r.items.size() == 17);
+  CHECK(anyDiagContains(r, "deep"));
+}
+
+TEST_CASE("parseFile records the main file first in Result::files") {
+  auto loader = fakeLoader({
+    {"/menus/main", "[begin] (m)\n  [include] (/menus/extra)\n[end]\n"},
+    {"/menus/extra", "  [exec] (X) {x}\n"},
+  });
+  Result r = menuparser::parseFile("/menus/main", loader);
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.files == std::vector<std::string>{"/menus/main", "/menus/extra"});
 }
 
 TEST_CASE("unknown tags are skipped with a note") {
