@@ -67,6 +67,15 @@ POCs against the Fedora host headers (two scouts verified against the upstream 0
 tarball on a wlroots-less box - same version, but re-cite from `/usr/include`), and fix
 the 0.19→0.20 staleness in RESUME.md + project memory in passing.
 
+## Carried items (owed by later waves, flagged by the plan writers)
+
+- Wave-3 man page owes the **restart-kills-clients** caveat (documented at the exec site
+  in main.cc by menu-wire; the user-facing doc is wave-3's).
+- TTY checkpoint list gains: **nm-applet-class tray items are activate-only until the
+  wave-2 dbusmenu client lands** - expected, not a wave-1 defect.
+- Implementation happens in the `blackboxai-ci:f44` container (this box has no wlroots);
+  plans' "host header re-cite" tasks re-cite from the container's /usr/include.
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
