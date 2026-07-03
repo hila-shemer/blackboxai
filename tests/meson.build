@@ -307,6 +307,12 @@ lock_interactions_exe = executable('lock-interactions-test',
 test('lock_interactions', lock_interactions_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# lock-idle: ext-idle-notify-v1 wiring (timeout=0 = deterministic, no goldens).
+idle_notify_exe = executable('idle-notify-test', files('system/idle_notify_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('idle_notify', idle_notify_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

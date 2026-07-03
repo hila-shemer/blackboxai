@@ -84,6 +84,7 @@ namespace bbai {
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
     SessionLock *sessionLockForTest() const { return session_lock_.get(); }
+    wlr_idle_notifier_v1 *idleNotifierForTest() const { return idle_notifier_; }
     wlr_surface *focusedKeyboardSurfaceForTest() const {
       return seat->keyboard_state.focused_surface;
     }
@@ -188,6 +189,7 @@ namespace bbai {
     void removeKeyboard(Keyboard *kb);
     bool dispatchBinding(uint32_t mods, xkb_keysym_t sym);  // true if a binding fired
     void executeAction(const Action &a);
+    void notifyIdleActivity();   // ext-idle-notify: call at EVERY input-funnel entry
     void cycleWorkspace(int delta);
     // menu modal helpers
     void handleMenuButton(uint32_t button, wl_pointer_button_state state);

@@ -685,7 +685,17 @@ namespace bbai {
     grabbed_view->resizeTo(x, y, w, h);
   }
 
+  // Any input-funnel entry is user activity. Sits ABOVE the locked gate on
+  // purpose - typing at the locker must still reset swayidle's timers. Future
+  // input surfaces (an axis handler when someone adds one, touch, tablet) must
+  // call this too.
+  void Server::notifyIdleActivity() {
+    if (idle_notifier_)
+      wlr_idle_notifier_v1_notify_activity(idle_notifier_, seat);
+  }
+
   void Server::onPointerMotion(uint32_t time) {
+    notifyIdleActivity();
     if (session_lock_ && session_lock_->locked()) return;  // lock owns the seat; pointer discarded
     if (active_menu_) {
       const int x = static_cast<int>(cursor->x), y = static_cast<int>(cursor->y);
@@ -737,6 +747,7 @@ namespace bbai {
 
   void Server::onPointerButton(uint32_t time, uint32_t button,
                                wl_pointer_button_state state) {
+    notifyIdleActivity();
     if (session_lock_ && session_lock_->locked()) return;  // no client sees buttons under a lock
     if (active_menu_) { handleMenuButton(button, state); return; }  // modal gate
 
@@ -871,6 +882,7 @@ namespace bbai {
 
   void Server::onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode,
                      wl_keyboard_key_state state) {
+    notifyIdleActivity();
     if (session_lock_ && session_lock_->locked()) {
       // Every key goes to the lock surface - no bindings, no exceptions.
       // Ctrl+Alt+Backspace's Quit is deliberately suppressed: lock means lock,
@@ -1079,6 +1091,7 @@ namespace bbai {
   }
 
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
+    notifyIdleActivity();
     if (session_lock_ && session_lock_->locked()) return;  // mirror the onKey gate: no bindings
     if (active_menu_) { if (pressed) handleMenuKey(sym); return; }
     if (cursor_mode == CursorMode::ScreenshotSelect) {
