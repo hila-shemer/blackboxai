@@ -6,6 +6,9 @@
 
 #include "wlr.hpp"
 #include "listener.hpp"
+#include "WorkArea.geom.hh"
+
+#include <vector>
 
 namespace bbai {
 
@@ -28,6 +31,13 @@ namespace bbai {
     // consumes this directly - never workArea().
     wlr_box fullBox() const;
 
+    // Work-area seam. Registrants (toolbar now, slit in wave 2) own their
+    // Strut: addStrut once, mutate in place on change, removeStrut before
+    // the Strut dies. workArea() = fullBox minus max-per-edge, on demand.
+    wlr_box workArea() const;
+    void addStrut(const Strut *s);
+    void removeStrut(const Strut *s);
+
   private:
     void renderBackground();
 
@@ -35,6 +45,7 @@ namespace bbai {
     wlr_output *output;
     wlr_scene_output *scene_output = nullptr;
     wlr_scene_buffer *bg = nullptr;
+    std::vector<const Strut *> struts_;
     bt::Listener frame, destroy;
   };
 
