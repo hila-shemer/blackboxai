@@ -80,6 +80,12 @@ namespace bbai {
     void deiconifyView(View *v);
     void closeMenus();
     void activeOutputSize(int &w, int &h) const;
+    // Per-output resolution (work-area slice). outputAt maps a layout point to
+    // our Output (nullptr from the layout -> active_output, so callers always
+    // get the primary as a floor). outputForView resolves by frame center -
+    // dynamic lookup, no stored membership, can't go stale.
+    Output *outputAt(double lx, double ly);
+    Output *outputForView(const View *v);
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }

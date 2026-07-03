@@ -359,6 +359,22 @@ namespace bbai {
     wlr_headless_add_output(backend, w, h);   // fires new_output on the next dispatch
   }
 
+  Output *Server::outputAt(double lx, double ly) {
+    wlr_output *wo = wlr_output_layout_output_at(output_layout, lx, ly);
+    if (!wo) return active_output;
+    for (Output *o : outputs_)
+      if (o->wlrOutput() == wo) return o;
+    return active_output;   // a layout output we don't track - shouldn't happen
+  }
+
+  Output *Server::outputForView(const View *v) {
+    const int fw = v->drawsFrame() ? frame::frameWidth(v->contentWidth())
+                                   : v->contentWidth();
+    const int fh = v->drawsFrame() ? frame::frameHeight(v->contentHeight())
+                                   : v->contentHeight();
+    return outputAt(v->x() + fw / 2.0, v->y() + fh / 2.0);
+  }
+
   void Server::runAutostart() {
     // Children resolve OnlyShowIn/NotShowIn against our id; set it before spawn.
     setenv("XDG_CURRENT_DESKTOP", "Blackbox", 1);
