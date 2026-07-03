@@ -5,6 +5,7 @@
 #include "Keyboard.hh"
 #include "Menu.hh"
 #include "Rootmenu.hh"
+#include "MenuParser.hh"
 #include "Frame.hh"
 #include "Screenshot.hh"
 #include "ClipboardImage.hh"
@@ -21,6 +22,7 @@
 #include <set>                         // basename dedup (user shadows system)
 #include <sstream>
 #include <dirent.h>                    // opendir/readdir glob
+#include <sys/stat.h>                  // stat-on-open menu reload (classic checkMenu)
 #include <unistd.h>                    // access(X_OK) for TryExec
 #include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
 
@@ -859,7 +861,8 @@ namespace bbai {
         const int idx = m->itemIndexAtGlobal(x, y);
         if (idx >= 0) {
           m->setActive(idx);
-          if (m->item(idx).kind == MenuItem::Kind::Submenu) m->openSubmenuAt(idx);
+          if (m->item(idx).kind == MenuItem::Kind::Submenu && m->item(idx).selectable())
+            m->openSubmenuAt(idx);
           else m->closeSubmenu();   // hovering a plain row in m drops m's stale child
           return;
         }
@@ -1288,6 +1291,49 @@ namespace bbai {
     return true;                                               // background texture
   }
 
+  void Server::setMenuFileForTest(const std::string &path) {
+    menu_file_ = path;
+    menu_loaded_ = false;      // force a re-parse on the next open
+    menu_stamps_.clear();
+  }
+
+  bool Server::menuFilesChanged() const {
+    for (const MenuStamp &s : menu_stamps_) {
+      struct stat st;
+      if (stat(s.path.c_str(), &st) != 0) return true;          // vanished -> reread (classic)
+      if (st.st_ctim.tv_sec != s.ctime_sec || st.st_ctim.tv_nsec != s.ctime_nsec)
+        return true;
+    }
+    return false;
+  }
+
+  void Server::loadMenuFile() {
+    menu_title_.clear();
+    menu_items_.clear();
+    menu_stamps_.clear();
+    menu_loaded_ = true;
+    if (menu_file_[0] == '|') {
+      // Pipe menus popen a generator at menu-open - blocks the compositor
+      // loop. Locked v1 non-goal; diagnosed, not silent.
+      std::fprintf(stderr,
+        "blackboxai: menu: pipe menus (|cmd) are not supported - using the built-in menu\n");
+      return;
+    }
+    menuparser::Result r = menuparser::parseFile(menu_file_);
+    for (const std::string &d : r.diagnostics)
+      std::fprintf(stderr, "blackboxai: menu: %s\n", d.c_str());
+    menu_title_ = std::move(r.title);
+    menu_items_ = std::move(r.items);
+    for (const std::string &p : r.files) {
+      struct stat st;
+      if (stat(p.c_str(), &st) == 0)
+        menu_stamps_.push_back({p, st.st_ctim.tv_sec, st.st_ctim.tv_nsec});
+      // A file that fails stat is not recorded - classic saveMenuFilename
+      // does the same; if it appears later the parse won't see it until
+      // another recorded file changes. Same limit as classic.
+    }
+  }
+
   void Server::openRootMenu(double lx, double ly) {
     if (active_menu_) return;
     // Abort any in-progress move/resize grab before going modal — otherwise the
@@ -1300,8 +1346,15 @@ namespace bbai {
       grabbed_view = nullptr;
       resize_edges = 0;
     }
-    active_menu_ = std::make_unique<Menu>(*this, rootmenu::title(),
-                                          rootmenu::build(workspaces_));
+    if (!menu_file_.empty() && (!menu_loaded_ || menuFilesChanged()))
+      loadMenuFile();
+    std::vector<MenuItem> items = menu_file_.empty()
+        ? rootmenu::build(workspaces_)
+        : rootmenu::buildFromParsed(menu_items_, workspaces_);
+    const std::u32string title =
+        (!menu_file_.empty() && !menu_title_.empty()) ? menu_title_
+                                                      : rootmenu::title();
+    active_menu_ = std::make_unique<Menu>(*this, title, std::move(items));
     active_menu_->show(static_cast<int>(lx), static_cast<int>(ly));
     wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
   }
@@ -1400,7 +1453,10 @@ namespace bbai {
     for (Menu *m = liveMenu(); m; m = m->parent()) {
       const int idx = m->itemIndexAtGlobal(x, y);
       if (idx >= 0) {
-        if (m->item(idx).kind == MenuItem::Kind::Submenu) { m->openSubmenuAt(idx); return; }
+        if (m->item(idx).kind == MenuItem::Kind::Submenu && m->item(idx).selectable()) {
+          m->openSubmenuAt(idx);
+          return;
+        }
         activateMenuItem(m->item(idx));
         return;
       }
