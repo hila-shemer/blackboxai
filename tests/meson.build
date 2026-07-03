@@ -328,7 +328,9 @@ test('demo_toolbar', demo_toolbar_exe, suite : 'demo',
 # own private bus daemon - claiming org.kde.StatusNotifierWatcher never touches
 # the developer's real session bus.
 dbus_run_session = find_program('dbus-run-session')
-sni_host_exe = executable('sni-host-test', files('system/sni_host_test.cc'),
-  dependencies : [bbai_dep, doctest_dep, libsystemd_dep])
+sni_host_exe = executable('sni-host-test',
+  files('system/sni_host_test.cc', 'harness/SniMockItem.cc'),
+  dependencies : [bbai_dep, doctest_dep, libsystemd_dep],
+  include_directories : include_directories('harness'))
 test('sni_host', dbus_run_session, args : ['--', sni_host_exe], suite : 'system',
   workdir : meson.project_source_root())

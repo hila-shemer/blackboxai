@@ -4,6 +4,7 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 #include "SniHost.hh"
+#include "SniMockItem.hh"
 
 #include <systemd/sd-bus.h>
 
@@ -221,4 +222,44 @@ TEST_CASE("name-variant registration resolves to the well-known name") {
 
   sd_bus_flush_close_unref(observer);
   sd_bus_flush_close_unref(item_conn);
+}
+
+TEST_CASE("mock publisher registers with the watcher and serves its icon") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+
+  bbai::test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  CHECK(mock.waitReport(5000, [&] { host.processForTest(); }) == "registered");
+
+  // Read the icon back over the bus like POC #1 did - proves the child's
+  // vtable serves byte-exact a(iiay). Blocking Get is fine HERE (unlike the
+  // watcher-property reads): the target is the child, and it pumps itself.
+  sd_bus *probe = nullptr;
+  REQUIRE(sd_bus_open_user(&probe) >= 0);
+  std::vector<std::string> items = registeredItems(host, probe);
+  REQUIRE(items.size() == 1);
+  std::string service = items[0].substr(0, items[0].find('/'));
+
+  sd_bus_error err = SD_BUS_ERROR_NULL;
+  sd_bus_message *reply = nullptr;
+  REQUIRE(sd_bus_get_property(probe, service.c_str(), "/StatusNotifierItem",
+                              "org.kde.StatusNotifierItem", "IconPixmap",
+                              &err, &reply, "a(iiay)") >= 0);
+  REQUIRE(sd_bus_message_enter_container(reply, 'a', "(iiay)") >= 0);
+  REQUIRE(sd_bus_message_enter_container(reply, 'r', "iiay") >= 0);
+  int32_t w = 0, h = 0;
+  const void *bytes = nullptr;
+  size_t len = 0;
+  REQUIRE(sd_bus_message_read(reply, "ii", &w, &h) >= 0);
+  REQUIRE(sd_bus_message_read_array(reply, 'y', &bytes, &len) >= 0);
+  CHECK(w == 2);
+  CHECK(h == 2);
+  REQUIRE(len == 16);
+  CHECK(memcmp(bytes, bbai::test::kSniMockIcon, 16) == 0);
+  sd_bus_message_unref(reply);
+  sd_bus_error_free(&err);
+
+  mock.quit();
+  sd_bus_flush_close_unref(probe);
 }
