@@ -984,8 +984,24 @@ namespace bbai {
   }
 
   void Server::handleSessionLocked() {
+    // Abort every modal mode via its canonical cancel: their exit paths
+    // re-sync the seat, and locked_ is already true (SessionLock sets it
+    // before this hook), so those re-syncs hit the gate instead of handing
+    // focus back to a client. cancelCycle's focus-restore does touch a client
+    // for an instant - the clearFocus below parks it; enter/leave with no keys
+    // in between is harmless.
+    if (active_menu_) closeMenus();
+    if (cursor_mode == CursorMode::ScreenshotSelect) cancelScreenshot();
+    if (cycling_) cancelCycle();
+    if (cursor_mode != CursorMode::Passthrough) {   // live move/resize grab
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
     // A binding pressed just before the lock must not leak its release to a
-    // client after unlock - and the release erase in onKey is gated off while
+    // client after unlock - the release erase in onKey is gated off while
     // locked, so drop the swallow set here.
     swallowed_keycodes_.clear();
     focus_before_lock_ = focused_view;
