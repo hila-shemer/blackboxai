@@ -254,3 +254,62 @@ TEST_CASE("locked session: clients get no input, bindings are dead, quit key sup
     server.injectKeyForTest(XKB_KEY_space, WLR_MODIFIER_LOGO, true);
     CHECK_FALSE(server.menuOpenForTest());
 }
+
+TEST_CASE("unlock restores the desktop pixel-for-pixel, focus and bindings included") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    test::TestClient app(server.socketName(), 0xFFFF0000u, 200, 150);
+    REQUIRE(app.ok());
+    auto appMapped = [&] {
+        const auto &v = server.viewsForTest();
+        return !v.empty() && v[0]->isMapped();
+    };
+    REQUIRE(pumpUntil(server, appMapped, [&] { app.flush(); app.pump(); }));
+    for (int i = 0; i < 40; ++i) { app.flush(); server.dispatch(); app.pump(); }
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    View *focused_before = server.focusedViewForTest();
+    REQUIRE(focused_before != nullptr);
+    for (int i = 0; i < 40; ++i) { app.flush(); server.dispatch(); app.pump(); }
+
+    test::Frame before = test::captureFrame(server);
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    auto pumpBoth = [&] { app.flush(); app.pump(); lc.flush(); lc.pump(); };
+    REQUIRE(pumpUntil(server, [&] { return lc.sawLockManager(); }, pumpBoth));
+    lc.lock();
+    REQUIRE(pumpUntil(server, [&] { return server.sessionLockForTest()->locked(); },
+                      pumpBoth));
+    server.advanceClockForTest(2);   // fallback path; no real-time wait needed here
+    REQUIRE(pumpUntil(server, [&] { return lc.lockedReceived(); }, pumpBoth));
+
+    lc.unlockAndDestroy();
+    bool unlocked = pumpUntil(server,
+        [&] { return !server.sessionLockForTest()->locked(); }, pumpBoth);
+    REQUIRE(unlocked);
+    CHECK(server.sessionLockForTest()->blankRectCountForTest() == 0);
+    CHECK_FALSE(server.sessionLockForTest()->hasActiveLockForTest());
+
+    // Focus is back on the pre-lock window.
+    CHECK(server.focusedViewForTest() == focused_before);
+
+    // The desktop came back exactly - captured BEFORE the binding checks below
+    // perturb anything. advanceClockForTest(2) stayed inside the same clock
+    // minute (14:05:00 epoch), so the toolbar clock text is stable.
+    test::Frame after = test::captureFrame(server);
+    REQUIRE(after.w == before.w);
+    REQUIRE(after.h == before.h);
+    CHECK(after.pixels == before.pixels);
+
+    // And bindings are live again.
+    const unsigned ws_before = server.currentWorkspaceForTest();
+    server.injectKeyForTest(XKB_KEY_Right, WLR_MODIFIER_LOGO, true);
+    CHECK(server.currentWorkspaceForTest() == (ws_before + 1) % 4);
+}
