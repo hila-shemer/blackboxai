@@ -51,9 +51,10 @@ namespace bbai {
     void setIconified(bool i);
     bool isIconified() const { return iconified_; }
 
-    // Maximized state: frame fills the work area (output minus the toolbar).
-    // frameW x frameH is the target frame dimensions to fill.
-    void setMaximized(bool m, int frameW, int frameH);
+    // Maximized state: frame fills `work` (LAYOUT coords - the origin is part
+    // of the contract, so top toolbars and non-origin heads land right).
+    // Saves the pre-maximize rect; un-maximize restores it exactly.
+    void setMaximized(bool m, wlr_box work);
     bool isMaximized() const { return maximized_; }
 
     // xdg-decoration: a decoration object for this toplevel appeared. Decide and
@@ -73,6 +74,7 @@ namespace bbai {
     void relayout();             // (re)build decorations for the current size + focus
     void chooseDecorationMode(); // the SSD/CSD rule; safe to call repeatedly
     void applyVisibility();      // sync frame_tree enable from on_workspace_ + iconified_
+    void applyMaximizedGeometry(wlr_box work);  // shared by setMaximized/remaximize
 
     Server &server;
     wlr_xdg_toplevel *xdg_toplevel;
