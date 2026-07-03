@@ -23,6 +23,12 @@ namespace bbai {
     wlr_output_commit_state(output, &state);
     wlr_output_state_finish(&state);
 
+    // Advertise the head to clients: ext_session_lock_v1.get_lock_surface takes
+    // a wl_output, and until this slice nothing ever created the global - no
+    // client could name an output at all. Compositor-wide behavior change,
+    // landed early in the train on purpose.
+    wlr_output_create_global(output, server.display);
+
     wlr_output_layout_output *lo =
       wlr_output_layout_add_auto(server.output_layout, output);
     scene_output = wlr_scene_output_create(server.scene, output);

@@ -31,6 +31,7 @@ namespace bbai {
   class View;
   class Toolbar;
   class Menu;
+  class SessionLock;
   struct Keyboard;
   namespace sni { class Host; }
 
@@ -82,6 +83,10 @@ namespace bbai {
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
+    SessionLock *sessionLockForTest() const { return session_lock_.get(); }
+    wlr_surface *focusedKeyboardSurfaceForTest() const {
+      return seat->keyboard_state.focused_surface;
+    }
     int activeMenuItemForTest() const;
     Menu *rootMenuForTest() const { return active_menu_.get(); }
 
@@ -163,11 +168,15 @@ namespace bbai {
     wlr_scene_tree *layer_window = nullptr;
     wlr_scene_tree *layer_top = nullptr;
     wlr_scene_tree *layer_overlay = nullptr;
+    // 6th, topmost: session-lock blanks + lock surfaces. Nothing renders above
+    // a locked session - screenshot/menu overlays stay on layer_overlay below.
+    wlr_scene_tree *layer_lock = nullptr;
 
     bt::Resource style;  // desktop style driving the background texture
 
   private:
     friend struct Keyboard;
+    friend class SessionLock;   // reaches outputs_/seat + the two hooks below
     enum class CursorMode { Passthrough, Move, Resize, ScreenshotSelect };
 
     // Pointer handlers shared by real cursor events and test injection.
@@ -239,6 +248,8 @@ namespace bbai {
     std::unique_ptr<sni::Host> sni_host_;       // tray D-Bus half (sni-core)
     WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
     std::unique_ptr<Toolbar> toolbar_;          // top-layer chrome (M4)
+    std::unique_ptr<SessionLock> session_lock_;   // ext-session-lock-v1 (lock-idle)
+    wlr_idle_notifier_v1 *idle_notifier_ = nullptr;  // ext-idle-notify-v1
     Keybindings keybindings_;                   // M4 built-in keybinding table
     std::unique_ptr<CommandRunner> default_runner_;  // owns the production runner
     CommandRunner *command_runner_ = nullptr;        // -> default or a test fake
