@@ -30,7 +30,9 @@
 // later milestone.
 
 #include "Texture.hh"
+#include "Resource.hh"
 #include <cctype>
+#include <cstdlib>
 #include <string>
 
 
@@ -135,3 +137,79 @@ bt::Texture& bt::Texture::operator=(const bt::Texture &tt) {
 
   return *this;
 }
+
+
+namespace bt {
+
+namespace {
+  Color safeColor(const std::string &spec) {
+    Color c = Color::fromString(spec);
+    return c.valid() ? c : Color(0, 0, 0);
+  }
+}
+
+Texture textureResource(const Resource &resource,
+                        const std::string &name,
+                        const std::string &className,
+                        const std::string &defaultColor) {
+  Texture texture;
+
+  std::string description = resource.read(name + ".appearance",
+                                          className + ".Appearance",
+                                          resource.read(name, className));
+  if (description.empty()) {
+    // no such texture, use the default color in a flat solid texture
+    texture.setDescription("flat solid");
+    texture.setColor1(safeColor(defaultColor));
+    return texture;
+  }
+
+  texture.setDescription(description);
+
+  if ((texture.texture() & Texture::Gradient)
+      || (texture.texture() & Texture::Interlaced)) {
+    std::string color1 = resource.read(name + ".color1", className + ".Color1",
+                                       resource.read(name + ".color",
+                                                     className + ".Color",
+                                                     defaultColor));
+    std::string color2 = resource.read(name + ".color2", className + ".Color2",
+                                       resource.read(name + ".colorTo",
+                                                     className + ".ColorTo",
+                                                     defaultColor));
+    texture.setColor1(safeColor(color1));
+    texture.setColor2(safeColor(color2));
+  } else {
+    std::string color1 = resource.read(name + ".backgroundColor",
+                                       className + ".BackgroundColor",
+                                       resource.read(name + ".color",
+                                                     className + ".Color",
+                                                     defaultColor));
+    texture.setColor1(safeColor(color1));
+  }
+
+  if (texture.texture() & Texture::Border) {
+    texture.setBorderColor(safeColor(resource.read(name + ".borderColor",
+                                                   className + ".BorderColor",
+                                                   "black")));
+    const std::string bstr =
+      resource.read(name + ".borderWidth", className + ".BorderWidth", "1");
+    texture.setBorderWidth(
+      static_cast<unsigned int>(strtoul(bstr.c_str(), nullptr, 0)));
+  }
+
+  return texture;
+}
+
+Texture textureResource(const Resource &resource,
+                        const std::string &name,
+                        const std::string &className,
+                        const Texture &defaultTexture) {
+  std::string description = resource.read(name + ".appearance",
+                                          className + ".Appearance",
+                                          resource.read(name, className));
+  if (description.empty())
+    return defaultTexture;
+  return textureResource(resource, name, className);
+}
+
+} // namespace bt
