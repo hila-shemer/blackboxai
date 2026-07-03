@@ -44,6 +44,18 @@ namespace bbai::sni {
     void drain();        // process until idle, then re-arm fd/timer sources
     void teardownBus();  // drop sources + slots + connection (goes inert)
 
+    // One accepted registration. The D-Bus-visible watcher state derives from
+    // this list; materialized items (task 5) lag it by one GetAll round trip.
+    // unique_ptr because Reg* is handed to sd-bus as userdata - reallocation
+    // must not move entries. `owner` is the registrant's unique name: change
+    // signals arrive from it even when `service` is a well-known name.
+    struct Reg;
+    void addRegistration(const std::string &service, const std::string &path,
+                         const std::string &owner);
+
+    std::vector<std::unique_ptr<Reg>> regs_;
+    bool host_registered_ = false;   // any StatusNotifierHost announced (task 9: us)
+
     wl_event_loop *loop_ = nullptr;
     wl_event_source *fd_source_ = nullptr;
     wl_event_source *timer_source_ = nullptr;
