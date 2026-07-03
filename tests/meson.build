@@ -56,6 +56,15 @@ test('text', text_test_exe, suite : 'unit',
   workdir : meson.project_source_root(),
   env : ['FONTCONFIG_FILE=' + fontconfig_conf])
 
+# Style loader policy + metric formulas - own executable so it runs under the
+# isolated fontconfig (Style constructs TextRenderers) with workdir = source
+# root (it loads data/styles/* by relative path).
+style_test_exe = executable('style-test', files('unit/style_test.cc'),
+  dependencies : [doctest_dep, bt_dep, bbai_dep, text_dep])
+test('style', style_test_exe, suite : 'unit',
+  workdir : meson.project_source_root(),
+  env : ['FONTCONFIG_FILE=' + fontconfig_conf])
+
 # Pure palette selector: focused/unfocused Look + color helpers, no wlroots.
 decoration_palette_exe = executable('decoration_palette',
   files('unit/decoration_palette_test.cc'),

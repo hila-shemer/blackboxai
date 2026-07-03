@@ -22,6 +22,17 @@ namespace bbai::toolbar {
   constexpr int kWidthPercent  = 66;
   constexpr int kExtra         = 6;    // overlap-compaction when frame_margin>0
 
+  // Style-computed toolbar metrics; defaults are the pinned M4 constants.
+  // widthPercent is NOT here - it is an rc (Config) knob, not a style key.
+  struct ToolbarMetrics {
+    int frameMargin  = kFrameMargin;   // 2
+    int labelMargin  = kLabelMargin;   // 2
+    int labelHeight  = kLabelHeight;   // 19
+    int buttonWidth  = kButtonWidth;   // 19
+    int barHeight    = kBarHeight;     // 23
+    int hiddenHeight = kHiddenHeight;  // 2
+  };
+
   struct Rect { int x, y, w, h; };
   struct Sections {
     Rect workspace_label, prev_ws, next_ws, window_label, prev_win, next_win, clock;
