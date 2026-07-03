@@ -233,6 +233,8 @@ namespace bbai {
         if (!headless)
           wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
       }
+      // A head lit up mid-lock must be blanked before anything renders on it.
+      if (session_lock_) session_lock_->handleNewOutput(o);
     });
 
     if (const char *sock = wl_display_add_socket_auto(display))

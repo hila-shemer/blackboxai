@@ -373,3 +373,42 @@ TEST_CASE("a crashed locker leaves the session locked; a new locker takes over")
     REQUIRE(pumpUntil(server, [&] { return !server.sessionLockForTest()->locked(); },
                       [&] { second.flush(); second.pump(); }));
 }
+
+TEST_CASE("a head appearing mid-lock is blanked and its lock surface configured") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    REQUIRE(pumpUntil(server, [&] { return lc.sawLockManager(); },
+                      [&] { lc.flush(); lc.pump(); }));
+    lc.lock();
+    REQUIRE(pumpUntil(server, [&] { return server.sessionLockForTest()->locked(); },
+                      [&] { lc.flush(); lc.pump(); }));
+    server.advanceClockForTest(2);
+    REQUIRE(pumpUntil(server, [&] { return lc.lockedReceived(); },
+                      [&] { lc.flush(); lc.pump(); }));
+    REQUIRE(server.sessionLockForTest()->blankRectCountForTest() == 1);
+
+    // A second monitor lights up under the lock.
+    server.addHeadlessOutputForTest(800, 600);
+    REQUIRE(pumpUntil(server, [&] { return server.outputCountForTest() == 2; },
+                      [&] { lc.flush(); lc.pump(); }));
+    CHECK(server.sessionLockForTest()->blankRectCountForTest() == 2);
+
+    // The client sees the new wl_output and covers it; the compositor
+    // configures the late lock surface to the new head's size.
+    REQUIRE(pumpUntil(server, [&] { return lc.outputCount() == 2; },
+                      [&] { lc.flush(); lc.pump(); }));
+    lc.createLockSurface(1, 0xFF0000FFu);
+    // This test creates only ONE lock surface, so it is index 0 in the
+    // client's list even though it targets output 1.
+    bool configured = pumpUntil(server,
+        [&] { return lc.configuredWidth(0) == 800 && lc.configuredHeight(0) == 600; },
+        [&] { lc.flush(); lc.pump(); });
+    CHECK(configured);
+}

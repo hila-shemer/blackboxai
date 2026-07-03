@@ -18,7 +18,12 @@ namespace bbai {
     if (wlr_output_mode *mode = wlr_output_preferred_mode(output))
       wlr_output_state_set_mode(&state, mode);
     else
-      wlr_output_state_set_custom_mode(&state, 1280, 720, 0);  // headless
+      // Headless outputs advertise no mode list, but the backend already gave
+      // them the size wlr_headless_add_output was called with - keep it, or a
+      // second 800x600 test head would silently become another 1280x720 one.
+      wlr_output_state_set_custom_mode(&state,
+          output->width > 0 ? output->width : 1280,
+          output->height > 0 ? output->height : 720, 0);
     wlr_output_state_set_scale(&state, 1);
     wlr_output_commit_state(output, &state);
     wlr_output_state_finish(&state);
