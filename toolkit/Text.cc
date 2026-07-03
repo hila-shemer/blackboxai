@@ -32,6 +32,12 @@ namespace bt {
     font_ = fcft_from_name(1, names, attrs.c_str());
   }
 
+  TextRenderer::TextRenderer(const std::string &pattern) {
+    fcftRef();
+    const char *names[1] = { pattern.c_str() };
+    font_ = fcft_from_name(1, names, "dpi=96");
+  }
+
   TextRenderer::~TextRenderer() {
     if (font_) fcft_destroy(font_);
     fcftUnref();
