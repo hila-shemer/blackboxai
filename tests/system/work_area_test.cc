@@ -7,6 +7,8 @@
 #include "Server.hh"
 #include "Output.hh"
 #include "Toolbar.hh"
+#include "TestClient.hh"
+#include "View.hh"
 
 #include <cstdlib>
 
@@ -15,6 +17,15 @@ using namespace bbai;
 static void settleOutputs(Server &server, int want) {
   for (int i = 0; i < 50 && server.outputCountForTest() < want; ++i)
     server.dispatch();
+}
+
+static void mapOne(Server &server, test::TestClient &c) {
+  auto mapped = [&] {
+    const auto &v = server.viewsForTest();
+    return !v.empty() && v[0]->isMapped();
+  };
+  for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); server.dispatch(); c.pump(); }
+  for (int i = 0; i < 30; ++i) { c.flush(); server.dispatch(); c.pump(); }
 }
 
 TEST_CASE("fullBox: primary at origin; add_auto puts head 2 to its right") {
@@ -133,4 +144,39 @@ TEST_CASE("toolbar strut follows placement and auto-hide") {
   w = primary->workArea();
   CHECK(w.y == 0);
   CHECK(w.height == 720 - barH);
+}
+
+TEST_CASE("outputAt/outputForView resolve heads; off-layout falls back to primary") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  settleOutputs(server, 1);
+  server.addHeadlessOutputForTest(1280, 720);
+  settleOutputs(server, 2);
+  REQUIRE(server.outputCountForTest() == 2);
+
+  Output *primary = server.outputForTest(0);
+  Output *second  = server.outputForTest(1);
+  REQUIRE(primary == server.activeOutputForTest());
+
+  CHECK(server.outputAt(100, 100)   == primary);
+  CHECK(server.outputAt(1400, 100)  == second);
+  CHECK(server.outputAt(-50, -50)   == primary);   // off-layout -> active fallback
+
+  test::TestClient c(server.socketName(), 0xFF00FF00u, 200, 150,
+                     test::TestClient::Deco::RequestSSD);
+  REQUIRE(c.ok());
+  mapOne(server, c);
+  View *v = server.viewsForTest()[0].get();
+
+  v->setPosition(100, 100);
+  CHECK(server.outputForView(v) == primary);
+  v->setPosition(1400, 100);
+  CHECK(server.outputForView(v) == second);
+  // Straddling the seam: the frame CENTER decides. Frame is 202 wide
+  // (200 + 2*border), so at x=1200 the center sits at 1301 -> second head.
+  v->setPosition(1200, 100);
+  CHECK(server.outputForView(v) == second);
 }
