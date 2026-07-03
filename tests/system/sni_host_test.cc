@@ -408,3 +408,26 @@ TEST_CASE("activate/secondaryActivate/contextMenu land on the item with (x,y)") 
   CHECK(mock.waitReport(5000, pump) == "ContextMenu 5 6");
   mock.quit();
 }
+
+TEST_CASE("host announces itself: name + property + signal") {
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch host_sig;
+  // Subscribed BEFORE the Host exists - sd_bus_match_signal installs the match
+  // synchronously, so the ctor-time emission cannot race past it.
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierHostRegistered", onSig,
+                              &host_sig) >= 0);
+
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  REQUIRE(pumpUntil(host, {observer}, [&] { return host_sig.fired; }));
+
+  std::string host_name =
+      "org.kde.StatusNotifierHost-" + std::to_string(getpid());
+  CHECK(nameOwner(observer, host_name.c_str()) != "");   // daemon call: may block
+
+  CHECK(watcherProp(host, observer, "IsStatusNotifierHostRegistered").boolean == 1);
+  sd_bus_flush_close_unref(observer);
+}
