@@ -29,6 +29,8 @@ namespace bbai {
 
     void timeout() override;   // fallback deadline: send locked anyway
 
+    wlr_surface *focusedLockSurface() const;   // first mapped lock surface, or null
+
     // test introspection
     bool lockedSentForTest() const { return locked_sent_; }
     int blankRectCountForTest() const { return static_cast<int>(per_output_.size()); }
@@ -42,6 +44,17 @@ namespace bbai {
       bool committed = false;      // a post-blank frame reached this head
       bt::Listener commit;         // wlr_output.events.commit
     };
+
+    // One client lock surface. The scene tree is wlroots-owned: it destroys
+    // itself with the wlr_surface (subsurface_tree addon) - we only track it.
+    struct SurfaceEntry {
+      wlr_session_lock_surface_v1 *surface = nullptr;
+      wlr_scene_tree *tree = nullptr;
+      bt::Listener map, destroy;
+    };
+
+    void onNewSurface(wlr_session_lock_surface_v1 *ls);
+    void enterKeyboard(wlr_surface *surface);
 
     void onNewLock(wlr_session_lock_v1 *lock);
     void onUnlock();
@@ -57,6 +70,8 @@ namespace bbai {
     bt::Listener new_lock_;
     wlr_session_lock_v1 *lock_ = nullptr;   // live lock object (null once abandoned)
     bt::Listener lock_unlock_, lock_destroy_;
+    bt::Listener lock_new_surface_;
+    std::vector<std::unique_ptr<SurfaceEntry>> surfaces_;
     bool locked_ = false;          // session state; survives a locker crash
     bool locked_sent_ = false;     // per-lock: wlroots asserts send_locked once
     std::vector<std::unique_ptr<PerOutput>> per_output_;

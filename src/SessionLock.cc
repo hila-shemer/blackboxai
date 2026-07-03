@@ -36,6 +36,9 @@ namespace bbai {
     locked_sent_ = false;
     locked_ = true;
 
+    lock_new_surface_.connect(&lock->events.new_surface, [this](void *data) {
+      onNewSurface(static_cast<wlr_session_lock_surface_v1 *>(data));
+    });
     lock_unlock_.connect(&lock->events.unlock, [this](void *) { onUnlock(); });
     lock_destroy_.connect(&lock->events.destroy, [this](void *) { onLockDestroy(); });
 
@@ -95,10 +98,62 @@ namespace bbai {
     lock_ = nullptr;
     lock_unlock_.disconnect();
     lock_destroy_.disconnect();
+    lock_new_surface_.disconnect();
+    surfaces_.clear();   // wlroots already tore the lock surfaces down before this signal
     fallback_.stop();
     // locked_ stays as-is on purpose: destroy WITHOUT unlock is an abandoned
     // lock (locker crashed) - the session MUST remain locked, blanks and all.
     // A new locker may take over (Task 8).
+  }
+
+  void SessionLock::onNewSurface(wlr_session_lock_surface_v1 *ls) {
+    auto e = std::make_unique<SurfaceEntry>();
+    e->surface = ls;
+    wlr_box box;
+    wlr_output_layout_get_box(server_.output_layout, ls->output, &box);
+    wlr_session_lock_surface_v1_configure(
+      ls, static_cast<uint32_t>(box.width), static_cast<uint32_t>(box.height));
+    // Created after the blanks, so within layer_lock the surface tree stacks
+    // above them; an early-destroyed surface falls back to the blank beneath
+    // (the xml's solid-color obligation) with zero extra work.
+    e->tree = wlr_scene_subsurface_tree_create(layer_lock_, ls->surface);
+    wlr_scene_node_set_position(&e->tree->node, box.x, box.y);
+    e->map.connect(&ls->surface->events.map, [this, s = ls->surface](void *) {
+      // First mapped lock surface takes the keyboard (spec-suggested policy).
+      if (server_.seat->keyboard_state.focused_surface == nullptr)
+        enterKeyboard(s);
+    });
+    e->destroy.connect(&ls->events.destroy, [this, raw = e.get()](void *) {
+      // Drop our record ONLY. wlroots unmaps the surface now and the
+      // subsurface tree destroys itself when the wlr_surface dies -
+      // destroying it here would double-free (subsurface_tree.c:150-154).
+      wlr_surface *dead = raw->surface->surface;
+      std::erase_if(surfaces_, [raw](const std::unique_ptr<SurfaceEntry> &p) {
+        return p.get() == raw;
+      });
+      if (locked_ && server_.seat->keyboard_state.focused_surface == dead) {
+        wlr_seat_keyboard_notify_clear_focus(server_.seat);
+        if (wlr_surface *next = focusedLockSurface())
+          enterKeyboard(next);   // hand the keyboard to a surviving lock surface
+      }
+    });
+    surfaces_.push_back(std::move(e));
+  }
+
+  void SessionLock::enterKeyboard(wlr_surface *surface) {
+    // Headless has no wlr_keyboard; notify_enter copes with null keycodes and
+    // still sets keyboard_state.focused_surface (the part input routing needs).
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(server_.seat))
+      wlr_seat_keyboard_notify_enter(server_.seat, surface, kb->keycodes,
+                                     kb->num_keycodes, &kb->modifiers);
+    else
+      wlr_seat_keyboard_notify_enter(server_.seat, surface, nullptr, 0, nullptr);
+  }
+
+  wlr_surface *SessionLock::focusedLockSurface() const {
+    for (const auto &e : surfaces_)
+      if (e->surface->surface->mapped) return e->surface->surface;
+    return nullptr;
   }
 
   void SessionLock::removeBlanks() {

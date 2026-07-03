@@ -27,8 +27,7 @@ namespace bbai::test {
       wl_display_dispatch_pending(d);
     }
 
-    [[maybe_unused]] wl_buffer *makeShmBuffer(wl_shm *shm, int w, int h,
-                                              uint32_t argb) {
+    wl_buffer *makeShmBuffer(wl_shm *shm, int w, int h, uint32_t argb) {
       const int stride = w * 4;
       const int size = stride * h;
       int fd = memfd_create("bbai-lock-shm", MFD_CLOEXEC);
@@ -107,6 +106,22 @@ namespace bbai::test {
   static const ext_session_lock_v1_listener s_lock_listener = {
     .locked = lock_locked, .finished = lock_finished };
 
+  static void ls_configure(void *data, ext_session_lock_surface_v1 *lsurf,
+                           uint32_t serial, uint32_t width, uint32_t height) {
+    auto *ls = static_cast<LockSurfaceState *>(data);
+    ext_session_lock_surface_v1_ack_configure(lsurf, serial);
+    ls->configured_w = static_cast<int>(width);
+    ls->configured_h = static_cast<int>(height);
+    // Exact-size buffer or wlroots raises DIMENSIONS_MISMATCH by design.
+    if (ls->buffer) wl_buffer_destroy(ls->buffer);
+    ls->buffer = makeShmBuffer(ls->client->shm, ls->configured_w,
+                               ls->configured_h, ls->argb);
+    wl_surface_attach(ls->surface, ls->buffer, 0, 0);
+    wl_surface_damage_buffer(ls->surface, 0, 0, ls->configured_w, ls->configured_h);
+    wl_surface_commit(ls->surface);
+  }
+  static const ext_session_lock_surface_v1_listener s_ls_listener = { ls_configure };
+
   LockTestClient::LockTestClient(const std::string &socket) {
     impl = new Impl();
     impl->display = wl_display_connect(socket.c_str());
@@ -162,8 +177,19 @@ namespace bbai::test {
     wl_display_flush(impl->display);
   }
 
-  // Grown in Task 4.
-  void LockTestClient::createLockSurface(int, uint32_t) {}
+  void LockTestClient::createLockSurface(int output_index, uint32_t argb) {
+    if (!impl->lock || !impl->compositor ||
+        output_index >= static_cast<int>(impl->outputs.size())) return;
+    auto *ls = new LockSurfaceState();
+    ls->client = impl;
+    ls->argb = argb;
+    ls->surface = wl_compositor_create_surface(impl->compositor);
+    ls->lock_surface = ext_session_lock_v1_get_lock_surface(
+      impl->lock, ls->surface, impl->outputs[output_index]);
+    ext_session_lock_surface_v1_add_listener(ls->lock_surface, &s_ls_listener, ls);
+    impl->surfaces.push_back(ls);
+    wl_display_flush(impl->display);
+  }
   int LockTestClient::configuredWidth(int i) const {
     return i < static_cast<int>(impl->surfaces.size())
       ? impl->surfaces[i]->configured_w : -1;
