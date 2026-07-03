@@ -41,6 +41,12 @@ namespace bbai::sni {
     const std::vector<Item> &items() const { return items_; }
     void setEvents(HostEvents ev) { events_ = std::move(ev); }
 
+    // Fire-and-forget async calls on the item; replies ignored (v1). The
+    // dbusmenu behind a menu-only item's ContextMenu is wave-2 menus.
+    void activate(const Item &, int x, int y);
+    void secondaryActivate(const Item &, int x, int y);
+    void contextMenu(const Item &, int x, int y);
+
     // Drain sd_bus_process exactly like the production fd source does.
     void processForTest();
 
@@ -61,6 +67,7 @@ namespace bbai::sni {
                          const std::string &owner);
 
     void fetchAll(Reg &reg);           // async Properties.GetAll -> Cb::onGetAll
+    void callItem(const Item &, const char *method, int x, int y);
     void storeItem(Item item);         // upsert + fire itemAdded/itemChanged
     void dropRegistration(const std::string &service, const std::string &path);
 
