@@ -24,8 +24,12 @@
 //
 // Ported to BlackboxAI (Wayland) from blackboxwm lib/Resource.hh:
 // the XrmDatabase backend is replaced by a self-contained key/value parser
-// over the classic Xrm file syntax (no libX11 link). Exact-match resolution
-// is sufficient for M1 (full Xrm wildcard semantics deferred).
+// over the classic Xrm file syntax (no libX11 link).
+// Resolution: exact name, exact class, then Xrm loose-binding wildcards - a
+// documented subset where '*' spans zero or more whole components and the
+// match with the most literal characters wins (name tried before class).
+// Full per-component tight/loose interleaving is not implemented; no shipped
+// style needs it.
 
 #ifndef BLACKBOXAI_RESOURCE_HH
 #define BLACKBOXAI_RESOURCE_HH
@@ -58,6 +62,8 @@ namespace bt {
 
   private:
     void parseLine(const std::string &line);
+    // Best wildcard-db match for `key` (most literal characters). found=false if none.
+    std::string wildcardRead(const std::string &key, bool &found) const;
     std::unordered_map<std::string, std::string> db;
     bool loaded = false;
   };
