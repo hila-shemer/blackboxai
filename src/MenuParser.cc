@@ -251,6 +251,45 @@ namespace bbai::menuparser {
             diag.push_back(note(lineNo,
               "[reconfig] command '" + cmd + "' dropped (classic ignores it too - the man page lies)"));
           out.push_back(std::move(m));
+        } else if (tag == "stylesdir" || tag == "stylesmenu") {
+          // One impl for both, like classic: stylesdir takes the directory as
+          // its (label) and inlines; stylesmenu takes (label){dir} and wraps
+          // the listing in a titled submenu.
+          const bool newmenu = (tag == "stylesmenu");
+          if (label.empty() || (newmenu && cmd.empty())) {
+            diag.push_back(note(lineNo, "[" + tag + "] needs a directory - skipped"));
+            continue;
+          }
+          const std::string dir = bt::expandTilde(newmenu ? cmd : label);
+          std::vector<std::string> names;
+          if (!ctx.lister(dir, names)) {
+            diag.push_back(note(lineNo, "[" + tag + "] cannot list '" + dir + "' - skipped"));
+            continue;
+          }
+          ctx.result.files.push_back(dir);   // dir edits re-trigger the reload
+          std::sort(names.begin(), names.end());
+          std::vector<MenuItem> styles;
+          for (const std::string &name : names) {
+            if (name.empty() || name[0] == '.' || name.back() == '~')
+              continue;                       // dotfiles + editor backups
+            MenuItem s;
+            s.kind = MenuItem::Kind::Command;
+            s.action = MenuItem::Act::SetStyle;
+            s.argv = {dir + "/" + name};
+            std::string display = name;
+            std::replace(display.begin(), display.end(), '_', ' ');  // This_Name -> This Name
+            s.label = bt::decodeUtf8(display.c_str());
+            styles.push_back(std::move(s));
+          }
+          if (newmenu) {
+            MenuItem m;
+            m.kind = MenuItem::Kind::Submenu;
+            m.label = bt::decodeUtf8(label.c_str());
+            m.submenu_items = std::move(styles);
+            out.push_back(std::move(m));
+          } else {
+            for (MenuItem &s : styles) out.push_back(std::move(s));
+          }
         } else {
           diag.push_back(note(lineNo, "[" + tag + "] not supported - skipped"));
         }

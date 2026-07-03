@@ -209,13 +209,50 @@ TEST_CASE("[reconfig] becomes a Reconfigure item; the documented {cmd} is droppe
   CHECK(anyDiagContains(r, "touch /tmp/x"));   // dropped loudly, not silently
 }
 
-TEST_CASE("[stylesdir] is still skipped with a note (wired next)") {
+TEST_CASE("[stylesdir] inlines sorted SetStyle items, filtering junk") {
+  auto lister = fakeLister({
+    {"/styles", {"Results", ".hidden", "Gray_Wolf", "backup~"}},
+  });
   Result r = menuparser::parse(
     "[begin] (m)\n"
-    "  [stylesdir] (~/.blackbox/styles)\n"
-    "[end]\n");
+    "  [exec] (before) {b}\n"
+    "  [stylesdir] (/styles)\n"
+    "  [exec] (after) {a}\n"
+    "[end]\n", fakeLoader({}), lister);
+
+  REQUIRE(r.items.size() == 4);                       // before + 2 styles + after
+  CHECK(r.items[1].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[1].label == u("Gray Wolf"));          // sorted + '_' -> ' '
+  CHECK(r.items[1].argv == std::vector<std::string>{"/styles/Gray_Wolf"});
+  CHECK(r.items[2].label == u("Results"));
+  CHECK(r.items[3].label == u("after"));
+  CHECK(r.files == std::vector<std::string>{"/styles"});
+}
+
+TEST_CASE("[stylesmenu] wraps the same listing in a titled submenu") {
+  setenv("HOME", "/home/bb", 1);
+  auto lister = fakeLister({{"/home/bb/styles", {"Results"}}});
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [stylesmenu] (Choose a style...) {~/styles}\n"
+    "[end]\n", fakeLoader({}), lister);
+
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[0].label == u("Choose a style..."));
+  REQUIRE(r.items[0].submenu_items.size() == 1);
+  CHECK(r.items[0].submenu_items[0].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[0].submenu_items[0].argv
+        == std::vector<std::string>{"/home/bb/styles/Results"});
+  CHECK(r.files == std::vector<std::string>{"/home/bb/styles"});
+}
+
+TEST_CASE("[stylesdir] on a missing directory degrades with a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n  [stylesdir] (/gone)\n[end]\n", fakeLoader({}), fakeLister({}));
   CHECK(r.items.empty());
-  CHECK(anyDiagContains(r, "stylesdir"));
+  CHECK(anyDiagContains(r, "/gone"));
+  CHECK(r.files.empty());
 }
 
 TEST_CASE("[include] appends into the current level, even inside a submenu") {
@@ -400,10 +437,12 @@ TEST_CASE("the real data/menu.in fixture parses with sane known entries") {
   REQUIRE(mail != nullptr);
   CHECK(mail->argv == sh("mozilla -mail"));
 
-  // [stylesdir] inside the Styles submenu is skipped -> empty cascade.
+  // menu.in's [stylesdir] points at the unexpanded @pkgdatadir@ - no such
+  // directory, so the Styles submenu stays empty and the parse says why.
   const MenuItem *styles = findByLabel(r.items, "Styles");
   REQUIRE(styles != nullptr);
   CHECK(styles->submenu_items.empty());
+  CHECK(anyDiagContains(r, "stylesdir"));
 
   // [workspaces] / [config] -> placeholder submenus.
   const MenuItem *wsl = findByLabel(r.items, "Workspace List");

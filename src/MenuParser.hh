@@ -23,7 +23,9 @@
 //   [include] (path)        -> included items appended into the CURRENT level
 //                              (tilde-expanded; pipe '|cmd' skipped + noted;
 //                              depth-capped at 16; path recorded in Result::files)
-//   [stylesdir]/unknown     -> skipped + noted (stylesdir wired in the next task)
+//   [stylesdir] (dir)       -> inline SetStyle items, one per regular file
+//   [stylesmenu] (l) {dir}  -> the same listing wrapped in a titled Submenu
+//   unknown                 -> skipped + noted
 //
 // The tokenizer mirrors blackbox's string_within: backslash escapes the next
 // character inside a field, a leading '#' is a comment, malformed lines are
