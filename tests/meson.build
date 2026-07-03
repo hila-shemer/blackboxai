@@ -288,6 +288,12 @@ multi_output_exe = executable('multi-output-test', files('system/multi_output_te
 test('multi_output', multi_output_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Work-area slice: per-output fullBox/workArea + strut registry + resolution.
+work_area_exe = executable('work-area-test', files('system/work_area_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('work_area', work_area_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # M7 autostart wiring: glob + filter + spawn .desktop entries via the fake runner.
 autostart_wiring_exe = executable('autostart-wiring-test',
   files('system/autostart_wiring_test.cc'),
