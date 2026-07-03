@@ -54,6 +54,24 @@ namespace bbai {
     bt::Color modFg, modBg;
   };
 
+  // Native interpretation of a style file's bsetroot rootCommand (locked
+  // policy: style rootCommand NEVER reaches a shell; we render what bsetroot
+  // would have painted). Grammar per util/bsetroot.cc: -solid <c>,
+  // -mod <x> <y> with -fg/-foreground and -bg/-background, -gradient <texture>
+  // with -from/-to. bsetbg is accepted as an alias (Cthulhain uses it with the
+  // same -solid grammar). Anything else -> Kind::None.
+  namespace bsetroot {
+    struct Spec {
+      enum class Kind { None, Solid, Mod, Gradient } kind = Kind::None;
+      std::string fore, back, texture;
+      int modX = 1, modY = 1;
+    };
+    Spec parse(const std::string &command);
+    // The classic 16x16 modula tile expanded to w x h ARGB8888 (alpha 0xFF).
+    std::vector<uint32_t> renderModula(int w, int h, int x, int y,
+                                       bt::Color fg, bt::Color bg);
+  }
+
   class Style {
   public:
     // nullptr if the file is unreadable. The requested->default->builtin

@@ -170,3 +170,83 @@ TEST_CASE("builtin: today's look, pinned M3/M4 metrics") {
 TEST_CASE("load: unreadable path returns nullptr (the ladder lives in Server)") {
   CHECK(Style::load("/nonexistent/style") == nullptr);
 }
+
+#include <cstdint>
+
+TEST_CASE("bsetroot::parse covers every shipped rootCommand form") {
+  using bbai::bsetroot::Spec;
+  using bbai::bsetroot::parse;
+
+  Spec s = parse("bsetroot -solid grey20");                       // Twice, Nyz
+  CHECK(s.kind == Spec::Kind::Solid);
+  CHECK(s.fore == "grey20");
+
+  s = parse("bsetroot -mod 4 4 -fg rgb:6/6/5c -bg grey20");       // Results
+  CHECK(s.kind == Spec::Kind::Mod);
+  CHECK(s.modX == 4);
+  CHECK(s.modY == 4);
+  CHECK(s.fore == "rgb:6/6/5c");
+  CHECK(s.back == "grey20");
+
+  s = parse("bsetroot -gradient flatcrossdiagonalgradient -from black -to rgb:af/89/7c");  // TDF
+  CHECK(s.kind == Spec::Kind::Gradient);
+  CHECK(s.texture == "flatcrossdiagonalgradient");
+  CHECK(s.fore == "black");
+  CHECK(s.back == "rgb:af/89/7c");
+
+  s = parse("bsetbg -solid \"#3a404b\"");                          // Cthulhain (quoted; bsetbg alias)
+  CHECK(s.kind == Spec::Kind::Solid);
+  CHECK(s.fore == "#3a404b");
+
+  CHECK(parse("").kind == Spec::Kind::None);
+  CHECK(parse("xsetroot -solid black").kind == Spec::Kind::None);  // not bsetroot -> refused
+  CHECK(parse("bsetroot").kind == Spec::Kind::None);               // no mode flag
+}
+
+TEST_CASE("modula reproduces the classic 16x16 X bitmap tile") {
+  using bbai::bsetroot::renderModula;
+  const bt::Color fg(255, 0, 0), bg(0, 0, 255);
+  std::vector<uint32_t> px = renderModula(32, 32, 4, 4, fg, bg);
+  auto at = [&](int x, int y) { return px[static_cast<size_t>(y) * 32 + x]; };
+  const uint32_t FG = 0xFFFF0000u, BG = 0xFF0000FFu;
+  // row rule: every y with y%4==0 is all-foreground
+  CHECK(at(1, 0) == FG);
+  CHECK(at(9, 4) == FG);
+  // column rule: fg when (15 - (x%16)) % 4 == 0  ->  x%16 in {3,7,11,15}
+  CHECK(at(3, 1) == FG);
+  CHECK(at(7, 2) == FG);
+  CHECK(at(15, 1) == FG);
+  CHECK(at(0, 1) == BG);
+  CHECK(at(4, 2) == BG);
+  // tiles: (19,1) === (3,1)
+  CHECK(at(19, 1) == FG);
+  CHECK(at(16, 1) == BG);
+}
+
+TEST_CASE("desktop background resolution: keys beat rootCommand beat flat black") {
+  // 1. explicit BlackboxAI.desktop keys win
+  bt::Resource r1;
+  r1.loadFromString(
+    "BlackboxAI.desktop: flat solid\n"
+    "BlackboxAI.desktop.color: #112233\n"
+    "rootCommand: bsetroot -solid white\n");
+  auto s1 = bbai::Style::fromResource(r1);
+  CHECK(s1->desktop().kind == bbai::DesktopBackground::Kind::TextureBg);
+  CHECK(s1->desktop().texture.color1() == bt::Color(0x11, 0x22, 0x33));
+
+  // 2. a bsetroot rootCommand is interpreted (Results' modula here)
+  bt::Resource r2;
+  r2.loadFromString("rootCommand: bsetroot -mod 4 4 -fg rgb:6/6/5c -bg grey20\n");
+  auto s2 = bbai::Style::fromResource(r2);
+  CHECK(s2->desktop().kind == bbai::DesktopBackground::Kind::Modula);
+  CHECK(s2->desktop().modX == 4);
+  CHECK(s2->desktop().modFg == bt::Color(0x66, 0x66, 0x5c));
+  CHECK(s2->desktop().modBg == bt::Color(51, 51, 51));
+
+  // 3. nothing -> flat black
+  bt::Resource r3;
+  r3.loadFromString("! empty\n");
+  auto s3 = bbai::Style::fromResource(r3);
+  CHECK(s3->desktop().kind == bbai::DesktopBackground::Kind::TextureBg);
+  CHECK(s3->desktop().texture.color1() == bt::Color(0, 0, 0));
+}
