@@ -4,6 +4,7 @@
 #include <doctest/doctest.h>
 #include "HeadlessFixture.hh"
 #include "Server.hh"
+#include "Menu.hh"
 #include "Menu.geom.hh"
 
 #include <cstdlib>
@@ -42,7 +43,7 @@ TEST_CASE("right-click desktop opens the root menu; outside/Escape dismiss") {
   CHECK_FALSE(server.menuOpenForTest());
 }
 
-TEST_CASE("right-click on the toolbar does NOT open the root menu") {
+TEST_CASE("right-click on the toolbar opens the Toolbar menu, not the root menu") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
 
@@ -53,9 +54,15 @@ TEST_CASE("right-click on the toolbar does NOT open the root menu") {
     server.dispatch();
 
   // The toolbar bar is at {218,697,844,23}; a right-click inside it is chrome.
+  // Since wave-2 menus this opens the Toolbar config menu (never the root menu):
+  // its first row is the ConfigOption "Enable Toolbar", not an Exec entry.
   server.injectPointerMotionForTest(640, 708);
   server.injectPointerButtonForTest(BTN_RIGHT, true);
-  CHECK_FALSE(server.menuOpenForTest());
+  REQUIRE(server.menuOpenForTest());
+  Menu *m = server.rootMenuForTest();
+  REQUIRE(m->itemCount() == 4);
+  CHECK(m->item(0).action == MenuItem::Act::ConfigOption);
+  CHECK(m->item(0).option == ConfigOption::ToolbarEnabled);
 }
 
 TEST_CASE("menu keyboard navigation: Down/Up skip separators, Return activates") {

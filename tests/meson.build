@@ -549,3 +549,10 @@ windowmenu_exe = executable('windowmenu-test', files('system/windowmenu_test.cc'
   dependencies : [harness_dep, doctest_dep])
 test('windowmenu', windowmenu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: toolbar/slit right-click gestures -> config flip + live + persist.
+bar_menu_exe = executable('bar-menu-test',
+  files('system/bar_menu_test.cc', 'harness/SniMockItem.cc'),
+  dependencies : [harness_dep, doctest_dep, libsystemd_dep])
+test('bar_menu', dbus_run_session, args : ['--', bar_menu_exe], suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
