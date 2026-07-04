@@ -60,6 +60,49 @@ namespace {
     return col.valid() ? col : bt::Color(0, 0, 0);
   }
 
+  // Interpret a parsed bsetroot spec into the desktop background (the locked
+  // policy's "render what bsetroot would have painted"). Kind::None is the
+  // classic root-untouched analogue: flat black.
+  void applyBsetroot(bbai::DesktopBackground &dt, const bbai::bsetroot::Spec &spec) {
+    using Spec = bbai::bsetroot::Spec;
+    switch (spec.kind) {
+    case Spec::Kind::Solid: {
+      bt::Texture solid;
+      solid.setDescription("flat solid");
+      bt::Color c = bt::Color::fromString(spec.fore);
+      solid.setColor1(c.valid() ? c : bt::Color(0, 0, 0));
+      dt.kind = bbai::DesktopBackground::Kind::TextureBg;
+      dt.texture = solid;
+      break;
+    }
+    case Spec::Kind::Gradient: {
+      bt::Texture g;
+      g.setDescription(spec.texture);   // "flatcrossdiagonalgradient" parses via find()
+      bt::Color c1 = bt::Color::fromString(spec.fore);
+      bt::Color c2 = bt::Color::fromString(spec.back);
+      g.setColor1(c1.valid() ? c1 : bt::Color(0, 0, 0));
+      g.setColor2(c2.valid() ? c2 : bt::Color(0, 0, 0));
+      dt.kind = bbai::DesktopBackground::Kind::TextureBg;
+      dt.texture = g;
+      break;
+    }
+    case Spec::Kind::Mod: {
+      dt.kind = bbai::DesktopBackground::Kind::Modula;
+      dt.modX = spec.modX;
+      dt.modY = spec.modY;
+      bt::Color f = bt::Color::fromString(spec.fore);
+      bt::Color b = bt::Color::fromString(spec.back);
+      dt.modFg = f.valid() ? f : bt::Color(0, 0, 0);
+      dt.modBg = b.valid() ? b : bt::Color(0, 0, 0);
+      break;
+    }
+    case Spec::Kind::None:
+      dt.kind = bbai::DesktopBackground::Kind::TextureBg;
+      dt.texture = flatBlack();
+      break;
+    }
+  }
+
   // The current hardcoded look (DecorationPalette.hh + Toolbar.cc kLooks +
   // Menu.cc kLooks + Server.cc:108's desktop), spelled as a style file. When
   // this string and those tables disagree, the golden suite catches it.
@@ -150,23 +193,27 @@ Spec parse(const std::string &command) {
   const std::string base = slash == std::string::npos ? prog : prog.substr(slash + 1);
   if (base != "bsetroot" && base != "bsetbg") return spec;
 
-  Spec::Kind kind = Spec::Kind::None;
+  // Directive presence as booleans, like classic's sol/mod/grd flags: the
+  // same directive twice still counts once (later value wins), two DIFFERENT
+  // directives fail the (mod+sol+grd) != 1 guard (util/bsetroot.cc:98-104)
+  // and classic exits without painting - our analogue is Kind::None.
+  bool solid = false, mod = false, grad = false;
   for (size_t i = 1; i < argv.size(); ++i) {
     const std::string &a = argv[i];
     auto next = [&]() -> const std::string * {
       return (i + 1 < argv.size()) ? &argv[++i] : nullptr;
     };
     if (a == "-solid") {
-      if (const std::string *v = next()) { spec.fore = *v; kind = Spec::Kind::Solid; }
+      if (const std::string *v = next()) { spec.fore = *v; solid = true; }
     } else if (a == "-mod") {
       const std::string *x = next(), *y = x ? next() : nullptr;
       if (y) {
         spec.modX = std::max(std::atoi(x->c_str()), 1);
         spec.modY = std::max(std::atoi(y->c_str()), 1);
-        kind = Spec::Kind::Mod;
+        mod = true;
       }
     } else if (a == "-gradient") {
-      if (const std::string *v = next()) { spec.texture = *v; kind = Spec::Kind::Gradient; }
+      if (const std::string *v = next()) { spec.texture = *v; grad = true; }
     } else if (a == "-fg" || a == "-foreground" || a == "-from") {
       if (const std::string *v = next()) spec.fore = *v;
     } else if (a == "-bg" || a == "-background" || a == "-to") {
@@ -177,7 +224,14 @@ Spec parse(const std::string &command) {
     // unknown flags are skipped - a theme's exotic bsetroot variant should
     // degrade to flat black, not kill the style load
   }
-  spec.kind = kind;
+  if (int(solid) + int(mod) + int(grad) != 1) return spec;   // Kind::None
+  // Classic's completeness predicates (bsetroot.cc:109-116): -mod needs both
+  // colors, -gradient needs -from AND -to, else usage() and the root is left
+  // untouched. We used to sanitize the missing colors to black and paint
+  // black-on-black - refuse instead.
+  if (solid) spec.kind = Spec::Kind::Solid;                  // fore is set with the flag
+  else if (mod && !spec.fore.empty() && !spec.back.empty()) spec.kind = Spec::Kind::Mod;
+  else if (grad && !spec.fore.empty() && !spec.back.empty()) spec.kind = Spec::Kind::Gradient;
   return spec;
 }
 
@@ -202,14 +256,16 @@ std::vector<uint32_t> renderModula(int w, int h, int x, int y,
 
 } // namespace bsetroot
 
-std::shared_ptr<const Style> Style::load(const std::string &path) {
+std::shared_ptr<const Style> Style::load(const std::string &path,
+                                         const std::string &rc_root_command) {
   bt::Resource res(path);
   if (!res.valid()) return nullptr;
-  return fromResource(res, path);
+  return fromResource(res, path, rc_root_command);
 }
 
 std::shared_ptr<const Style> Style::fromResource(const bt::Resource &res,
-                                                 std::string source_path) {
+                                                 std::string source_path,
+                                                 const std::string &rc_root_command) {
   auto s = std::shared_ptr<Style>(new Style);
   s->source_path_ = std::move(source_path);
 
@@ -341,49 +397,29 @@ std::shared_ptr<const Style> Style::fromResource(const bt::Resource &res,
   s->border_width_ = res.read("borderWidth", "BorderWidth", 1);
   s->bevel_width_  = std::max(res.read("bevelWidth", "BevelWidth", 3), 1);
 
-  // --- desktop background: BlackboxAI.desktop keys win; bsetroot
-  //     interpretation slots in here in Task 9; else flat black. ---
+  // --- desktop background. Classic resolves ONE root command with rc
+  //     priority (ScreenResource::loadStyle: the style's value is only the
+  //     read default), so an rc rootCommand suppresses the style's entirely:
+  //     rc bsetroot > BlackboxAI.desktop keys > style bsetroot (rc empty
+  //     only) > flat black. A non-bsetroot rc command can't be rendered (it
+  //     runs via /bin/sh in Server; no layer-shell yet), but the theme still
+  //     loses - keys or flat black, matching classic where the style's line
+  //     was never bexec'd. ---
   {
     bt::Texture none;   // empty description sentinel via the defaultTexture overload
     bt::Texture d = bt::textureResource(res, "BlackboxAI.desktop", "BlackboxAI.Desktop", none);
-    if (!d.description().empty() && d.texture() != bt::Texture::Parent_Relative) {
+    const bool have_keys =
+      !d.description().empty() && d.texture() != bt::Texture::Parent_Relative;
+    const bsetroot::Spec rc_spec = bsetroot::parse(rc_root_command);
+    if (rc_spec.kind != bsetroot::Spec::Kind::None) {
+      applyBsetroot(s->desktop_, rc_spec);
+    } else if (have_keys) {
       s->desktop_.kind = DesktopBackground::Kind::TextureBg;
       s->desktop_.texture = d;
+    } else if (rc_root_command.empty()) {
+      applyBsetroot(s->desktop_, bsetroot::parse(s->root_command_));
     } else {
-      const bsetroot::Spec spec = bsetroot::parse(s->root_command_);
-      switch (spec.kind) {
-      case bsetroot::Spec::Kind::Solid: {
-        bt::Texture solid;
-        solid.setDescription("flat solid");
-        bt::Color c = bt::Color::fromString(spec.fore);
-        solid.setColor1(c.valid() ? c : bt::Color(0, 0, 0));
-        s->desktop_.texture = solid;
-        break;
-      }
-      case bsetroot::Spec::Kind::Gradient: {
-        bt::Texture g;
-        g.setDescription(spec.texture);   // "flatcrossdiagonalgradient" parses via find()
-        bt::Color c1 = bt::Color::fromString(spec.fore);
-        bt::Color c2 = bt::Color::fromString(spec.back);
-        g.setColor1(c1.valid() ? c1 : bt::Color(0, 0, 0));
-        g.setColor2(c2.valid() ? c2 : bt::Color(0, 0, 0));
-        s->desktop_.texture = g;
-        break;
-      }
-      case bsetroot::Spec::Kind::Mod: {
-        s->desktop_.kind = DesktopBackground::Kind::Modula;
-        s->desktop_.modX = spec.modX;
-        s->desktop_.modY = spec.modY;
-        bt::Color f = bt::Color::fromString(spec.fore);
-        bt::Color b = bt::Color::fromString(spec.back);
-        s->desktop_.modFg = f.valid() ? f : bt::Color(0, 0, 0);
-        s->desktop_.modBg = b.valid() ? b : bt::Color(0, 0, 0);
-        break;
-      }
-      case bsetroot::Spec::Kind::None:
-        s->desktop_.texture = flatBlack();
-        break;
-      }
+      s->desktop_.texture = flatBlack();
     }
   }
 
@@ -403,10 +439,10 @@ std::shared_ptr<const Style> Style::fromResource(const bt::Resource &res,
   return s;
 }
 
-std::shared_ptr<const Style> Style::builtin() {
+std::shared_ptr<const Style> Style::builtin(const std::string &rc_root_command) {
   bt::Resource res;
   res.loadFromString(kBuiltinStyle);
-  auto loaded = fromResource(res);
+  auto loaded = fromResource(res, {}, rc_root_command);
   // fromResource returns shared_ptr<const>; we own the only reference, so the
   // const_cast to pin metrics/fonts is contained here.
   Style *s = const_cast<Style *>(loaded.get());

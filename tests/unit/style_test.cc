@@ -203,6 +203,32 @@ TEST_CASE("bsetroot::parse covers every shipped rootCommand form") {
   CHECK(parse("bsetroot").kind == Spec::Kind::None);               // no mode flag
 }
 
+TEST_CASE("bsetroot::parse refuses what classic bsetroot refuses (root untouched -> None)") {
+  using bbai::bsetroot::Spec;
+  using bbai::bsetroot::parse;
+
+  // Two DISTINCT directives: classic errors out via the (mod+sol+grd) != 1
+  // guard (util/bsetroot.cc:98-104, exit before painting). Not last-one-wins.
+  CHECK(parse("bsetroot -solid grey -mod 4 4").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -mod 4 4 -fg red -bg blue -gradient flatgradient -from red -to blue").kind
+        == Spec::Kind::None);
+
+  // The SAME directive twice keeps the classic sum at 1 (booleans) - the
+  // later value wins, exactly as classic's re-assignment does.
+  Spec s = parse("bsetroot -solid red -solid blue");
+  CHECK(s.kind == Spec::Kind::Solid);
+  CHECK(s.fore == "blue");
+
+  // -mod without -fg/-bg and -gradient missing -from/-to fail classic's
+  // completeness predicate (bsetroot.cc:111-116 -> usage(), root untouched);
+  // painting black-on-black instead was the divergence.
+  CHECK(parse("bsetroot -mod 4 4").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -mod 4 4 -fg red").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -gradient flatgradient -from red").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -gradient flatgradient -to blue").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -gradient flatgradient").kind == Spec::Kind::None);
+}
+
 TEST_CASE("modula reproduces the classic 16x16 X bitmap tile") {
   using bbai::bsetroot::renderModula;
   const bt::Color fg(255, 0, 0), bg(0, 0, 255);
@@ -221,6 +247,51 @@ TEST_CASE("modula reproduces the classic 16x16 X bitmap tile") {
   // tiles: (19,1) === (3,1)
   CHECK(at(19, 1) == FG);
   CHECK(at(16, 1) == BG);
+}
+
+TEST_CASE("rc rootCommand precedence: the user's rc suppresses the theme's background") {
+  // Classic resolves ONE root command with rc priority (ScreenResource::loadStyle
+  // reads the rc key with the style's value only as the fallback). The style's
+  // grey20 must lose whenever the rc carries a rootCommand.
+  bt::Resource style;
+  style.loadFromString("rootCommand: bsetroot -solid grey20\n");
+
+  // 1. rc rootCommand is a bsetroot line (the common classic case): the rc's
+  //    color paints, not the style's.
+  auto s1 = Style::fromResource(style, {}, "bsetroot -solid red");
+  CHECK(s1->desktop().kind == DesktopBackground::Kind::TextureBg);
+  CHECK(s1->desktop().texture.color1() == bt::Color(255, 0, 0));
+
+  // 2. rc rootCommand is NOT bsetroot (a wallpaper command): the style's
+  //    bsetroot still never runs - flat black, exactly as classic where the
+  //    style's line was never bexec'd.
+  auto s2 = Style::fromResource(style, {}, "feh --bg-fill x.png");
+  CHECK(s2->desktop().kind == DesktopBackground::Kind::TextureBg);
+  CHECK(s2->desktop().texture.color1() == bt::Color(0, 0, 0));
+
+  // 3. no rc rootCommand: the style's own line is the fallback (unchanged).
+  auto s3 = Style::fromResource(style, {}, "");
+  CHECK(s3->desktop().texture.color1() == bt::Color::fromString("grey20"));
+
+  // 4. the user's rc bsetroot beats even explicit BlackboxAI.desktop keys -
+  //    the whole theme background loses to the user, keys included.
+  bt::Resource keyed;
+  keyed.loadFromString(
+    "BlackboxAI.desktop: flat solid\n"
+    "BlackboxAI.desktop.color: #112233\n"
+    "rootCommand: bsetroot -solid grey20\n");
+  auto s4 = Style::fromResource(keyed, {}, "bsetroot -solid green");
+  CHECK(s4->desktop().texture.color1() == bt::Color(0, 255, 0));
+
+  // 5. a non-bsetroot rc against a keyed style: we can't render the user's
+  //    command (no layer-shell yet), so the keys stay - but the style's
+  //    rootCommand is still suppressed.
+  auto s5 = Style::fromResource(keyed, {}, "feh --bg-fill x.png");
+  CHECK(s5->desktop().texture.color1() == bt::Color(0x11, 0x22, 0x33));
+
+  // 6. rc rootCommand reaches the builtin fallback rung too.
+  auto s6 = Style::builtin("bsetroot -solid red");
+  CHECK(s6->desktop().texture.color1() == bt::Color(255, 0, 0));
 }
 
 TEST_CASE("desktop background resolution: keys beat rootCommand beat flat black") {
