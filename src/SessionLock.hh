@@ -36,6 +36,7 @@ namespace bbai {
     bool lockedSentForTest() const { return locked_sent_; }
     int blankRectCountForTest() const { return static_cast<int>(per_output_.size()); }
     bool hasActiveLockForTest() const { return lock_ != nullptr; }
+    int mappedLockSurfaceCountForTest() const;
 
   private:
     // One blank rect + post-blank commit tracking per head.
