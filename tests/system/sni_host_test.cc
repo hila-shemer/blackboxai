@@ -121,7 +121,65 @@ namespace {
     SD_BUS_VTABLE_END
   };
 
+  // Hostile IconPixmap property: two frames whose 4*w*h wraps at 32 bits to
+  // exactly the byte count shipped (16 and 0), plus one honest 2x2. A watcher
+  // doing the size check in 32-bit math stores the poison frames.
+  int getHostileIconPixmap(sd_bus *, const char *, const char *, const char *,
+                           sd_bus_message *reply, void *, sd_bus_error *) {
+    static const unsigned char sixteen[16] = {0};
+    auto frame = [&](int32_t w, int32_t h, const void *data, size_t len) {
+      int r = sd_bus_message_open_container(reply, 'r', "iiay");
+      if (r < 0) return r;
+      r = sd_bus_message_append(reply, "ii", w, h);
+      if (r < 0) return r;
+      r = sd_bus_message_append_array(reply, 'y', data, len);
+      if (r < 0) return r;
+      return sd_bus_message_close_container(reply);
+    };
+    int r = sd_bus_message_open_container(reply, 'a', "(iiay)");
+    if (r < 0) return r;
+    r = frame(1073741825, 4, sixteen, 16);   // 4*w*h mod 2^32 == 16
+    if (r < 0) return r;
+    r = frame(65536, 65536, sixteen, 0);     // 4*w*h mod 2^32 == 0
+    if (r < 0) return r;
+    r = frame(2, 2, sixteen, 16);            // the one honest frame
+    if (r < 0) return r;
+    return sd_bus_message_close_container(reply);
+  }
+
+  const sd_bus_vtable kHostileIconVtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_PROPERTY("IconPixmap", "a(iiay)", getHostileIconPixmap, 0, 0),
+    SD_BUS_VTABLE_END
+  };
+
 } // namespace
+
+TEST_CASE("wrap-around IconPixmap dims are dropped, the honest frame survives") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+
+  sd_bus *item_conn = nullptr;
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kHostileIconVtable, nullptr) >= 0);
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "/StatusNotifierItem") >= 0);
+
+  REQUIRE(pumpUntil(host, {item_conn}, [&] { return !host.items().empty(); }));
+  const Item &it = host.items()[0];
+  REQUIRE(it.icon_pixmaps.size() == 1);      // both wrap frames dropped
+  CHECK(it.icon_pixmaps[0].width == 2);
+  CHECK(it.icon_pixmaps[0].height == 2);
+  CHECK(it.icon_pixmaps[0].data.size() == 16);
+
+  sd_bus_flush_close_unref(item_conn);
+}
 
 TEST_CASE("Host claims the watcher name on the private bus") {
   Host host(nullptr);

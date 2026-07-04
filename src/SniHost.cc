@@ -26,7 +26,13 @@ namespace bbai::sni {
     constexpr const char *kItemIface    = "org.kde.StatusNotifierItem";
 
     // a(iiay) -> IconFrame list. Degenerate/mis-sized frames are dropped here,
-    // once, instead of being every renderer's problem.
+    // once, instead of being every renderer's problem. The size check is
+    // 64-bit: any peer can register an item, and dims like 1073741825x4 make
+    // 4*w*h wrap at 32 bits to the byte count actually shipped. The dim cap
+    // bounds what a frame can make us store (D-Bus caps the message anyway;
+    // real tray icons top out around 256).
+    constexpr int32_t kMaxIconDim = 1024;
+
     void readFrames(sd_bus_message *m, std::vector<IconFrame> &out) {
       if (sd_bus_message_enter_container(m, 'a', "(iiay)") < 0) return;
       while (sd_bus_message_at_end(m, 0) == 0) {
@@ -37,7 +43,8 @@ namespace bbai::sni {
         if (sd_bus_message_read(m, "ii", &w, &h) >= 0 &&
             sd_bus_message_read_array(m, 'y', &bytes, &len) >= 0 &&
             w > 0 && h > 0 && bytes &&
-            len == 4u * unsigned(w) * unsigned(h)) {
+            w <= kMaxIconDim && h <= kMaxIconDim &&
+            uint64_t(len) == 4 * uint64_t(w) * uint64_t(h)) {
           IconFrame f;
           f.width = w;
           f.height = h;
