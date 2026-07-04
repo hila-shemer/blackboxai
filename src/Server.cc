@@ -424,8 +424,10 @@ namespace bbai {
     switch (opt) {
     case ConfigOption::FocusClickToFocus:
       config_.focusModel = FocusModel::ClickToFocus;
-      config_.autoRaise = false;    // classic: CTF forces both raise flags off
-      config_.clickRaise = false;
+      // Classic zeroes the raise flags only at load-parse, never on the runtime
+      // menu toggle - keep them in memory so a CTF->Sloppy round-trip restores
+      // them. focusModelValue() short-circuits to bare "ClickToFocus" while CTF
+      // is active, so the persisted spelling is unchanged.
       break;
     case ConfigOption::FocusSloppy:
       config_.focusModel = FocusModel::SloppyFocus;   // raise flags keep their values
