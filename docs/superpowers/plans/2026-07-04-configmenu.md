@@ -664,7 +664,7 @@ can't live there. Round-tripped through updateRcKey + Config::load."
 - Consumes: `ConfigOption` + `MenuItem::option` (Task 1), the mount (Task 2), `configmenu::focusModelValue`/`windowPlacementValue` (Task 3), `bbai::updateRcKey`, `Server::applyConfig()` (Server.hh:280), `bt::boolAsString` (toolkit/Resource.hh:43), Menu accessors `rectXForTest/rectYForTest/itemIndexAtGlobal/child/submenuOpenForTest/item/itemCount` (src/Menu.hh:29-50).
 - Produces: `void Server::setConfigOption(ConfigOption opt)` (private, pinned name - menus appends its enum values' cases to this switch); `case MenuItem::Act::ConfigOption` in `activateMenuItem`; the disabled-row swallow in `handleMenuButton` (menus' gestures inherit it).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/configmenu_test.cc`:
 
@@ -889,7 +889,7 @@ test('configmenu', configmenu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -900,7 +900,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: FAIL - clicking row 3 dispatches nothing (`Act::ConfigOption` has no case yet, falls to no switch match → compile error actually surfaces first if `-Wswitch` promotes; otherwise the `config().focusNewWindows` CHECK fails). Either failure mode is the right red.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh` - one declaration after `void applyConfig();` (line 280):
 
@@ -998,7 +998,7 @@ Expected: FAIL - clicking row 3 dispatches nothing (`Act::ConfigOption` has no c
 
 (The old `&& m->item(idx).selectable()` on the Submenu line is subsumed - remove it. Behavior change vs wave-1: clicking a disabled submenu row used to dismiss the whole chain through the no-op `Act::ConfigMenu` dispatch; now it's inert. That was placeholder-era behavior nobody pinned - the disabled-row test in Step 1 pins the new, classic-correct one.)
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1009,7 +1009,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass, including the new `configmenu` suite entry. `git status tests/golden/` unchanged since Task 2.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Server.hh src/Server.cc tests/system/configmenu_test.cc tests/meson.build
