@@ -41,6 +41,7 @@ namespace bbai {
     map_.connect(&surface->events.map, [this](void *) {
       mapped = true;
       relayout();
+      server.onViewMapped(this);
     });
     unmap_.connect(&surface->events.unmap, [this](void *) {
       mapped = false;

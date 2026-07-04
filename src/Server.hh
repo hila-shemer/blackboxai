@@ -49,6 +49,8 @@ namespace bbai {
 
     const std::string &socketName() const { return socket_name; }
     void removeView(View *view);
+    // A View's surface mapped: apply focus policy (classic focusNewWindows).
+    void onViewMapped(View *view);
 
     // Restack a view to the top/bottom of its layer (model + scene).
     void raiseView(View *view);

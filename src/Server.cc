@@ -357,6 +357,10 @@ namespace bbai {
     }
   }
 
+  void Server::onViewMapped(View *view) {
+    if (config_.focusNewWindows) focusView(view);
+  }
+
   void Server::raiseView(View *view) {
     stacking_.raise(view);
     wlr_scene_node_raise_to_top(&view->sceneTree()->node);
