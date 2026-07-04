@@ -76,13 +76,20 @@ namespace bbai {
   public:
     // nullptr if the file is unreadable. The requested->default->builtin
     // ladder lives in Server::loadStyleWithFallback, not here.
-    static std::shared_ptr<const Style> load(const std::string &path);
+    // rc_root_command is the RC FILE's rootCommand: classic resolves one root
+    // command with rc priority (ScreenResource::loadStyle), so when it is
+    // nonempty the style's own rootCommand never paints - the rc line does if
+    // it is a bsetroot call, else the desktop falls back to the style's
+    // explicit BlackboxAI.desktop keys / flat black.
+    static std::shared_ptr<const Style> load(const std::string &path,
+                                             const std::string &rc_root_command = {});
     static std::shared_ptr<const Style> fromResource(const bt::Resource &res,
-                                                     std::string source_path = {});
+                                                     std::string source_path = {},
+                                                     const std::string &rc_root_command = {});
     // Today's pre-style look: the M3 grey palette as a style string with the
     // M3/M4 metrics and font PINNED (not formula-computed) - the existing
     // golden suite is keyed to those numbers, and the builtin IS that theme.
-    static std::shared_ptr<const Style> builtin();
+    static std::shared_ptr<const Style> builtin(const std::string &rc_root_command = {});
 
     Style(const Style &) = delete;
     Style &operator=(const Style &) = delete;
