@@ -88,6 +88,11 @@ namespace bbai {
                             server_.config().toolbar.widthPercent);
   }
 
+  int Toolbar::exposedHeight() const {
+    return auto_hide_ ? server_.currentStyle()->toolbarMetrics().hiddenHeight
+                      : currentBarRect().h;
+  }
+
   void Toolbar::rebuild(void) {
     clearNodes();
     std::shared_ptr<const Style> st = server_.currentStyle();

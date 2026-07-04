@@ -32,10 +32,11 @@ namespace bbai {
   class Output;
   class View;
   class Toolbar;
+  class Slit;
   class Menu;
   class SessionLock;
   struct Keyboard;
-  namespace sni { class Host; }
+  namespace sni { class Host; struct Item; }
 
   class Server {
   public:
@@ -160,6 +161,10 @@ namespace bbai {
     // private dbus-run-session bus. Inert-never-fatal either way.
     sni::Host &sniHost() { return *sni_host_; }
     sni::Host *sniHostForTest() const { return sni_host_.get(); }
+    // Checked production accessor: null on headless until the test lever
+    // runs, and the Host can be ok()==false on a busless boot - every slit
+    // path treats "no host" as "no items" (inert-never-fatal).
+    sni::Host *sniHostOrNull() const { return sni_host_.get(); }
     void createSniHostForTest();
 
     // Deviceless key injection: drives the same binding matcher the real onKey
@@ -187,6 +192,8 @@ namespace bbai {
     void addHeadlessOutputForTest(int w, int h);
     void destroyOutputForTest(int index);   // wlr_output_destroy on outputs_[index]
     Toolbar *toolbarForTest() const { return toolbar_.get(); }
+    Toolbar *toolbarOrNull() const { return toolbar_.get(); }
+    Slit *slitForTest() const { return slit_.get(); }
     const std::string &toolbarWindowTitleForTest() const;
     wlr_scene_output *activeSceneOutput() const;     // production accessor
     wlr_scene_output *activeSceneOutputForTest() const { return activeSceneOutput(); }
@@ -311,6 +318,7 @@ namespace bbai {
     std::unique_ptr<sni::Host> sni_host_;       // tray D-Bus half (sni-core)
     WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
     std::unique_ptr<Toolbar> toolbar_;          // top-layer chrome (M4)
+    std::unique_ptr<Slit> slit_;                // primary-output tray chrome (wave-2)
     std::unique_ptr<SessionLock> session_lock_;   // ext-session-lock-v1 (lock-idle)
     wlr_idle_notifier_v1 *idle_notifier_ = nullptr;  // ext-idle-notify-v1
     Keybindings keybindings_;                   // M4 built-in keybinding table

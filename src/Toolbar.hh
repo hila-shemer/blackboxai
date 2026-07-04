@@ -48,6 +48,10 @@ namespace bbai {
     // Work-area's Strut derives from this, never from the constexpr defaults.
     toolbar::Rect currentBarRect() const;
 
+    // What the bar occupies on its edge right now - the auto-hide sliver or
+    // the full bar. The slit's classic overlap shift consumes this.
+    int exposedHeight() const;
+
     void handlePointerMotion(double x, double y);
     void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
     void setAutoHide(bool on);                 // hidden sliver still struts (2px)
