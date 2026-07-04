@@ -8,6 +8,7 @@
 #include "Rootmenu.hh"
 #include "Windowmenu.hh"
 #include "ConfigSpelling.hh"
+#include "BarSpelling.hh"
 #include "MenuParser.hh"
 #include "Frame.hh"
 #include "Placement.geom.hh"
@@ -436,6 +437,25 @@ namespace bbai {
     case ConfigOption::PlacementColSmart: config_.windowPlacement = WindowPlacement::ColSmart; break;
     case ConfigOption::PlacementCenter:   config_.windowPlacement = WindowPlacement::Center;   break;
     case ConfigOption::PlacementCascade:  config_.windowPlacement = WindowPlacement::Cascade;  break;
+    case ConfigOption::ToolbarEnabled:  config_.toolbar.enabled  = !config_.toolbar.enabled;  break;
+    case ConfigOption::ToolbarAutoHide: config_.toolbar.autoHide = !config_.toolbar.autoHide; break;
+    case ConfigOption::ToolbarPlaceTopLeft:      config_.toolbar.placement = toolbar::Placement::TopLeft;      break;
+    case ConfigOption::ToolbarPlaceTopCenter:    config_.toolbar.placement = toolbar::Placement::TopCenter;    break;
+    case ConfigOption::ToolbarPlaceTopRight:     config_.toolbar.placement = toolbar::Placement::TopRight;     break;
+    case ConfigOption::ToolbarPlaceBottomLeft:   config_.toolbar.placement = toolbar::Placement::BottomLeft;   break;
+    case ConfigOption::ToolbarPlaceBottomCenter: config_.toolbar.placement = toolbar::Placement::BottomCenter; break;
+    case ConfigOption::ToolbarPlaceBottomRight:  config_.toolbar.placement = toolbar::Placement::BottomRight;  break;
+    case ConfigOption::SlitAutoHide: config_.slit.autoHide = !config_.slit.autoHide; break;
+    case ConfigOption::SlitDirHorizontal: config_.slit.direction = SlitDirection::Horizontal; break;
+    case ConfigOption::SlitDirVertical:   config_.slit.direction = SlitDirection::Vertical;   break;
+    case ConfigOption::SlitPlaceTopLeft:      config_.slit.placement = SlitPlacement::TopLeft;      break;
+    case ConfigOption::SlitPlaceCenterLeft:   config_.slit.placement = SlitPlacement::CenterLeft;   break;
+    case ConfigOption::SlitPlaceBottomLeft:   config_.slit.placement = SlitPlacement::BottomLeft;   break;
+    case ConfigOption::SlitPlaceTopCenter:    config_.slit.placement = SlitPlacement::TopCenter;    break;
+    case ConfigOption::SlitPlaceBottomCenter: config_.slit.placement = SlitPlacement::BottomCenter; break;
+    case ConfigOption::SlitPlaceTopRight:     config_.slit.placement = SlitPlacement::TopRight;     break;
+    case ConfigOption::SlitPlaceCenterRight:  config_.slit.placement = SlitPlacement::CenterRight;  break;
+    case ConfigOption::SlitPlaceBottomRight:  config_.slit.placement = SlitPlacement::BottomRight;  break;
     }
 
     std::string key, value;
@@ -457,6 +477,43 @@ namespace bbai {
     case ConfigOption::PlacementCascade:
       key = "session.windowPlacement";
       value = configmenu::windowPlacementValue(config_.windowPlacement);
+      break;
+    case ConfigOption::ToolbarEnabled:
+      key = "session.screen0.enableToolbar";                  // top-level screen key
+      value = bt::boolAsString(config_.toolbar.enabled);
+      break;
+    case ConfigOption::ToolbarAutoHide:
+      key = "session.screen0.toolbar.autoHide";
+      value = bt::boolAsString(config_.toolbar.autoHide);
+      break;
+    case ConfigOption::ToolbarPlaceTopLeft:
+    case ConfigOption::ToolbarPlaceTopCenter:
+    case ConfigOption::ToolbarPlaceTopRight:
+    case ConfigOption::ToolbarPlaceBottomLeft:
+    case ConfigOption::ToolbarPlaceBottomCenter:
+    case ConfigOption::ToolbarPlaceBottomRight:
+      key = "session.screen0.toolbar.placement";
+      value = barmenu::toolbarPlacementValue(config_.toolbar.placement);
+      break;
+    case ConfigOption::SlitAutoHide:
+      key = "session.screen0.slit.autoHide";
+      value = bt::boolAsString(config_.slit.autoHide);
+      break;
+    case ConfigOption::SlitDirHorizontal:
+    case ConfigOption::SlitDirVertical:
+      key = "session.screen0.slit.direction";
+      value = barmenu::slitDirectionValue(config_.slit.direction);
+      break;
+    case ConfigOption::SlitPlaceTopLeft:
+    case ConfigOption::SlitPlaceCenterLeft:
+    case ConfigOption::SlitPlaceBottomLeft:
+    case ConfigOption::SlitPlaceTopCenter:
+    case ConfigOption::SlitPlaceBottomCenter:
+    case ConfigOption::SlitPlaceTopRight:
+    case ConfigOption::SlitPlaceCenterRight:
+    case ConfigOption::SlitPlaceBottomRight:
+      key = "session.screen0.slit.placement";
+      value = barmenu::slitPlacementValue(config_.slit.placement);
       break;
     }
 
