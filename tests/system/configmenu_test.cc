@@ -205,3 +205,26 @@ TEST_CASE("no rc: the toggle flips in memory, persist is a guarded no-op") {
   CHECK(server.config().focusNewWindows == !before);   // live flip, no file, no crash
   std::remove(kMenu);
 }
+
+TEST_CASE("golden: Configuration submenu + Focus Model cascade (builtin style)") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  // Explicit focus model: merge-stable across window-mgmt's default flip,
+  // and it puts a checkmark + one disabled pair in frame (drawCheck gutter,
+  // frameDisabled text - the two renderings this slice leans on).
+  writeFile(kRc, "session.focusModel: SloppyFocus AutoRaise\n");
+  writeMenu();
+
+  Server server(/*headless=*/true, kRc);
+  boot(server);
+  server.setMenuFileForTest(kMenu);
+
+  Menu *cfg = openConfigMenu(server);
+  hoverRow(server, cfg, 0);                        // Focus Model cascade open
+  REQUIRE(cfg->submenuOpenForTest());
+  CHECK(test::compareGolden(test::captureFrame(server),
+                            "tests/golden/v1-configmenu.png", 2, 40));
+  server.injectKeyForTest(XKB_KEY_Escape, 0, true);
+  std::remove(kRc);
+  std::remove(kMenu);
+}

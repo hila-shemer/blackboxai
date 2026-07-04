@@ -1571,7 +1571,7 @@ CI-coverable for the first time; the real-backend face stays a TTY check."
 - Consumes: everything above; `test::captureFrame`/`compareGolden` (tests/harness/HeadlessFixture.hh).
 - Produces: the slice's one NEW golden; the pre-merge evidence bundle (suite green, coverage >= 80, golden delta = exactly the declared set).
 
-- [ ] **Step 1: Write the golden test**
+- [x] **Step 1: Write the golden test**
 
 Append to `tests/system/configmenu_test.cc`:
 
@@ -1600,7 +1600,7 @@ TEST_CASE("golden: Configuration submenu + Focus Model cascade (builtin style)")
 }
 ```
 
-- [ ] **Step 2: Bless it, eyeball it, run it clean**
+- [x] **Step 2: Bless it, eyeball it, run it clean**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1612,7 +1612,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: both runs pass; `tests/golden/v1-configmenu.png` created. Open the PNG and confirm: root menu + Configuration cascade + Focus Model cascade; Sloppy Focus and Auto Raise carry checkmarks; nothing rendered grey EXCEPT nothing (all four focus rows are enabled under sloppy - the grey pair shows in the disabled-row TEST, not this golden; what matters here is checks + arrows + three-deep cascade geometry).
 
-- [ ] **Step 3: Full gate + coverage + golden-delta audit**
+- [x] **Step 3: Full gate + coverage + golden-delta audit**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1625,13 +1625,13 @@ git -C "$WT" status --short tests/golden/
 
 Expected: every suite green; gcovr exits 0 at the project's usual ~91% (specifically `src/Rootmenu.cc` and the new Server methods near-full - they are pure/headless by construction). Golden delta across the WHOLE branch = exactly: `m5-menufile.png` (M, Task 2), `m5-menufile-cascade.png` (M, Task 2), `v1-configmenu.png` (A, this task). Anything else fails the slice's zero-churn promise - fix before commit.
 
-- [ ] **Step 4: Self-check before hand-off (run, don't skip)**
+- [x] **Step 4: Self-check before hand-off (run, don't skip)**
 
 - Grep the diff for territory: `git diff <base> --stat` must show NO hunks in `src/Config.cc`, `src/Config.hh`, `src/Menu.cc`, `src/Menu.hh`, `src/Menu.geom.hh`, `src/View.*`, `src/Style.*`, `src/SniHost.*`.
 - Seam spellings verbatim: `Act::ConfigOption` right after `ConfigMenu`; `ConfigOption` values in the pinned order ending at `PlacementCascade`; `Server::setConfigOption(ConfigOption)`; `rootmenu::buildConfigSubmenu(const Config &)`.
 - No test asserts a default-constructed Config's focus model (grep `focusModel` in tests touched - every use explicit).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add tests/system/configmenu_test.cc tests/golden/v1-configmenu.png
