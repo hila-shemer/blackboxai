@@ -88,6 +88,11 @@ namespace bbai {
                             server_.config().toolbar.widthPercent);
   }
 
+  bool Toolbar::containsGlobal(int gx, int gy) const {
+    const toolbar::Rect b = currentBarRect();
+    return gx >= b.x && gx < b.x + b.w && gy >= b.y && gy < b.y + b.h;
+  }
+
   void Toolbar::rebuild(void) {
     clearNodes();
     std::shared_ptr<const Style> st = server_.currentStyle();

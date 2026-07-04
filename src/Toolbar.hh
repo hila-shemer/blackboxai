@@ -55,6 +55,12 @@ namespace bbai {
     // Work-area's Strut derives from this, never from the constexpr defaults.
     toolbar::Rect currentBarRect() const;
 
+    // Global-coord hit-test against the SHOWN footprint (an auto-hidden bar's
+    // 2px sliver is NOT a wheel/click target - same hot-zone rule as
+    // handlePointerMotion, Toolbar.cc:180). Wave-2 seam: window-mgmt's wheel
+    // gate + menus' toolbar right-click gesture share this one rect.
+    bool containsGlobal(int gx, int gy) const;
+
     void handlePointerMotion(double x, double y);
     void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
     void setAutoHide(bool on);                 // hidden sliver still struts (2px)

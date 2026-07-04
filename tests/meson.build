@@ -391,6 +391,12 @@ axis_forward_exe = executable('axis-forward-test', files('system/axis_forward_te
 test('axis_forward', axis_forward_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Classic wheel gestures: scroll over the desktop / toolbar cycles workspaces.
+wheel_workspace_exe = executable('wheel-workspace-test', files('system/wheel_workspace_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('wheel_workspace', wheel_workspace_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via
