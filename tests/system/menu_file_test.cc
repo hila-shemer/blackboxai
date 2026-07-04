@@ -104,8 +104,7 @@ TEST_CASE("[reconfig] hits the reconfigure seam and invalidates the menu cache")
   setenv("WLR_RENDERER", "pixman", 1);
   // Real reconfigure re-reads session.menuFile from the rc (Task 9 wiring), so
   // the dispatch menu must come from an rc the server owns - a ForTest path
-  // would be overwritten by the reload. Mechanism adapted, requirement kept:
-  // [reconfig] invalidates the cache and the next open re-parses.
+  // would be overwritten by the reload.
   const std::string menu = writeDispatchMenu();
   const std::string rc = writeTemp("reconfig.blackboxrc",
     "session.menuFile: " + menu + "\n");
@@ -113,13 +112,25 @@ TEST_CASE("[reconfig] hits the reconfigure seam and invalidates the menu cache")
   boot(server);
 
   openDispatchMenu(server, 400, 200);
+  CHECK(server.rootMenuForTest()->itemCount() == 6);   // the cache's content
+
+  // Retarget the rc at a second menu, leaving dispatch.menu untouched - its
+  // recorded ctime stamp still matches at the reopen, so the stat-on-open
+  // reload (pinned by the checkMenu case below) cannot deliver the swap.
+  // Serving the stale cache means itemCount stays 6; only reconfigure's
+  // invalidation gets us to 1.
+  const std::string swapped = writeTemp("reconfig-swapped.menu",
+    "[begin] (Swapped)\n  [exec] (Marker) {m}\n[end]\n");
+  writeTemp("reconfig.blackboxrc", "session.menuFile: " + swapped + "\n");
+
   clickRow(server, 400, 200, 2);                       // Reconfigure
   CHECK_FALSE(server.menuOpenForTest());
   CHECK(server.reconfigureRequestsForTest() == 1);
-  // Cache invalidated: the next open re-parses without any file edit.
   server.injectPointerMotionForTest(400, 200);
   server.injectPointerButtonForTest(BTN_RIGHT, true);
-  CHECK(server.rootMenuForTest()->itemCount() == 6);   // reparsed fine
+  REQUIRE(server.menuOpenForTest());
+  CHECK(server.rootMenuForTest()->itemCount() == 1);   // re-parsed, not cached
+  CHECK(server.rootMenuForTest()->item(0).label == bt::decodeUtf8("Marker"));
 }
 
 TEST_CASE("[restart] bare requests a self-restart and stops the loop") {
