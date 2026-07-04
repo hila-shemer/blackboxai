@@ -109,6 +109,12 @@ toolbar_config_exe = executable('toolbar-config-test', files('system/toolbar_con
 test('toolbar_config', toolbar_config_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Root menu rendered under the Results style (bordered textures, two fonts).
+styled_menu_exe = executable('styled-menu-test', files('system/styled_menu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('styled_menu', styled_menu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 client_exe = executable('client-test', files('system/client_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('client', client_exe, suite : 'system',
