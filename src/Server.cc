@@ -619,6 +619,12 @@ namespace bbai {
   }
 
   Part Server::partAt(View *v, double lx, double ly) {
+    if (v->isFullscreen()) {   // borderless: the whole frame is the client
+      const int fx = static_cast<int>(lx) - v->x();
+      const int fy = static_cast<int>(ly) - v->y();
+      return (fx >= 0 && fy >= 0 && fx < v->contentWidth() && fy < v->contentHeight())
+                 ? Part::Client : Part::None;
+    }
     using namespace frame;
     const FrameMetrics &m = style_->frameMetrics();
     const int fx = static_cast<int>(lx) - v->x();
@@ -1107,6 +1113,21 @@ namespace bbai {
       if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
       else clearFocus();
     }
+  }
+
+  void Server::toggleFullscreenForTest() {
+    if (focused_view) setViewFullscreen(focused_view, !focused_view->isFullscreen());
+  }
+
+  void Server::setViewFullscreen(View *v, bool on, Output *on_output) {
+    if (!v) return;
+    Output *o = on_output ? on_output : outputForView(v);
+    if (!o) return;                                  // zero outputs - nowhere to fill
+    v->setFullscreen(on, o->fullBox());
+    // Exit while the view was maximized: re-apply maximized geometry onto the
+    // (possibly different) target's work area - View left that to us.
+    if (!on && v->isMaximized()) v->remaximize(o->workArea());
+    // [Task 6 inserts the layer_fullscreen reparent here.]
   }
 
   // --- test-only injection + introspection --------------------------------------

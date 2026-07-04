@@ -183,6 +183,8 @@ namespace bbai {
     int lastActionForTest() const { return last_action_.kind; }
     unsigned currentWorkspaceForTest() const { return workspaces_.current(); }
     View *focusedViewForTest() const { return focused_view; }
+    void focusViewForTest(View *v) { focusView(v); }
+    void toggleFullscreenForTest();   // defined in Server.cc (View is incomplete here)
 
     // Alt-tab cycle seams: drive the same session state machine the CycleNext/
     // CyclePrev bindings and the onModifiers commit / Escape cancel funnels use.
@@ -295,6 +297,10 @@ namespace bbai {
     std::shared_ptr<const Style> loadStyleWithFallback(const std::string &path,
                                                        bool *exact_ok = nullptr);
     void runRootCommand();   // rc-file rootCommand via /bin/sh (user-authored)
+    // Fullscreen orchestration: geometry via the target Output's fullBox, plus
+    // (Task 6) the layer_fullscreen hop. on_output pins a specific head (a
+    // client's requested fullscreen_output); null resolves by frame centre.
+    void setViewFullscreen(View *v, bool on, Output *on_output = nullptr);
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
