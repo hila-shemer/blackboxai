@@ -24,6 +24,9 @@ xkbcommon_dep      = dependency('xkbcommon')
 # fcft (font rasterization, used by foot) drives M3 titlebar text. We call pixman
 # directly on its glyph masks, so pixman is linked explicitly alongside it.
 fcft_dep           = dependency('fcft', version : '>=3.0.0')
+# sd-bus for the StatusNotifier tray (sni-core). Plain '-lsystemd'; the headers
+# are C++-safe upstream so they bypass the wlr.hpp sanitize machinery entirely.
+libsystemd_dep     = dependency('libsystemd')
 
 # Generated protocol code: server headers the wlroots headers need (e.g.
 # xdg-shell-protocol.h) + client stubs for the in-process test client.
