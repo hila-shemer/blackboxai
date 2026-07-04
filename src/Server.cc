@@ -1367,6 +1367,11 @@ namespace bbai {
 
   void Server::openRootMenu(double lx, double ly) {
     if (active_menu_) return;
+    // A live alt-tab session must dissolve before the menu goes modal, or the
+    // later modifier release commits the cycle (focus + workspace switch)
+    // underneath the open menu. Commit, not cancel: the preview is the real
+    // raise+focus, so committing matches what is on screen at the click.
+    if (cycling_) commitCycle();
     // Abort any in-progress move/resize grab before going modal — otherwise the
     // grab's terminating release is swallowed by the modal gate and the window
     // would keep following the cursor after the menu closes.
@@ -1405,6 +1410,7 @@ namespace bbai {
 
   void Server::openIconMenu(double lx, double ly) {
     if (active_menu_) return;
+    if (cycling_) commitCycle();   // same rule as openRootMenu: one modal mode at a time
     // Abort any in-progress move/resize grab before going modal — otherwise the
     // grab's terminating release is swallowed by the modal gate and the window
     // would keep following the cursor after the menu closes.
