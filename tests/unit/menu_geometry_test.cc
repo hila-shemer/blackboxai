@@ -41,3 +41,24 @@ TEST_CASE("single-column layout with a title and a separator") {
   CHECK(itemAt(L, 5, items)  == -1);            // title region
   CHECK(itemAt(L, 999, items) == -1);           // below the menu
 }
+
+TEST_CASE("computeLayout: margins are parameters (MenuLook), default to the pinned 1") {
+  using namespace bbai::menu;
+  std::vector<ItemMetric> items{ {40, false}, {60, false} };
+
+  // Default call == pinned constants (byte-identical to the shipped goldens).
+  Layout d = computeLayout(items, 18, /*show_title=*/true, 50, 18);
+  Layout one = computeLayout(items, 18, true, 50, 18, /*frame=*/1, /*title=*/1);
+  CHECK(d.width == one.width);
+  CHECK(d.height == one.height);
+  CHECK(d.title_h == one.title_h);
+  CHECK(d.items[0].y == one.items[0].y);
+
+  // margin 2 grows the title bar, the frame border and every item's y-offset.
+  Layout two = computeLayout(items, 18, true, 50, 18, /*frame=*/2, /*title=*/2);
+  CHECK(two.title_h == one.title_h + 2);           // titleHeight = text + 2*titleMargin
+  CHECK(two.items[0].x == 2);                       // frameMargin
+  CHECK(two.items[0].y == two.title_h + 2);         // title_h + frameMargin
+  CHECK(two.width == one.width + 2);                // +2*(frameMargin) - 2*(1)
+  CHECK(two.height == one.height + 4);              // +2 title margin, +1 top frame, +1 bottom frame
+}

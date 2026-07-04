@@ -1,5 +1,6 @@
 #include "Menu.hh"
 #include "Server.hh"
+#include "Output.hh"
 #include "DataBuffer.hh"
 #include "Style.hh"
 
@@ -33,17 +34,21 @@ namespace bbai {
     }
   } // namespace
 
-  Menu::Menu(Server &server, std::u32string title, std::vector<MenuItem> items)
-    : server_(server), title_(std::move(title)), items_(std::move(items)) {
+  Menu::Menu(Server &server, std::u32string title, std::vector<MenuItem> items,
+             bool show_title)
+    : server_(server), title_(std::move(title)), show_title_(show_title),
+      items_(std::move(items)) {
     tree_ = wlr_scene_tree_create(server_.layer_overlay);
     std::shared_ptr<const Style> st = server_.currentStyle();
+    const MenuLook &look = st->menuLook();
     bt::TextRenderer *frame_font = st->menuFrameFont();
     bt::TextRenderer *title_font = st->menuTitleFont();
     metrics_.reserve(items_.size());
     for (const MenuItem &it : items_)
       metrics_.push_back({ it.separator() ? 0 : frame_font->textWidth(it.label), it.separator() });
-    layout_ = menu::computeLayout(metrics_, frame_font->height(), /*show_title=*/true,
-                                  title_font->textWidth(title_), title_font->height());
+    layout_ = menu::computeLayout(metrics_, frame_font->height(), show_title_,
+                                  title_font->textWidth(title_), title_font->height(),
+                                  look.frameMargin, look.titleMargin);
     item_nodes_.assign(items_.size(), nullptr);
   }
 
@@ -52,13 +57,17 @@ namespace bbai {
   }
 
   void Menu::show(int gx, int gy) {
-    int ow = 1280, oh = 720;
-    server_.activeOutputSize(ow, oh);
-    // Clamp so the whole menu stays on-screen.
-    if (gx + layout_.width > ow) gx = ow - layout_.width;
-    if (gy + layout_.height > oh) gy = oh - layout_.height;
-    if (gx < 0) gx = 0;
-    if (gy < 0) gy = 0;
+    // Clamp so the whole menu stays on the output UNDER the requested point,
+    // in layout coords. Pre-fix this used the primary's size at origin (0,0),
+    // which snapped second-head menus back to head 1. outputAt floors to the
+    // active output, so a fallback box only bites when there is no output at
+    // all (headless-no-output: keep the historical 1280x720).
+    wlr_box b{0, 0, 1280, 720};
+    if (Output *o = server_.outputAt(gx, gy)) b = o->fullBox();
+    if (gx + layout_.width  > b.x + b.width)  gx = b.x + b.width  - layout_.width;
+    if (gy + layout_.height > b.y + b.height) gy = b.y + b.height - layout_.height;
+    if (gx < b.x) gx = b.x;
+    if (gy < b.y) gy = b.y;
     gx_ = gx; gy_ = gy;
     wlr_scene_node_set_position(&tree_->node, gx_, gy_);
 
@@ -77,11 +86,11 @@ namespace bbai {
       wlr_scene_node_set_position(&sb->node, 0, 0);
       frame_node_ = &sb->node;
     }
-    // Title bar.
-    {
+    // Title bar (skipped for titleless menus - Windowmenu / dbusmenu).
+    if (layout_.title_h > 0) {
       std::vector<uint32_t> px = render(layout_.width, layout_.title_h, look.title);
       if (title_font->ok())
-        title_font->drawText(px, layout_.width, layout_.title_h, menu::kTitleMargin + 1, baseline,
+        title_font->drawText(px, layout_.width, layout_.title_h, look.titleMargin + 1, baseline,
                              title_, look.titleText);
       DataBuffer *buf = DataBuffer::create(layout_.width, layout_.title_h, std::move(px));
       wlr_scene_buffer *sb = wlr_scene_buffer_create(tree_, buf->base());

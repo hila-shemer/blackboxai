@@ -21,7 +21,8 @@ namespace bbai {
 
   class Menu {
   public:
-    Menu(Server &server, std::u32string title, std::vector<MenuItem> items);
+    Menu(Server &server, std::u32string title, std::vector<MenuItem> items,
+         bool show_title = true);
     ~Menu();
     Menu(const Menu &) = delete;
     Menu &operator=(const Menu &) = delete;
@@ -54,6 +55,7 @@ namespace bbai {
     Server &server_;
     wlr_scene_tree *tree_ = nullptr;
     std::u32string title_;
+    bool show_title_ = true;
     std::vector<MenuItem> items_;
     std::vector<menu::ItemMetric> metrics_;
     menu::Layout layout_;

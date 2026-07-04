@@ -6,7 +6,11 @@
 #include "Keyboard.hh"
 #include "Menu.hh"
 #include "Rootmenu.hh"
+#include "Windowmenu.hh"
+#include "Barmenu.hh"
+#include "SniMenu.hh"
 #include "ConfigSpelling.hh"
+#include "BarSpelling.hh"
 #include "MenuParser.hh"
 #include "Frame.hh"
 #include "Placement.geom.hh"
@@ -435,6 +439,25 @@ namespace bbai {
     case ConfigOption::PlacementColSmart: config_.windowPlacement = WindowPlacement::ColSmart; break;
     case ConfigOption::PlacementCenter:   config_.windowPlacement = WindowPlacement::Center;   break;
     case ConfigOption::PlacementCascade:  config_.windowPlacement = WindowPlacement::Cascade;  break;
+    case ConfigOption::ToolbarEnabled:  config_.toolbar.enabled  = !config_.toolbar.enabled;  break;
+    case ConfigOption::ToolbarAutoHide: config_.toolbar.autoHide = !config_.toolbar.autoHide; break;
+    case ConfigOption::ToolbarPlaceTopLeft:      config_.toolbar.placement = toolbar::Placement::TopLeft;      break;
+    case ConfigOption::ToolbarPlaceTopCenter:    config_.toolbar.placement = toolbar::Placement::TopCenter;    break;
+    case ConfigOption::ToolbarPlaceTopRight:     config_.toolbar.placement = toolbar::Placement::TopRight;     break;
+    case ConfigOption::ToolbarPlaceBottomLeft:   config_.toolbar.placement = toolbar::Placement::BottomLeft;   break;
+    case ConfigOption::ToolbarPlaceBottomCenter: config_.toolbar.placement = toolbar::Placement::BottomCenter; break;
+    case ConfigOption::ToolbarPlaceBottomRight:  config_.toolbar.placement = toolbar::Placement::BottomRight;  break;
+    case ConfigOption::SlitAutoHide: config_.slit.autoHide = !config_.slit.autoHide; break;
+    case ConfigOption::SlitDirHorizontal: config_.slit.direction = SlitDirection::Horizontal; break;
+    case ConfigOption::SlitDirVertical:   config_.slit.direction = SlitDirection::Vertical;   break;
+    case ConfigOption::SlitPlaceTopLeft:      config_.slit.placement = SlitPlacement::TopLeft;      break;
+    case ConfigOption::SlitPlaceCenterLeft:   config_.slit.placement = SlitPlacement::CenterLeft;   break;
+    case ConfigOption::SlitPlaceBottomLeft:   config_.slit.placement = SlitPlacement::BottomLeft;   break;
+    case ConfigOption::SlitPlaceTopCenter:    config_.slit.placement = SlitPlacement::TopCenter;    break;
+    case ConfigOption::SlitPlaceBottomCenter: config_.slit.placement = SlitPlacement::BottomCenter; break;
+    case ConfigOption::SlitPlaceTopRight:     config_.slit.placement = SlitPlacement::TopRight;     break;
+    case ConfigOption::SlitPlaceCenterRight:  config_.slit.placement = SlitPlacement::CenterRight;  break;
+    case ConfigOption::SlitPlaceBottomRight:  config_.slit.placement = SlitPlacement::BottomRight;  break;
     }
 
     std::string key, value;
@@ -456,6 +479,43 @@ namespace bbai {
     case ConfigOption::PlacementCascade:
       key = "session.windowPlacement";
       value = configmenu::windowPlacementValue(config_.windowPlacement);
+      break;
+    case ConfigOption::ToolbarEnabled:
+      key = "session.screen0.enableToolbar";                  // top-level screen key
+      value = bt::boolAsString(config_.toolbar.enabled);
+      break;
+    case ConfigOption::ToolbarAutoHide:
+      key = "session.screen0.toolbar.autoHide";
+      value = bt::boolAsString(config_.toolbar.autoHide);
+      break;
+    case ConfigOption::ToolbarPlaceTopLeft:
+    case ConfigOption::ToolbarPlaceTopCenter:
+    case ConfigOption::ToolbarPlaceTopRight:
+    case ConfigOption::ToolbarPlaceBottomLeft:
+    case ConfigOption::ToolbarPlaceBottomCenter:
+    case ConfigOption::ToolbarPlaceBottomRight:
+      key = "session.screen0.toolbar.placement";
+      value = barmenu::toolbarPlacementValue(config_.toolbar.placement);
+      break;
+    case ConfigOption::SlitAutoHide:
+      key = "session.screen0.slit.autoHide";
+      value = bt::boolAsString(config_.slit.autoHide);
+      break;
+    case ConfigOption::SlitDirHorizontal:
+    case ConfigOption::SlitDirVertical:
+      key = "session.screen0.slit.direction";
+      value = barmenu::slitDirectionValue(config_.slit.direction);
+      break;
+    case ConfigOption::SlitPlaceTopLeft:
+    case ConfigOption::SlitPlaceCenterLeft:
+    case ConfigOption::SlitPlaceBottomLeft:
+    case ConfigOption::SlitPlaceTopCenter:
+    case ConfigOption::SlitPlaceBottomCenter:
+    case ConfigOption::SlitPlaceTopRight:
+    case ConfigOption::SlitPlaceCenterRight:
+    case ConfigOption::SlitPlaceBottomRight:
+      key = "session.screen0.slit.placement";
+      value = barmenu::slitPlacementValue(config_.slit.placement);
       break;
     }
 
@@ -488,6 +548,11 @@ namespace bbai {
     cursor_frame.disconnect();
     cursor_axis.disconnect();
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish
+    if (sni_menu_reset_idle_) {    // drop the deferred reset before the loop dies
+      wl_event_source_remove(sni_menu_reset_idle_);
+      sni_menu_reset_idle_ = nullptr;
+    }
+    sni_menu_.reset();        // cancel any in-flight dbusmenu reply before the Host's bus dies
     active_menu_.reset();     // destroys its overlay scene tree
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
@@ -1158,8 +1223,17 @@ namespace bbai {
           if (button == BTN_LEFT)        host->activate(it, lx, ly);
           else if (button == BTN_MIDDLE) host->secondaryActivate(it, lx, ly);
           else if (button == BTN_RIGHT)  openSniContextMenu(it, lx, ly);
+        } else if (button == BTN_RIGHT) {
+          openSlitMenu(lx, ly);   // right-click on the frame (no icon) -> Slit menu
         }
         return;   // swallow frame-gap presses too - chrome, not desktop
+      }
+      // Right-click on the toolbar opens the Toolbar menu (classic gesture).
+      if (button == BTN_RIGHT && toolbar_ &&
+          toolbar_->containsGlobal(static_cast<int>(cursor->x),
+                                   static_cast<int>(cursor->y))) {
+        openToolbarMenu(static_cast<int>(cursor->x), static_cast<int>(cursor->y));
+        return;
       }
       // Right-click on the bare desktop opens the modal root menu.
       if (button == BTN_RIGHT && overDesktop(cursor->x, cursor->y)) {
@@ -1177,6 +1251,10 @@ namespace bbai {
         const Part part = partAt(v, cursor->x, cursor->y);
         focusView(v);
         if (config_.clickRaise) raiseView(v);   // sloppy sub-flag; inert under CTF
+        if (button == BTN_RIGHT && (part == Part::Titlebar || part == Part::Label)) {
+          openWindowMenu(v, static_cast<int>(cursor->x), static_cast<int>(cursor->y));
+          return;   // the titlebar right-click was free (only ever reached the seat)
+        }
         if (button == BTN_LEFT) {
           if (part == Part::Titlebar) { beginInteractive(v, CursorMode::Move, 0); return; }
           if (part == Part::LeftGrip)  { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);  return; }
@@ -1821,12 +1899,110 @@ namespace bbai {
     wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
   }
 
+  // The openRootMenu preamble, factored for the new gesture openers so we do
+  // NOT edit the landed openRootMenu/openIconMenu. One modal mode at a time:
+  // a live alt-tab commits (the preview IS the real focus), an in-progress
+  // move/resize grab aborts (its terminating release would be swallowed modal).
+  void Server::abortGrabsForMenu() {
+    if (cycling_) commitCycle();
+    if (cursor_mode != CursorMode::Passthrough) {
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+  }
+
+  void Server::openWindowMenu(View *v, int lx, int ly) {
+    if (active_menu_ || sni_menu_) return;
+    abortGrabsForMenu();
+    active_menu_ = std::make_unique<Menu>(*this, std::u32string{},
+                                          windowmenu::build(v, workspaces_),
+                                          /*show_title=*/false);
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);   // modal while open
+  }
+
+  void Server::openToolbarMenu(int lx, int ly) {
+    if (active_menu_ || sni_menu_ || !toolbar_) return;
+    abortGrabsForMenu();
+    active_menu_ = std::make_unique<Menu>(*this, bt::decodeUtf8("Toolbar"),
+                                          barmenu::buildToolbar(config_.toolbar));
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
+  void Server::openSlitMenu(int lx, int ly) {
+    if (active_menu_ || sni_menu_) return;
+    abortGrabsForMenu();
+    active_menu_ = std::make_unique<Menu>(*this, bt::decodeUtf8("Slit"),
+                                          barmenu::buildSlit(config_.slit));
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
+  void Server::sendViewToWorkspace(View *v, unsigned ws) {
+    if (ws >= workspaces_.count() || ws == v->workspace()) return;
+    v->setWorkspace(ws);
+    v->setOnWorkspace(ws == workspaces_.current());   // hidden unless target is current
+    if (!v->visible() && focused_view == v) {          // focus left with the window
+      if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+      else clearFocus();
+    }
+  }
+
+  void Server::scheduleSniMenuReset() {
+    if (sni_menu_reset_idle_) return;   // already pending
+    sni_menu_reset_idle_ = wl_event_loop_add_idle(
+        wl_display_get_event_loop(display), &Server::sniMenuResetIdle, this);
+  }
+
+  void Server::sniMenuResetIdle(void *data) {
+    auto *self = static_cast<Server *>(data);
+    self->sni_menu_reset_idle_ = nullptr;   // libwayland removes the idle after it fires
+    std::function<void()> fb = std::move(self->sni_menu_fallback_);
+    self->sni_menu_fallback_ = {};
+    self->sni_menu_.reset();                 // free the finished client's slots first
+    if (fb) fb();                            // then the proxy, on a clean non-reentrant bus
+  }
+
+  void Server::showDbusMenu(std::vector<MenuItem> items, int lx, int ly) {
+    active_menu_ = std::make_unique<Menu>(*this, std::u32string{}, std::move(items),
+                                          /*show_title=*/false);
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
   void Server::openSniContextMenu(const sni::Item &item, int lx, int ly) {
-    // v1 proxy. The coords are layout ints - on Wayland items can't position
-    // by them anyway (waybar sends the same); don't burn time making them
-    // "correct".
-    if (sni_host_ && sni_host_->ok())
-      sni_host_->contextMenu(item, lx, ly);
+    // A menu-only item (menu_path advertised) tries the com.canonical.dbusmenu
+    // client; on a GetLayout error OR empty layout it falls back to the SNI
+    // ContextMenu proxy (a faithful superset - an item pointing at a dead menu
+    // path should still give the user its SNI context menu). A busless boot or
+    // a menu-less item goes straight to the proxy.
+    if (item.menu_path.empty() || !sni_host_ || !sni_host_->ok() || !sni_host_->bus()) {
+      if (sni_host_ && sni_host_->ok()) sni_host_->contextMenu(item, lx, ly);   // proxy
+      return;
+    }
+    if (active_menu_ || sni_menu_) return;
+    const sni::Item snap = item;
+    sni_menu_ = std::make_unique<SniMenu>(
+        sni_host_->bus(), item.service, item.menu_path,
+        [this, snap, lx, ly](bool ok, std::vector<MenuItem> items) {
+          if (!ok || items.empty()) {                     // no usable dbusmenu -> proxy
+            // This lambda runs INSIDE the Host's sd_bus_process drain. Neither
+            // the proxy call (Host::callItem re-enters sd_bus_process via its
+            // own drain -> -EBUSY -> the Host tears its bus down) nor freeing
+            // the client's slots is safe here. Defer BOTH to an event-loop idle.
+            sni_menu_fallback_ = [this, snap, lx, ly] {
+              if (sni_host_ && sni_host_->ok()) sni_host_->contextMenu(snap, lx, ly);
+            };
+            scheduleSniMenuReset();
+            return;
+          }
+          showDbusMenu(std::move(items), lx, ly);
+        });
+    sni_menu_->open();
   }
 
   std::vector<MenuItem> Server::buildIconMenu() {
@@ -1879,6 +2055,15 @@ namespace bbai {
   }
 
   void Server::closeMenus() {
+    // closeMenus runs from input/reconfigure, never from a bus dispatch, so the
+    // direct teardown is safe; drop any deferred reset so it can't fire on a
+    // future sni_menu_.
+    if (sni_menu_reset_idle_) {
+      wl_event_source_remove(sni_menu_reset_idle_);
+      sni_menu_reset_idle_ = nullptr;
+      sni_menu_fallback_ = {};
+    }
+    sni_menu_.reset();   // cancel any in-flight dbusmenu reply (slots unref'd)
     active_menu_.reset();
     // While modal, onModifiers swallowed every modifier change so the client
     // wouldn't act on keys typed at the menu. Re-sync the seat now, or a modifier
@@ -1898,6 +2083,12 @@ namespace bbai {
 
   void Server::activateMenuItem(const MenuItem &it) {
     const MenuItem copy = it;   // copy before closeMenus() destroys the owning Menu
+    // A dbusmenu leaf fires its Event over the still-live SniMenu bus context
+    // before the chain (and sni_menu_) are torn down. sendClicked queues the
+    // message on the shared bus and flushes it, so it goes out even as
+    // sni_menu_ dies in the closeMenus below.
+    if (copy.action == MenuItem::Act::DbusmenuEvent && sni_menu_)
+      sni_menu_->sendClicked(static_cast<int>(copy.workspace));
     closeMenus();
     switch (copy.action) {
     case MenuItem::Act::Exec:            commandRunner().run(copy.argv); break;
@@ -1922,6 +2113,22 @@ namespace bbai {
     case MenuItem::Act::Deiconify:
       if (View *v = viewForHandle(copy.target)) deiconifyView(v);
       break;
+    case MenuItem::Act::Iconify:
+      if (View *v = viewForHandle(copy.target)) iconifyView(v);
+      break;
+    case MenuItem::Act::MaximizeToggle:
+      if (View *v = viewForHandle(copy.target))
+        if (Output *o = outputForView(v))
+          v->setMaximized(!v->isMaximized(), o->workArea());
+      break;
+    case MenuItem::Act::Close:
+      if (View *v = viewForHandle(copy.target))
+        wlr_xdg_toplevel_send_close(v->toplevel());
+      break;
+    case MenuItem::Act::SendToWorkspace:
+      if (View *v = viewForHandle(copy.target)) sendViewToWorkspace(v, copy.workspace);
+      break;
+    case MenuItem::Act::DbusmenuEvent: break;   // fired before closeMenus (Task 8)
     case MenuItem::Act::None:            break;
     }
   }

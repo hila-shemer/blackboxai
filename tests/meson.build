@@ -34,6 +34,8 @@ unit_sources = files(
   'unit/work_area_geom_test.cc',
   'unit/util_test.cc',
   'unit/rootmenu_wire_test.cc',
+  'unit/windowmenu_test.cc',
+  'unit/barmenu_test.cc',
   'unit/placement_geom_test.cc',
   'unit/slit_geom_test.cc',
   'unit/slit_icon_test.cc',
@@ -535,4 +537,31 @@ slit_exe = executable('slit-test',
   files('system/slit_test.cc', 'harness/SniMockItem.cc'),
   dependencies : [harness_dep, doctest_dep, libsystemd_dep])
 test('slit', dbus_run_session, args : ['--', slit_exe], suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: multi-head Menu::show clamp (the parked defect).
+menu_multihead_exe = executable('menu-multihead-test',
+  files('system/menu_multihead_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('menu_multihead', menu_multihead_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: Windowmenu titlebar-gesture -> real window ops + golden.
+windowmenu_exe = executable('windowmenu-test', files('system/windowmenu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('windowmenu', windowmenu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: toolbar/slit right-click gestures -> config flip + live + persist.
+bar_menu_exe = executable('bar-menu-test',
+  files('system/bar_menu_test.cc', 'harness/SniMockItem.cc'),
+  dependencies : [harness_dep, doctest_dep, libsystemd_dep])
+test('bar_menu', dbus_run_session, args : ['--', bar_menu_exe], suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: com.canonical.dbusmenu client against a with_menu mock.
+dbusmenu_exe = executable('dbusmenu-test',
+  files('system/dbusmenu_test.cc', 'harness/SniMockItem.cc'),
+  dependencies : [harness_dep, doctest_dep, libsystemd_dep])
+test('dbusmenu', dbus_run_session, args : ['--', dbusmenu_exe], suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
