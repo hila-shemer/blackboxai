@@ -27,7 +27,8 @@
 // over the classic Xrm file syntax (no libX11 link).
 // Resolution: exact name, exact class, then Xrm loose-binding wildcards - a
 // documented subset where '*' spans zero or more whole components and the
-// match with the most literal characters wins (name tried before class).
+// match with the most literal characters wins (name tried before class);
+// equal-literal ties resolve to the lexicographically smallest pattern.
 // Full per-component tight/loose interleaving is not implemented; no shipped
 // style needs it.
 

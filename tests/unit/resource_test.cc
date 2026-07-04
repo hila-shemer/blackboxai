@@ -77,3 +77,21 @@ TEST_CASE("wildcard precedence: more literal characters win") {
     CHECK(r.read("toolbar.label.textColor", "Toolbar.Label.TextColor", "") == "black");
     CHECK(r.read("menu.frame.textColor", "Menu.Frame.TextColor", "") == "red");
 }
+
+TEST_CASE("wildcard tie-break: equal literal counts resolve deterministically") {
+    // 'window*color' and '*focus.color' both match with 11 literal chars.
+    // The winner used to be whichever the unordered_map yielded first -
+    // stable per binary, unspecified across stdlibs. Ties now fall to the
+    // lexicographically smallest pattern, insertion order irrelevant.
+    bt::Resource r;
+    r.loadFromString(
+        "window*color: A\n"
+        "*focus.color: B\n");
+    CHECK(r.read("window.focus.color", "Window.Focus.Color", "") == "B");
+
+    bt::Resource r2;   // reverse insertion order, same winner
+    r2.loadFromString(
+        "*focus.color: B\n"
+        "window*color: A\n");
+    CHECK(r2.read("window.focus.color", "Window.Focus.Color", "") == "B");
+}

@@ -109,6 +109,7 @@ namespace bt {
     // times at load; not worth an index.
     const std::vector<std::string> comps = splitComponents(key);
     const std::string *best = nullptr;
+    const std::string *best_key = nullptr;
     size_t best_lit = 0;
     for (const auto &kv : db) {
       if (kv.first.find('*') == std::string::npos) continue;
@@ -116,7 +117,15 @@ namespace bt {
         continue;
       size_t lit = 0;
       for (char c : kv.first) if (c != '*') ++lit;
-      if (!best || lit > best_lit) { best = &kv.second; best_lit = lit; }
+      // Equal-literal ties fall to the lexicographically smallest pattern -
+      // arbitrary but deterministic, where hash iteration order was
+      // unspecified across stdlibs. (Xrm's per-component precedence could
+      // differ; no shipped style has a co-matching equal-literal pair.)
+      if (!best || lit > best_lit || (lit == best_lit && kv.first < *best_key)) {
+        best = &kv.second;
+        best_key = &kv.first;
+        best_lit = lit;
+      }
     }
     found = (best != nullptr);
     return best ? *best : std::string();
