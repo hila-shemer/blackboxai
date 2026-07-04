@@ -158,6 +158,21 @@ Plan-author calls:
 - Watch-item correction: the install-prefix pattern is at retheme_test.cc:138 (drifted
   from :99) AND style_boot_test.cc:78; configmenu owns fixing both with one mechanism.
 
+## Wave-2 train log
+
+Two-phase because menus consumes all three others' seams as real (not stubs):
+- Phase A (parallel, off wave-1 tip): window-mgmt 13/13, slit 8/8, configmenu 8/8,
+  each green + its sanctioned new goldens only.
+- Stop 1 `window-mgmt`: clean merge, gate 63/63, 92%.
+- Stop 2 `slit` (`e7e3c28`): 4 additive conflicts (Server.cc teardown, Toolbar
+  containsGlobal/exposedHeight, tests/meson.build) - git-mediate; gate 64/64, 92%,
+  goldens clean.
+- Stop 3 `configmenu` (`4180861`): 2 additive conflicts (Server.hh setConfigOption
+  decl, tests/meson.build) - git-mediate; gate 67/67, 92%, goldens clean.
+- Phase B: menus branches off 4180861 (the integrated tip) so containsGlobal /
+  Slit::currentRect / openSniContextMenu-proxy / Act::ConfigOption are all REAL.
+  [in progress]
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
