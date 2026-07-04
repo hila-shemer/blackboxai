@@ -29,7 +29,11 @@ namespace bbai {
       RestartOther,    // argv = {"/bin/sh", "-c", "exec " + cmd}
       WorkspacesMenu,  // marker on the [workspaces] placeholder Submenu
       ConfigMenu,      // marker on the [config] placeholder Submenu (wave-2 mount)
-      ConfigOption     // Configuration-submenu row -> Server::setConfigOption
+      ConfigOption,    // Configuration-submenu row -> Server::setConfigOption
+      // wave-2 menus (Windowmenu + dbusmenu). target = View handle for the
+      // window ops (re-validated via viewForHandle, icon-menu precedent);
+      // workspace = target ws (SendToWorkspace) or dbusmenu item id (DbusmenuEvent).
+      Iconify, MaximizeToggle, Close, SendToWorkspace, DbusmenuEvent
     };
 
     std::u32string label;
