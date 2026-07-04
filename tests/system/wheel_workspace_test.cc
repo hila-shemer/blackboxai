@@ -59,6 +59,26 @@ TEST_CASE("toolbar scroll cycles workspaces (toolbarActions default True)") {
   CHECK(server.currentWorkspaceForTest() == 1u);
 }
 
+TEST_CASE("auto-hidden toolbar does not swallow the wheel over its shown footprint") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  // Desktop wheel-gate off, toolbar wheel-gate on: the only thing that could
+  // cycle here is the toolbar footprint gate. With auto-hide the bar is off
+  // screen, so the scroll belongs to whatever occupies the strip, not the bar.
+  const std::string rc = writeRc("session.changeWorkspaceWithMouseWheel: False\n"
+                                 "session.toolbarActionsWithMouseWheel: True\n");
+  Server server(/*headless=*/true, rc);
+  boot(server);
+  Toolbar *tb = server.toolbarForTest();
+  REQUIRE(tb != nullptr);
+  tb->setAutoHide(true);
+  REQUIRE(tb->hiddenForTest());
+  const toolbar::Rect b = tb->barRectForTest();     // shown footprint
+  server.injectPointerMotionForTest(b.x + b.w / 2, b.y + b.h / 2);
+  scrollUp(server);
+  CHECK(server.currentWorkspaceForTest() == 0u);    // hidden bar didn't eat the wheel
+}
+
 TEST_CASE("both gates respect False - scroll is inert on the desktop and bar") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);

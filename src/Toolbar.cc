@@ -90,6 +90,10 @@ namespace bbai {
   }
 
   bool Toolbar::containsGlobal(int gx, int gy) const {
+    // An auto-hidden bar's shown footprint is off-screen chrome; the click/wheel
+    // belongs to whatever occupies the strip (window or desktop), not the bar -
+    // same guard the slit path uses with !slit_->hidden().
+    if (auto_hide_ && hidden_) return false;
     const toolbar::Rect b = currentBarRect();
     return gx >= b.x && gx < b.x + b.w && gy >= b.y && gy < b.y + b.h;
   }
