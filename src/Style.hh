@@ -100,6 +100,7 @@ namespace bbai {
     const ToolbarLook &toolbarLook() const { return toolbar_; }
     const MenuLook &menuLook() const { return menu_; }
     const bt::Texture &slitTexture() const { return slit_; }
+    int slitMargin() const { return slit_margin_; }
 
     const frame::FrameMetrics &frameMetrics() const { return frame_; }
     const toolbar::ToolbarMetrics &toolbarMetrics() const { return toolbar_metrics_; }
@@ -127,6 +128,7 @@ namespace bbai {
     ToolbarLook toolbar_;
     MenuLook menu_;
     bt::Texture slit_;
+    int slit_margin_ = 2;
     frame::FrameMetrics frame_;
     toolbar::ToolbarMetrics toolbar_metrics_;
     std::unique_ptr<bt::TextRenderer> window_font_, toolbar_font_,
