@@ -38,13 +38,15 @@ namespace bbai {
     : server_(server), title_(std::move(title)), items_(std::move(items)) {
     tree_ = wlr_scene_tree_create(server_.layer_overlay);
     std::shared_ptr<const Style> st = server_.currentStyle();
+    const MenuLook &look = st->menuLook();
     bt::TextRenderer *frame_font = st->menuFrameFont();
     bt::TextRenderer *title_font = st->menuTitleFont();
     metrics_.reserve(items_.size());
     for (const MenuItem &it : items_)
       metrics_.push_back({ it.separator() ? 0 : frame_font->textWidth(it.label), it.separator() });
     layout_ = menu::computeLayout(metrics_, frame_font->height(), /*show_title=*/true,
-                                  title_font->textWidth(title_), title_font->height());
+                                  title_font->textWidth(title_), title_font->height(),
+                                  look.frameMargin, look.titleMargin);
     item_nodes_.assign(items_.size(), nullptr);
   }
 
@@ -86,7 +88,7 @@ namespace bbai {
     {
       std::vector<uint32_t> px = render(layout_.width, layout_.title_h, look.title);
       if (title_font->ok())
-        title_font->drawText(px, layout_.width, layout_.title_h, menu::kTitleMargin + 1, baseline,
+        title_font->drawText(px, layout_.width, layout_.title_h, look.titleMargin + 1, baseline,
                              title_, look.titleText);
       DataBuffer *buf = DataBuffer::create(layout_.width, layout_.title_h, std::move(px));
       wlr_scene_buffer *sb = wlr_scene_buffer_create(tree_, buf->base());
