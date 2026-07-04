@@ -1344,6 +1344,38 @@ namespace bbai {
     if (toolbar_) toolbar_->redrawWorkspaceLabel();
   }
 
+  void Server::removeLastWorkspaceAndRehome() {
+    const unsigned n = workspaces_.count();
+    if (n <= 1) return;                       // model floor: never below 1
+    const unsigned dying = n - 1, survivor = n - 2;
+    const bool current_on_dying = (workspaces_.current() == dying);
+    // Captured BEFORE re-homing: afterwards every tenant claims the survivor.
+    View *keep = (focused_view && focused_view->workspace() == dying)
+                     ? focused_view : nullptr;
+
+    for (auto &v : views)
+      if (v->workspace() == dying) v->setWorkspace(survivor);
+
+    // Gotcha #29: setCurrentWorkspace's restore branch focuses the incoming
+    // workspace's REMEMBERED view - point the survivor's memory at the view
+    // that actually holds focus first, so the restore lands on it (focusView
+    // early-returns) instead of yanking focus to a stale memory.
+    if (keep) workspaces_.setFocused(survivor, keep);
+
+    if (current_on_dying) {
+      setCurrentWorkspace(survivor);   // full switch: show/hide + focus restore + label
+    } else {
+      // No switch happened: sync visibility for the re-homed views (hidden
+      // unless the survivor IS current). Idempotent for existing tenants.
+      for (auto &v : views)
+        if (v->workspace() == survivor)
+          v->setOnWorkspace(survivor == workspaces_.current());
+    }
+
+    workspaces_.removeLastWorkspace();        // pops the dying slot, clamps current_
+    if (toolbar_) toolbar_->redrawWorkspaceLabel();
+  }
+
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
     notifyIdleActivity();
     if (session_lock_ && session_lock_->locked()) return;  // mirror the onKey gate: no bindings
@@ -1533,7 +1565,7 @@ namespace bbai {
     case MenuItem::Act::Exec:            commandRunner().run(copy.argv); break;
     case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(copy.workspace); break;
     case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
-    case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
+    case MenuItem::Act::RemoveWorkspace: removeLastWorkspaceAndRehome(); break;
     case MenuItem::Act::Exit:            terminate(); break;
     case MenuItem::Act::Restart:         requestRestart({}); break;
     case MenuItem::Act::RestartOther:    requestRestart(copy.argv); break;

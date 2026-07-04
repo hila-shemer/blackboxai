@@ -236,6 +236,14 @@ configmenu_exe = executable('configmenu-test', files('system/configmenu_test.cc'
 test('configmenu', configmenu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# wave-2 configmenu: workspace shrink re-home via the explicit RemoveWorkspace
+# action (the rc path stays grow-only).
+workspace_remove_exe = executable('workspace-remove-test',
+  files('system/workspace_remove_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('workspace_remove', workspace_remove_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F4.2 View iconified state: composes with workspace visibility (nonvisual, no golden).
 iconify_exe = executable('iconify-test', files('system/iconify_test.cc'),
   dependencies : [harness_dep, doctest_dep])

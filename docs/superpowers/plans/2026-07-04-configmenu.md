@@ -1036,7 +1036,7 @@ separators, so a dead row would have dispatched."
 - Consumes: `WorkspaceModel::{count,current,focused,setFocused,removeLastWorkspace}` (src/Workspace.hh), `View::{workspace,setWorkspace,setOnWorkspace}` (src/View.hh:44-47), `Server::setCurrentWorkspace` (Server.cc:1265, gotcha #29 semantics), `Toolbar::redrawWorkspaceLabel`.
 - Produces: `void Server::removeLastWorkspaceAndRehome()` (private; `Act::RemoveWorkspace`'s new target). The rc/applyConfig path stays grow-only - locked.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/workspace_remove_test.cc`:
 
@@ -1168,7 +1168,7 @@ test('workspace_remove', workspace_remove_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1179,7 +1179,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: FAIL at `CHECK(vb->workspace() == 1u)` - today's `Act::RemoveWorkspace` calls the bare model op and B's index still says 2 (a dead workspace: the window is lost forever, which is exactly the parked debt).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh` - after the `setCurrentWorkspace` declaration (line ~88):
 
@@ -1234,7 +1234,7 @@ Expected: FAIL at `CHECK(vb->workspace() == 1u)` - today's `Act::RemoveWorkspace
     case MenuItem::Act::RemoveWorkspace: removeLastWorkspaceAndRehome(); break;
 ```
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1245,7 +1245,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass - including the pre-existing menu/workspace suites (the empty-workspace RemoveWorkspace path behaves as before: no tenants, model op + label).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Server.hh src/Server.cc tests/system/workspace_remove_test.cc tests/meson.build
