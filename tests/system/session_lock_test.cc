@@ -374,6 +374,74 @@ TEST_CASE("a crashed locker leaves the session locked; a new locker takes over")
                       [&] { second.flush(); second.pump(); }));
 }
 
+TEST_CASE("takeover keeps the pre-lock focus for the eventual unlock") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    // A mapped and focused before the lock.
+    test::TestClient a(server.socketName(), 0xFFFF0000u, 200, 150);
+    REQUIRE(a.ok());
+    auto aMapped = [&] {
+        const auto &v = server.viewsForTest();
+        return !v.empty() && v[0]->isMapped();
+    };
+    REQUIRE(pumpUntil(server, aMapped, [&] { a.flush(); a.pump(); }));
+    for (int i = 0; i < 40; ++i) { a.flush(); server.dispatch(); a.pump(); }
+    server.injectPointerMotionForTest(260, 130);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    View *va = server.viewsForTest()[0].get();
+    REQUIRE(server.focusedViewForTest() == va);
+
+    auto first = std::make_unique<test::LockTestClient>(server.socketName());
+    REQUIRE(first->ok());
+    REQUIRE(pumpUntil(server, [&] { return first->sawLockManager(); },
+                      [&] { first->flush(); first->pump(); }));
+    first->lock();
+    REQUIRE(pumpUntil(server, [&] { return server.sessionLockForTest()->locked(); },
+                      [&] { first->flush(); first->pump(); }));
+    server.advanceClockForTest(2);
+    REQUIRE(pumpUntil(server, [&] { return first->lockedReceived(); },
+                      [&] { first->flush(); first->pump(); }));
+
+    // B maps mid-lock: top of the stacking layer, but focus stays parked - so
+    // topmost and pre-lock-focused now genuinely diverge.
+    test::TestClient b(server.socketName(), 0xFF00FF00u, 200, 150);
+    REQUIRE(b.ok());
+    auto pumpAB = [&] { a.flush(); a.pump(); b.flush(); b.pump();
+                        first->flush(); first->pump(); };
+    REQUIRE(pumpUntil(server,
+        [&] { return server.viewsForTest().size() == 2
+                  && server.viewsForTest()[1]->isMapped(); }, pumpAB));
+    REQUIRE(server.focusedViewForTest() == nullptr);
+
+    // Locker crash, then a takeover locker.
+    first.reset();
+    REQUIRE(pumpUntil(server,
+        [&] { return !server.sessionLockForTest()->hasActiveLockForTest(); },
+        [&] {}));
+    test::LockTestClient second(server.socketName());
+    REQUIRE(second.ok());
+    REQUIRE(pumpUntil(server, [&] { return second.sawLockManager(); },
+                      [&] { second.flush(); second.pump(); }));
+    second.lock();
+    REQUIRE(pumpUntil(server, [&] { return second.lockedReceived(); },
+                      [&] { second.flush(); second.pump(); }));
+
+    // Unlock must restore the window the user had focused when the session
+    // locked - not the topmost fallback (B).
+    second.unlockAndDestroy();
+    auto pumpAll = [&] { a.flush(); a.pump(); b.flush(); b.pump();
+                         second.flush(); second.pump(); };
+    REQUIRE(pumpUntil(server, [&] { return !server.sessionLockForTest()->locked(); },
+                      pumpAll));
+    CHECK(server.focusedViewForTest() == va);
+}
+
 TEST_CASE("a head appearing mid-lock is blanked and its lock surface configured") {
     setenv("WLR_BACKENDS", "headless", 1);
     setenv("WLR_RENDERER", "pixman", 1);

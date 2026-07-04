@@ -260,8 +260,11 @@ namespace bbai {
     void processResize();
     void focusView(View *v, bool update_mru = true);
     void clearFocus();                              // deactivate + clear keyboard focus
-    // Session-lock hooks (called by the friend SessionLock).
-    void handleSessionLocked();     // park focus + swallow-state; Task 7 adds modal aborts
+    // Session-lock hooks (called by the friend SessionLock). takeover = a new
+    // locker replacing a crashed one while locked_ never dropped: everything
+    // re-runs except the focus_before_lock_ capture (focused_view is already
+    // parked null - re-capturing would lose the unlock restore target).
+    void handleSessionLocked(bool takeover);   // park focus + swallow-state + modal aborts
     void handleSessionUnlocked();   // Task 6: restore focus + re-sync the seat
     // Alt-tab MRU cycle (spec §3.2). cycleStep starts or advances the modal
     // session; commit/cancel end it. visibleRing is the frozen candidate set:
