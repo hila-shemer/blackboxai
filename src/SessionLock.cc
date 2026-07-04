@@ -79,9 +79,9 @@ namespace bbai {
     // Hot-unplug while locked: wlroots destroys the head's lock surface itself
     // (it listens on output destroy), but this entry would keep a dangling
     // Output* and a listener into the dying wlr_output. Drop it, then recount
-    // - one fewer head to wait on can be what sends `locked`. Defensive-only:
-    // headless outputs can't be destroyed from a test, so this path is
-    // review-verified, not test-verified.
+    // - one fewer head to wait on can be what sends `locked`. Covered by the
+    // mid-wait unplug case in session_lock_test (work-area's
+    // destroyOutputForTest made headless output destruction drivable).
     po->output_destroy.connect(&o->wlrOutput()->events.destroy,
                                [this, p = po.get()](void *) {
       if (p->blank) wlr_scene_node_destroy(&p->blank->node);
