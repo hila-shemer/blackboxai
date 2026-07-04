@@ -1373,6 +1373,7 @@ namespace bbai {
     // view back to the window layer. Keeps the "only the focused fullscreen sits
     // above the toolbar" invariant across focus swaps, workspace switches and
     // alt-tab previews.
+    bool demoted = false;
     for (auto &up : views) {
       View *v = up.get();
       if (!v->isFullscreen()) continue;
@@ -1380,8 +1381,15 @@ namespace bbai {
       if (v->sceneTree()->node.parent != want) {
         wlr_scene_node_reparent(&v->sceneTree()->node, want);
         if (v == newly_focused) raiseView(v);
+        else demoted = true;
       }
     }
+    // A demotion reparents the ex-fullscreen view to the TOP of layer_window,
+    // above the window that just took focus (and it's still fullscreen-sized, so
+    // it fully covers it). Re-raise the focused non-fullscreen window so the one
+    // you switched TO isn't left hidden behind the one you switched from.
+    if (demoted && newly_focused && !newly_focused->isFullscreen())
+      raiseView(newly_focused);
   }
 
   bool Server::viewLayerIsFullscreenForTest(View *v) const {
