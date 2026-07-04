@@ -1,6 +1,7 @@
 #include "Menu.hh"
 #include "Server.hh"
 #include "DataBuffer.hh"
+#include "Style.hh"
 
 #include "Texture.hh"
 #include "Image.hh"
@@ -11,25 +12,8 @@
 namespace bbai {
 
   namespace {
-    struct Look { const char *desc; const char *c1; const char *c2; };
-    constexpr Look kFrameLook {"raised gradient diagonal", "#c8c8c8", "#a8a8a8"};
-    constexpr Look kTitleLook {"raised gradient diagonal", "#b0b0b0", "#888888"};
-    constexpr Look kHiliteLook{"raised gradient diagonal", "#5a7abf", "#33558f"};
-
-    bt::Color frameText()    { return bt::Color(0, 0, 0); }
-    bt::Color activeText()   { return bt::Color(255, 255, 255); }
-    bt::Color disabledText() { return bt::Color(112, 112, 112); }
-    bt::Color sepColor()     { return bt::Color(96, 96, 96); }
-
-    bt::Texture makeTexture(const Look &l) {
-      bt::Texture t;
-      t.setDescription(l.desc);
-      t.setColor1(bt::Color::fromString(l.c1));
-      if (l.c2 && *l.c2) t.setColor2(bt::Color::fromString(l.c2));
-      return t;
-    }
-    std::vector<uint32_t> render(int w, int h, const Look &l) {
-      return bt::Image(w, h).renderBuffer(makeTexture(l));
+    std::vector<uint32_t> render(int w, int h, const bt::Texture &t) {
+      return bt::Image(w, h).renderBuffer(t);
     }
     void setPx(std::vector<uint32_t> &px, int w, int h, int x, int y, const bt::Color &c) {
       if (x < 0 || y < 0 || x >= w || y >= h) return;
@@ -52,12 +36,14 @@ namespace bbai {
   Menu::Menu(Server &server, std::u32string title, std::vector<MenuItem> items)
     : server_(server), title_(std::move(title)), items_(std::move(items)) {
     tree_ = wlr_scene_tree_create(server_.layer_overlay);
-    bt::TextRenderer *font = server_.titleFont();
+    std::shared_ptr<const Style> st = server_.currentStyle();
+    bt::TextRenderer *frame_font = st->menuFrameFont();
+    bt::TextRenderer *title_font = st->menuTitleFont();
     metrics_.reserve(items_.size());
     for (const MenuItem &it : items_)
-      metrics_.push_back({ it.separator() ? 0 : font->textWidth(it.label), it.separator() });
-    layout_ = menu::computeLayout(metrics_, font->height(), /*show_title=*/true,
-                                  font->textWidth(title_), font->height());
+      metrics_.push_back({ it.separator() ? 0 : frame_font->textWidth(it.label), it.separator() });
+    layout_ = menu::computeLayout(metrics_, frame_font->height(), /*show_title=*/true,
+                                  title_font->textWidth(title_), title_font->height());
     item_nodes_.assign(items_.size(), nullptr);
   }
 
@@ -76,12 +62,15 @@ namespace bbai {
     gx_ = gx; gy_ = gy;
     wlr_scene_node_set_position(&tree_->node, gx_, gy_);
 
-    bt::TextRenderer *font = server_.titleFont();
-    const int baseline = std::max(0, (layout_.title_h - font->height()) / 2) + font->ascent();
+    std::shared_ptr<const Style> st = server_.currentStyle();
+    const MenuLook &look = st->menuLook();
+    bt::TextRenderer *title_font = st->menuTitleFont();
+    const int baseline =
+      std::max(0, (layout_.title_h - title_font->height()) / 2) + title_font->ascent();
 
     // Frame background (lowest).
     {
-      std::vector<uint32_t> px = render(layout_.width, layout_.height, kFrameLook);
+      std::vector<uint32_t> px = render(layout_.width, layout_.height, look.frame);
       DataBuffer *buf = DataBuffer::create(layout_.width, layout_.height, std::move(px));
       wlr_scene_buffer *sb = wlr_scene_buffer_create(tree_, buf->base());
       wlr_buffer_drop(buf->base());
@@ -90,10 +79,10 @@ namespace bbai {
     }
     // Title bar.
     {
-      std::vector<uint32_t> px = render(layout_.width, layout_.title_h, kTitleLook);
-      if (font->ok())
-        font->drawText(px, layout_.width, layout_.title_h, menu::kTitleMargin + 1, baseline,
-                       title_, frameText());
+      std::vector<uint32_t> px = render(layout_.width, layout_.title_h, look.title);
+      if (title_font->ok())
+        title_font->drawText(px, layout_.width, layout_.title_h, menu::kTitleMargin + 1, baseline,
+                             title_, look.titleText);
       DataBuffer *buf = DataBuffer::create(layout_.width, layout_.title_h, std::move(px));
       wlr_scene_buffer *sb = wlr_scene_buffer_create(tree_, buf->base());
       wlr_buffer_drop(buf->base());
@@ -107,19 +96,22 @@ namespace bbai {
     if (item_nodes_[i]) { wlr_scene_node_destroy(&item_nodes_[i]->node); item_nodes_[i] = nullptr; }
     const menu::Rect r = layout_.items[i];
     const MenuItem &it = items_[i];
-    bt::TextRenderer *font = server_.titleFont();
+    std::shared_ptr<const Style> st = server_.currentStyle();
+    const MenuLook &look = st->menuLook();
+    bt::TextRenderer *font = st->menuFrameFont();
 
     std::vector<uint32_t> px;
     if (it.separator()) {
-      px = render(r.w, r.h, kFrameLook);
+      px = render(r.w, r.h, look.frame);
       const int y = r.h / 2;
       for (int x = menu::kItemIndent; x < r.w - menu::kItemIndent; ++x)
-        setPx(px, r.w, r.h, x, y, sepColor());
+        setPx(px, r.w, r.h, x, y, look.frameForeground);
     } else {
       const bool active = (i == active_) && it.enabled;
-      px = render(r.w, r.h, active ? kHiliteLook : kFrameLook);
+      px = render(r.w, r.h, active ? look.active : look.frame);
       const int baseline = std::max(0, (r.h - font->height()) / 2) + font->ascent();
-      const bt::Color tc = !it.enabled ? disabledText() : (active ? activeText() : frameText());
+      const bt::Color tc = !it.enabled ? look.frameDisabled
+                                       : (active ? look.activeText : look.frameText);
       if (font->ok())
         font->drawText(px, r.w, r.h, menu::kItemIndent, baseline, it.label, tc);
       if (it.checked) drawCheck(px, r.w, r.h, tc);
