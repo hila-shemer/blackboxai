@@ -399,6 +399,12 @@ wheel_workspace_exe = executable('wheel-workspace-test', files('system/wheel_wor
 test('wheel_workspace', wheel_workspace_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Fullscreen geometry + one-shared-premax-rect semantics (numbers, not pixels).
+fullscreen_exe = executable('fullscreen-test', files('system/fullscreen_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('fullscreen', fullscreen_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

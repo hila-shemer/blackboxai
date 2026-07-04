@@ -61,19 +61,22 @@ namespace bbai {
   }
 
   void View::relayout() {
-    if (draw_frame) {
+    // Fullscreen hides chrome regardless of the decoration mode (an SSD window
+    // goes borderless while fullscreen, like a CSD holdout).
+    const bool chrome = draw_frame && !fullscreen_;
+    if (chrome) {
       const frame::FrameMetrics &m = server.currentStyle()->frameMetrics();
       wlr_scene_node_set_position(&surface_tree->node, frame::clientX(m), frame::clientY(m));
       deco->rebuild(*server.currentStyle(), cw, ch, xdg_toplevel->title, focused_);
     } else {
-      // CSD holdout: no chrome, client surface at the View origin; we still own
-      // the scene tree and manage geometry.
+      // CSD holdout / fullscreen: no chrome, client surface at the View origin;
+      // we still own the scene tree and manage geometry.
       wlr_scene_node_set_position(&surface_tree->node, 0, 0);
       deco->clear();
     }
     laid_w = cw;
     laid_h = ch;
-    laid_frame = draw_frame;
+    laid_frame = chrome;   // track the EFFECTIVE chrome state, not raw draw_frame
   }
 
   void View::setPosition(int x, int y) {
@@ -116,6 +119,27 @@ namespace bbai {
   void View::remaximize(wlr_box work) {
     if (!maximized_) return;
     applyMaximizedGeometry(work);
+  }
+
+  void View::setFullscreen(bool on, wlr_box full) {
+    if (fullscreen_ == on) return;
+    if (on) {
+      // One shared saved rect: don't clobber a maximize's premax, and don't
+      // re-save our own on a redundant enter.
+      if (!maximized_ && !fullscreen_) {
+        premax_x = pos_x; premax_y = pos_y; premax_w = cw; premax_h = ch;
+      }
+      fullscreen_ = true;
+      wlr_xdg_toplevel_set_fullscreen(xdg_toplevel, true);   // the mandated ack
+      resizeTo(full.x, full.y, full.width, full.height);     // content == fullBox
+    } else {
+      fullscreen_ = false;
+      wlr_xdg_toplevel_set_fullscreen(xdg_toplevel, false);
+      // Maximized-underneath restore is the Server's job (work area); here we
+      // only restore premax for the plain case.
+      if (!maximized_) resizeTo(premax_x, premax_y, premax_w, premax_h);
+    }
+    relayout();   // re-run the frame/chrome branch for the new fullscreen_ state
   }
 
   void View::applyVisibility() {

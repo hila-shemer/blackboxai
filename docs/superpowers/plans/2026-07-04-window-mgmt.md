@@ -703,7 +703,7 @@ Fullscreen geometry and the one-shared-premax-rect semantics. Layering (covering
 - Consumes: `Output::fullBox()`, `Output::workArea()`, `outputForView`, `View::remaximize` / `premax_*`, `resizeTo` (`View.cc:127`), `wlr_xdg_toplevel_set_fullscreen`.
 - Produces: `void View::setFullscreen(bool on, wlr_box full)` + `bool View::isFullscreen() const` (PINNED SEAM); `void Server::setViewFullscreen(View *v, bool on, Output *on_output = nullptr)`; `void Server::toggleFullscreenForTest()`. Task 6 makes `setViewFullscreen` layer-aware; Task 7's request path calls it; Task 8's key wires it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/fullscreen_test.cc`:
 
@@ -820,12 +820,12 @@ test('fullscreen', fullscreen_exe, suite : 'system',
 
 If `Server::Part` is not already reachable from tests (it is a nested type used by `partAtForTest`, `Server.hh`), the existing `hittest_test.cc` shows the accessible spelling — match it. `focusViewForTest` may need adding as a public wrapper around `focusView` (check `Server.hh`; `view_focus_test.cc` likely already exposes one — reuse it).
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `fullscreen`.
 Expected: BUILD FAILURE — `no member named 'setFullscreen'` / `toggleFullscreenForTest`.
 
-- [ ] **Step 3: Implement View**
+- [x] **Step 3: Implement View**
 
 `src/View.hh`, after `bool isMaximized() const { return maximized_; }` (line 62):
 
@@ -893,7 +893,7 @@ Change `relayout` (line 63) to drop chrome when fullscreen even for SSD windows:
 
 (Note `laid_frame` now tracks effective chrome; the commit-handler re-layout guard at `View.cc:38` compares `draw_frame != laid_frame` — leave that as-is; `setFullscreen` forces a `relayout()` directly, so a fullscreen toggle never depends on the commit-guard, and a genuine CSD-mode flip still triggers it correctly.)
 
-- [ ] **Step 4: Implement Server orchestration**
+- [x] **Step 4: Implement Server orchestration**
 
 `src/Server.hh`, after `void applyConfig();` (line 280):
 
@@ -938,11 +938,11 @@ Add the fullscreen branch at the TOP of `partAt` (line 600), so a fullscreen vie
     }
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Container gate, `<tests>` = `fullscreen`. Expected: both cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/View.hh src/View.cc src/Server.hh src/Server.cc \
