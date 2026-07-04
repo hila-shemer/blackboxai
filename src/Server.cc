@@ -996,6 +996,7 @@ namespace bbai {
       return;   // modal: no client/toolbar/grab handling while selecting
     }
     if (toolbar_) toolbar_->handlePointerMotion(cursor->x, cursor->y);   // auto-hide edge trigger (no-op when off)
+    if (slit_) slit_->handlePointerMotion(cursor->x, cursor->y);         // same, for the slit
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
     if (cursor_mode == CursorMode::Resize) { processResize(); return; }
 

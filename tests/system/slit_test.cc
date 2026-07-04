@@ -141,3 +141,41 @@ TEST_CASE("slit renders a mock item: golden, strut, icon update, empty again") {
   const test::Frame after = test::captureFrame(server);
   CHECK(after.pixels == before.pixels);
 }
+
+TEST_CASE("slit auto-hide: sliver strut, hidden golden, reveal, hide again") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  const std::string rc = writeRc("session.screen0.slit.autoHide: True\n");
+  Server server(/*headless=*/true, rc);
+  REQUIRE(server.ok());
+  bootOutputs(server);
+  server.createSniHostForTest();
+  REQUIRE(server.sniHostForTest()->ok());
+  test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  REQUIRE(pumpUntil(server, [&] { return server.slitForTest()->itemCountForTest() == 1; }));
+
+  Slit *sl = server.slitForTest();
+  CHECK(sl->hidden());
+  // Only the margin sliver struts while hidden (Vertical -> width shrinks).
+  CHECK(server.activeOutputForTest()->workArea().width == 1280 - 2);
+  CHECK(test::compareGolden(test::captureFrame(server),
+                            "tests/golden/v1-slit-hidden.png", 2, 80));
+
+  // Reveal: pointer into the SHOWN footprint (the sliver lies inside it),
+  // one-shot 250ms timer fires on the virtual clock.
+  const slit::Rect shown = sl->currentRect();
+  server.injectPointerMotionForTest(shown.x + shown.w / 2.0, shown.y + shown.h / 2.0);
+  server.advanceClockForTest(1);
+  CHECK_FALSE(sl->hidden());
+  // Revealed frame == the Task-4 golden: same placement, same pixels.
+  CHECK(test::compareGolden(test::captureFrame(server),
+                            "tests/golden/v1-slit-one-item.png", 2, 80));
+
+  // Away -> hidden again.
+  server.injectPointerMotionForTest(200, 200);
+  server.advanceClockForTest(1);
+  CHECK(sl->hidden());
+
+  mock.quit();
+}
