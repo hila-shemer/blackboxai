@@ -5,7 +5,14 @@
 #include "MenuParser.hh"
 #include "Text.hh"
 
+#include <cstdlib>
+#include <fstream>
+#include <map>
 #include <string>
+#include <vector>
+
+#include <sys/stat.h>   // mkdir - real-directory case for the default lister
+#include <unistd.h>     // unlink/rmdir cleanup
 
 using namespace bbai;
 using menuparser::Result;
@@ -108,9 +115,27 @@ namespace {
       if (d.find(needle) != std::string::npos) return true;
     return false;
   }
+
+  menuparser::FileLoader fakeLoader(std::map<std::string, std::string> files) {
+    return [files](const std::string &path, std::string &text) {
+      auto it = files.find(path);
+      if (it == files.end()) return false;
+      text = it->second;
+      return true;
+    };
+  }
+
+  menuparser::DirLister fakeLister(std::map<std::string, std::vector<std::string>> dirs) {
+    return [dirs](const std::string &dir, std::vector<std::string> &names) {
+      auto it = dirs.find(dir);
+      if (it == dirs.end()) return false;
+      names = it->second;
+      return true;
+    };
+  }
 }
 
-TEST_CASE("restart: bare restarts self, with a command degrades to self + note") {
+TEST_CASE("restart: bare restarts self, {cmd} becomes RestartOther via the shell") {
   Result r = menuparser::parse(
     "[begin] (m)\n"
     "  [restart] (Restart)\n"
@@ -120,15 +145,17 @@ TEST_CASE("restart: bare restarts self, with a command degrades to self + note")
   REQUIRE(r.items.size() == 2);
   CHECK(r.items[0].action == MenuItem::Act::Restart);
   CHECK(r.items[0].label == u("Restart"));
+  CHECK(r.items[0].argv.empty());
 
-  // No RestartOther action exists; the {fvwm} target is dropped, not invented.
-  CHECK(r.items[1].action == MenuItem::Act::Restart);
+  // Classic RestartOther shape: exec the named WM through the shell, `exec`
+  // so the intermediate sh is replaced.
+  CHECK(r.items[1].action == MenuItem::Act::RestartOther);
   CHECK(r.items[1].label == u("Start FVWM"));
-  CHECK(r.items[1].argv.empty());
-  CHECK(anyDiagContains(r, "fvwm"));
+  CHECK(r.items[1].argv == sh("exec fvwm"));
+  CHECK(r.diagnostics.empty());   // no longer a degradation
 }
 
-TEST_CASE("workspaces and config become empty placeholder submenus + a note") {
+TEST_CASE("workspaces and config become MARKED placeholder submenus") {
   Result r = menuparser::parse(
     "[begin] (m)\n"
     "  [workspaces] (Workspace List)\n"
@@ -138,35 +165,221 @@ TEST_CASE("workspaces and config become empty placeholder submenus + a note") {
   REQUIRE(r.items.size() == 2);
 
   CHECK(r.items[0].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[0].action == MenuItem::Act::WorkspacesMenu);
   CHECK(r.items[0].label == u("Workspace List"));
   CHECK(r.items[0].submenu_items.empty());
 
   CHECK(r.items[1].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[1].action == MenuItem::Act::ConfigMenu);
   CHECK(r.items[1].label == u("Configuration"));
   CHECK(r.items[1].submenu_items.empty());
 
-  CHECK(anyDiagContains(r, "workspaces"));
+  // [workspaces] is fully handled from here on - no diagnostic. [config]
+  // keeps a note until wave-2 configmenu populates it.
+  CHECK_FALSE(anyDiagContains(r, "workspaces"));
   CHECK(anyDiagContains(r, "config"));
 }
 
-TEST_CASE("unsupported style/include/reconfig tags are skipped with a note") {
+TEST_CASE("[style] becomes a SetStyle item with a tilde-expanded path") {
+  setenv("HOME", "/home/bb", 1);
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [style] (Some Style) {~/.blackbox/styles/x}\n"
+    "  [style] (Absolute) {/usr/share/styles/y}\n"
+    "  [style] (no path)\n"
+    "[end]\n");
+
+  REQUIRE(r.items.size() == 2);
+  CHECK(r.items[0].kind == MenuItem::Kind::Command);
+  CHECK(r.items[0].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[0].label == u("Some Style"));
+  CHECK(r.items[0].argv == std::vector<std::string>{"/home/bb/.blackbox/styles/x"});
+  CHECK(r.items[1].argv == std::vector<std::string>{"/usr/share/styles/y"});
+  CHECK(anyDiagContains(r, "style"));   // the path-less one degrades with a note
+}
+
+TEST_CASE("[reconfig] becomes a Reconfigure item; the documented {cmd} is dropped") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [reconfig] (Reconfigure)\n"
+    "  [reconfig] (With Cmd) {touch /tmp/x}\n"
+    "[end]\n");
+
+  REQUIRE(r.items.size() == 2);
+  CHECK(r.items[0].action == MenuItem::Act::Reconfigure);
+  CHECK(r.items[0].label == u("Reconfigure"));
+  CHECK(r.items[1].action == MenuItem::Act::Reconfigure);
+  CHECK(r.items[1].argv.empty());
+  CHECK(anyDiagContains(r, "touch /tmp/x"));   // dropped loudly, not silently
+}
+
+TEST_CASE("[stylesdir] inlines sorted SetStyle items, filtering junk") {
+  auto lister = fakeLister({
+    {"/styles", {"Results", ".hidden", "Gray_Wolf", "backup~"}},
+  });
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exec] (before) {b}\n"
+    "  [stylesdir] (/styles)\n"
+    "  [exec] (after) {a}\n"
+    "[end]\n", fakeLoader({}), lister);
+
+  REQUIRE(r.items.size() == 4);                       // before + 2 styles + after
+  CHECK(r.items[1].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[1].label == u("Gray Wolf"));          // sorted + '_' -> ' '
+  CHECK(r.items[1].argv == std::vector<std::string>{"/styles/Gray_Wolf"});
+  CHECK(r.items[2].label == u("Results"));
+  CHECK(r.items[3].label == u("after"));
+  CHECK(r.files == std::vector<std::string>{"/styles"});
+}
+
+TEST_CASE("[stylesmenu] wraps the same listing in a titled submenu") {
+  setenv("HOME", "/home/bb", 1);
+  auto lister = fakeLister({{"/home/bb/styles", {"Results"}}});
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [stylesmenu] (Choose a style...) {~/styles}\n"
+    "[end]\n", fakeLoader({}), lister);
+
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].kind == MenuItem::Kind::Submenu);
+  CHECK(r.items[0].label == u("Choose a style..."));
+  REQUIRE(r.items[0].submenu_items.size() == 1);
+  CHECK(r.items[0].submenu_items[0].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[0].submenu_items[0].argv
+        == std::vector<std::string>{"/home/bb/styles/Results"});
+  CHECK(r.files == std::vector<std::string>{"/home/bb/styles"});
+}
+
+TEST_CASE("[stylesmenu] without a directory degrades with a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n  [stylesmenu] (Choose...)\n[end]\n", fakeLoader({}), fakeLister({}));
+  CHECK(r.items.empty());
+  CHECK(anyDiagContains(r, "stylesmenu"));
+}
+
+TEST_CASE("label-less tags degrade with a note, each on its own line") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exit]\n"
+    "  [restart]\n"
+    "  [workspaces]\n"
+    "  [reconfig]\n"
+    "  [include]\n"
+    "  [submenu]\n"
+    "    [exec] (swallowed) {s}\n"
+    "  [end]\n"
+    "[end]\n", fakeLoader({}));
+  CHECK(r.items.empty());   // the label-less submenu's body parses but is dropped
+  CHECK(anyDiagContains(r, "exit"));
+  CHECK(anyDiagContains(r, "restart"));
+  CHECK(anyDiagContains(r, "workspaces"));
+  CHECK(anyDiagContains(r, "reconfig"));
+  CHECK(anyDiagContains(r, "include"));
+  CHECK(anyDiagContains(r, "submenu"));
+}
+
+TEST_CASE("the default dir lister enumerates a real directory (regular files only)") {
+  char tmpl[] = "/tmp/bbai-styles-XXXXXX";
+  REQUIRE(mkdtemp(tmpl) != nullptr);
+  const std::string dir = tmpl;
+  { std::ofstream f(dir + "/One_Style"); f << "x"; }
+  REQUIRE(mkdir((dir + "/subdir").c_str(), 0755) == 0);   // dirs are filtered out
+
+  Result r = menuparser::parse(
+    "[begin] (m)\n  [stylesdir] (" + dir + ")\n[end]\n");
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].action == MenuItem::Act::SetStyle);
+  CHECK(r.items[0].label == u("One Style"));
+  CHECK(r.items[0].argv == std::vector<std::string>{dir + "/One_Style"});
+
+  unlink((dir + "/One_Style").c_str());
+  rmdir((dir + "/subdir").c_str());
+  rmdir(dir.c_str());
+}
+
+TEST_CASE("[stylesdir] on a missing directory degrades with a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n  [stylesdir] (/gone)\n[end]\n", fakeLoader({}), fakeLister({}));
+  CHECK(r.items.empty());
+  CHECK(anyDiagContains(r, "/gone"));
+  CHECK(r.files.empty());
+}
+
+TEST_CASE("[include] appends into the current level, even inside a submenu") {
+  auto loader = fakeLoader({
+    {"/menus/extra", "  [exec] (Two) {two}\n  [exec] (Three) {three}\n"},
+  });
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [exec] (One) {one}\n"
+    "  [submenu] (Sub)\n"
+    "    [include] (/menus/extra)\n"
+    "  [end]\n"
+    "[end]\n", loader);
+
+  REQUIRE(r.items.size() == 2);
+  const MenuItem &sub = r.items[1];
+  REQUIRE(sub.kind == MenuItem::Kind::Submenu);
+  REQUIRE(sub.submenu_items.size() == 2);          // appended INTO the submenu
+  CHECK(sub.submenu_items[0].label == u("Two"));
+  CHECK(r.files == std::vector<std::string>{"/menus/extra"});
+}
+
+TEST_CASE("[include] expands tilde and reports an unreadable file") {
+  setenv("HOME", "/home/bb", 1);
+  auto loader = fakeLoader({{"/home/bb/extra", "  [exec] (In) {in}\n"}});
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [include] (~/extra)\n"
+    "  [include] (/gone)\n"
+    "[end]\n", loader);
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.items[0].label == u("In"));
+  CHECK(anyDiagContains(r, "/gone"));
+  CHECK(r.files == std::vector<std::string>{"/home/bb/extra"});  // only the readable one
+}
+
+TEST_CASE("pipe includes are an explicit v1 non-goal: skipped with a note") {
+  Result r = menuparser::parse(
+    "[begin] (m)\n"
+    "  [include] (|genmenu)\n"
+    "[end]\n", fakeLoader({}));
+  CHECK(r.items.empty());
+  CHECK(anyDiagContains(r, "pipe"));
+}
+
+TEST_CASE("a self-including file hits the depth cap instead of spinning") {
+  const std::string self =
+    "[begin] (m)\n"
+    "  [exec] (a) {a}\n"
+    "  [include] (/menus/self)\n"
+    "[end]\n";
+  Result r = menuparser::parse(self, fakeLoader({{"/menus/self", self}}));
+  // Top level + 16 nested includes parse; the 17th is refused. Classic would
+  // spin forever here.
+  CHECK(r.items.size() == 17);
+  CHECK(anyDiagContains(r, "deep"));
+}
+
+TEST_CASE("parseFile records the main file first in Result::files") {
+  auto loader = fakeLoader({
+    {"/menus/main", "[begin] (m)\n  [include] (/menus/extra)\n[end]\n"},
+    {"/menus/extra", "  [exec] (X) {x}\n"},
+  });
+  Result r = menuparser::parseFile("/menus/main", loader);
+  REQUIRE(r.items.size() == 1);
+  CHECK(r.files == std::vector<std::string>{"/menus/main", "/menus/extra"});
+}
+
+TEST_CASE("unknown tags are skipped with a note") {
   Result r = menuparser::parse(
     "[begin] (m)\n"
     "  [exec] (keep) {keep}\n"
-    "  [style] (Some Style) {~/.blackbox/styles/x}\n"
-    "  [stylesdir] (~/.blackbox/styles)\n"
-    "  [include] (~/.blackbox/other)\n"
-    "  [reconfig] (Reconfigure)\n"
     "  [frobnicate] (bogus)\n"
     "[end]\n");
-
-  // Only the [exec] survives; the rest degrade without producing items.
   REQUIRE(r.items.size() == 1);
   CHECK(r.items[0].label == u("keep"));
-
-  CHECK(anyDiagContains(r, "style"));
-  CHECK(anyDiagContains(r, "include"));
-  CHECK(anyDiagContains(r, "reconfig"));
   CHECK(anyDiagContains(r, "frobnicate"));
 }
 
@@ -275,16 +488,27 @@ TEST_CASE("the real data/menu.in fixture parses with sane known entries") {
   REQUIRE(mail != nullptr);
   CHECK(mail->argv == sh("mozilla -mail"));
 
-  // [stylesdir] inside the Styles submenu is skipped -> empty cascade.
+  // menu.in's [stylesdir] points at the unexpanded @pkgdatadir@ - no such
+  // directory, so the Styles submenu stays empty and the parse says why.
   const MenuItem *styles = findByLabel(r.items, "Styles");
   REQUIRE(styles != nullptr);
   CHECK(styles->submenu_items.empty());
+  CHECK(anyDiagContains(r, "stylesdir"));
 
   // [workspaces] / [config] -> placeholder submenus.
   const MenuItem *wsl = findByLabel(r.items, "Workspace List");
   REQUIRE(wsl != nullptr);
   CHECK(wsl->kind == MenuItem::Kind::Submenu);
   CHECK(wsl->submenu_items.empty());
+  CHECK(wsl->action == MenuItem::Act::WorkspacesMenu);
+
+  // The "Others" submenu is all RestartOther entries now.
+  const MenuItem *others = findByLabel(r.items, "Others");
+  REQUIRE(others != nullptr);
+  const MenuItem *fvwm = findByLabel(others->submenu_items, "Start FVWM");
+  REQUIRE(fvwm != nullptr);
+  CHECK(fvwm->action == MenuItem::Act::RestartOther);
+  CHECK(fvwm->argv == sh("exec fvwm"));
 
   // Tail actions: Restart -> Act::Restart, Exit -> Act::Exit.
   const MenuItem *restart = findByLabel(r.items, "Restart");

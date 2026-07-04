@@ -121,6 +121,22 @@ namespace bbai {
     int activeMenuItemForTest() const;
     Menu *rootMenuForTest() const { return active_menu_.get(); }
 
+    // M5 menu file: the live root menu parses menu_file_ lazily and re-parses
+    // when any recorded file's ctime changed (classic checkMenu, stat-on-open;
+    // we compare the full timespec, so tests don't race whole seconds). Empty
+    // path = the in-code menu. The ForTest name is the independence shim until
+    // rc-style's Config::menuFile lands - production wiring is one ctor line.
+    void setMenuFileForTest(const std::string &path);
+
+    // Restart leaves through main.cc: requestRestart stashes the argv (empty =
+    // re-exec self) and terminates the loop; main execs after full teardown.
+    void requestRestart(std::vector<std::string> argv_or_empty);
+    bool restartRequested() const { return restart_requested_; }
+    const std::vector<std::string> &restartArgv() const { return restart_argv_; }
+    const std::vector<std::string> &pendingRestartForTest() const { return restart_argv_; }
+    const std::string &lastStyleRequestForTest() const { return last_style_request_; }
+    int reconfigureRequestsForTest() const { return reconfigure_requests_; }
+
     // --- test-only input injection + hit-test introspection (headless has no
     // real input devices, so tests drive the SAME onPointer* handlers the real
     // cursor events use) ---
@@ -301,6 +317,21 @@ namespace bbai {
     std::set<uint32_t> swallowed_keycodes_;     // bound presses whose release we also swallow
     Action last_action_;                        // last fired binding (test introspection)
     std::unique_ptr<Menu> active_menu_;         // open root menu (nullptr = none); the modal gate
+
+    // menu-file source state (M5). Stamps cover the main file + [include]s +
+    // stylesdirs, from menuparser::Result::files.
+    struct MenuStamp { std::string path; long ctime_sec; long ctime_nsec; };
+    std::string menu_file_;                 // empty -> in-code menu
+    bool menu_loaded_ = false;
+    std::u32string menu_title_;
+    std::vector<MenuItem> menu_items_;
+    std::vector<MenuStamp> menu_stamps_;
+    void loadMenuFile();                    // parse + stamps + stderr diagnostics
+    bool menuFilesChanged() const;          // classic checkMenu (stat-on-open)
+    bool restart_requested_ = false;
+    std::vector<std::string> restart_argv_;   // empty = re-exec self
+    std::string last_style_request_;          // dispatch-side recorder (survives the stub swap)
+    int reconfigure_requests_ = 0;
 
     // interactive grab state
     CursorMode cursor_mode = CursorMode::Passthrough;

@@ -56,4 +56,28 @@ namespace bbai::rootmenu {
     return items;
   }
 
+  namespace {
+    void fixupDynamic(std::vector<MenuItem> &items, const WorkspaceModel &ws) {
+      for (MenuItem &m : items) {
+        if (m.kind != MenuItem::Kind::Submenu) continue;
+        if (m.action == MenuItem::Act::WorkspacesMenu) {
+          m.submenu_items = buildWorkspacesSubmenu(ws);
+        } else if (m.action == MenuItem::Act::ConfigMenu) {
+          m.enabled = false;                 // wave-2 configmenu mounts here
+          m.submenu_items.clear();
+        } else {
+          fixupDynamic(m.submenu_items, ws);
+        }
+      }
+    }
+  } // namespace
+
+  std::vector<MenuItem> buildFromParsed(const std::vector<MenuItem> &parsed,
+                                        const WorkspaceModel &ws) {
+    if (parsed.empty()) return build(ws);   // locked: fall back to the RICHER in-code menu
+    std::vector<MenuItem> items = parsed;
+    fixupDynamic(items, ws);
+    return items;
+  }
+
 } // namespace bbai::rootmenu

@@ -33,6 +33,7 @@ unit_sources = files(
   'unit/sni_model_test.cc',
   'unit/work_area_geom_test.cc',
   'unit/util_test.cc',
+  'unit/rootmenu_wire_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
@@ -218,6 +219,13 @@ rootmenu_submenu_exe = executable('rootmenu-submenu-test',
   files('system/rootmenu_submenu_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('rootmenu_submenu', rootmenu_submenu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# M5 menu-wire: file-driven root menu - tree + goldens, stat-on-open reload,
+# include end-to-end, fallback; action dispatch joins in the next task.
+menu_file_exe = executable('menu-file-test', files('system/menu_file_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('menu_file', menu_file_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
 # F4.2 View iconified state: composes with workspace visibility (nonvisual, no golden).
