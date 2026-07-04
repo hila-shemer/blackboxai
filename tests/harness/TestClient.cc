@@ -1,4 +1,5 @@
 #include "TestClient.hh"
+#include "ConnectRetry.hh"
 
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
@@ -166,7 +167,7 @@ namespace bbai::test {
     impl->w = w;
     impl->h = h;
     impl->deco = deco;
-    impl->display = wl_display_connect(socket.c_str());
+    impl->display = connectWithRetry(socket.c_str());
     if (!impl->display) return;
     impl->registry = wl_display_get_registry(impl->display);
     wl_registry_add_listener(impl->registry, &s_registry_listener, impl);

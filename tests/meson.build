@@ -370,6 +370,14 @@ lock_interactions_exe = executable('lock-interactions-test',
 test('lock_interactions', lock_interactions_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Harness self-test: the bounded-retry connect (the plan's recorded cold-cache
+# lock_interactions flake remedy) - no compositor, pure client-side.
+harness_connect_exe = executable('harness-connect-test',
+  files('system/harness_connect_test.cc'),
+  include_directories : include_directories('harness'),
+  dependencies : [doctest_dep, wayland_client_dep, dependency('threads')])
+test('harness_connect', harness_connect_exe, suite : 'system', env : test_env)
+
 # lock-idle: ext-idle-notify-v1 wiring (timeout=0 = deterministic, no goldens).
 idle_notify_exe = executable('idle-notify-test', files('system/idle_notify_test.cc'),
   dependencies : [harness_dep, doctest_dep])
