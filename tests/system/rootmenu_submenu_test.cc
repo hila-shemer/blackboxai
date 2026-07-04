@@ -40,6 +40,7 @@ TEST_CASE("hovering the Workspaces row opens the child submenu to the right") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -79,6 +80,7 @@ TEST_CASE("hovering a non-submenu row closes the open child") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -129,6 +131,7 @@ TEST_CASE("F3.4 keyboard: Return on Workspaces opens child; leaf action switches
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -172,6 +175,7 @@ TEST_CASE("F3.4 keyboard: New Workspace via submenu adds a workspace") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -210,6 +214,7 @@ TEST_CASE("F3.4 keyboard: Remove Last Workspace via submenu removes; never below
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -261,6 +266,7 @@ TEST_CASE("F3.4 mouse: click child workspace row switches workspace and closes c
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -294,6 +300,7 @@ TEST_CASE("F3.5 child row highlights on hover") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -325,6 +332,7 @@ TEST_CASE("F3.5 hover plain parent row closes stale child") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -352,6 +360,7 @@ TEST_CASE("F3.5 outside-click closes the whole chain") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -379,6 +388,7 @@ TEST_CASE("F3.5 Escape from child closes the whole chain") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 

@@ -74,6 +74,7 @@ namespace bbai {
         rc_path_ = std::string(home) + "/.blackboxrc";
     config_ = bbai::Config::load(rc_path_);
     style_ = loadStyleWithFallback(config_.styleFile);
+    menu_file_ = config().menuFile;   // tilde-expanded by Config (rc-style contract)
 
     // Workspace count/names from the rc. Applied before any output exists so
     // the toolbar's first render already shows the configured name. The shrink
@@ -346,6 +347,8 @@ namespace bbai {
   bool Server::reconfigure(const std::string &rc_override) {
     if (!rc_override.empty()) rc_path_ = rc_override;
     config_ = bbai::Config::load(rc_path_);
+    menu_file_ = config().menuFile;
+    menu_loaded_ = false;             // classic reconfigure re-parses the menu
     bool style_ok = true;
     style_ = loadStyleWithFallback(config_.styleFile, &style_ok);
     applyConfig();
