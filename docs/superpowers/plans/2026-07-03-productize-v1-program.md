@@ -177,6 +177,13 @@ Two-phase because menus consumes all three others' seams as real (not stubs):
   must defer to a wl_event_loop idle so it never re-enters the Host's sd_bus_process
   dispatch - without it slit's landed ContextMenu test regressed). WAVE 2 CODE-COMPLETE.
 
+- Review round (2026-07-04): 5-dimension review + per-finding adversarial verify over
+  75488aa..HEAD -> 7 confirmed, 0 refuted (1 must-fix: demoted fullscreen covering the
+  alt-tab target). Milder than wave-1's 23 - the plan-writer discipline held. All 6
+  distinct fixes (findings [0]/[2] were one defect) landed in one worktree (concentrated
+  in Server.cc), each with a pinning test watched failing first. Gate 71/71, 92%,
+  goldens clean. WAVE 2 COMPLETE + pushed.
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
