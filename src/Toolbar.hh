@@ -35,8 +35,9 @@ namespace bbai {
     void redrawWindowLabel(const char *title);    // on focus change (null/"" -> blank)
 
     // Re-theme hook: full rebuild (textures/fonts/metrics re-read from the
-    // server's current style) + reposition.
-    void restyle() { rebuild(); }
+    // server's current style) + reposition + strut recompute (the new style's
+    // bar height changes what the work area must reserve).
+    void restyle() { rebuild(); updateStrut(); }
 
     toolbar::Rect barRectForTest(void) const { return currentBarRect(); }
     toolbar::Placement placementForTest(void) const { return placement_; }
