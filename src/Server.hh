@@ -135,6 +135,11 @@ namespace bbai {
     // rc-style's Config::menuFile lands - production wiring is one ctor line.
     void setMenuFileForTest(const std::string &path);
 
+    // Pin the style ladder's middle rung (empty = skip straight to builtin).
+    // Headless boots it empty so an installed prefix can't leak into goldens;
+    // this is how tests exercise the default-style rung at all.
+    void setDefaultStyleForTest(const std::string &path) { default_style_path_ = path; }
+
     // Restart leaves through main.cc: requestRestart stashes the argv (empty =
     // re-exec self) and terminates the loop; main execs after full teardown.
     void requestRestart(std::vector<std::string> argv_or_empty);
@@ -294,6 +299,7 @@ namespace bbai {
     void setConfigOption(ConfigOption opt);
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
+    std::string default_style_path_;   // style ladder middle rung; empty on headless
     bbai::Config config_;
     std::shared_ptr<const Style> style_;
 

@@ -1416,7 +1416,7 @@ custom-format fixture is the new coverage. %H/%M cases only in tests -
 
 **Mechanism (one, for both files):** headless Servers treat the compiled install-prefix default style as absent - both faces of the macro: the ladder's middle rung comes from `default_style_path_` (empty on headless), and an incoming request for the macro path itself (Config defaults `styleFile` to it when the rc names none) is refused. Same stance as the ctor's rc discovery: a box where the product is installed must not leak prefix state into the golden suite. Real backends are untouched. Bonus: the test lever makes the ladder's middle rung CI-coverable for the first time (today it only runs on installed boxes, i.e. never in CI).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/system/retheme_test.cc`:
 
@@ -1446,7 +1446,7 @@ TEST_CASE("style ladder middle rung: a pinned default style catches the fallback
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c 'ninja -C build-f44'
@@ -1454,7 +1454,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `setDefaultStyleForTest` is not a member of `bbai::Server`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.cc` - add the empty-macro guard near the top (Config.cc:23-25 pattern), right after the includes:
 
@@ -1533,7 +1533,7 @@ Add anchoring comments in the two watch-item tests (assertions unchanged - they 
   CHECK(server.currentStyle()->sourcePath().empty());   // builtin rung
 ```
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1544,7 +1544,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass. In CI the container never has an installed prefix, so pre-existing behavior is bit-identical - the change only bites on installed dev boxes. **Verification limit, stated:** the real-backend branch (`default_style_path_` = the macro) can't run in CI; it is exercised by reasoning plus the next `meson install` hand-check on the user's TTY box. The middle-rung logic itself IS now covered via the lever.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Server.hh src/Server.cc tests/system/retheme_test.cc tests/system/style_boot_test.cc
