@@ -2099,6 +2099,12 @@ namespace bbai {
 
   void Server::activateMenuItem(const MenuItem &it) {
     const MenuItem copy = it;   // copy before closeMenus() destroys the owning Menu
+    // A dbusmenu leaf fires its Event over the still-live SniMenu bus context
+    // before the chain (and sni_menu_) are torn down. sendClicked queues the
+    // message on the shared bus and flushes it, so it goes out even as
+    // sni_menu_ dies in the closeMenus below.
+    if (copy.action == MenuItem::Act::DbusmenuEvent && sni_menu_)
+      sni_menu_->sendClicked(static_cast<int>(copy.workspace));
     closeMenus();
     switch (copy.action) {
     case MenuItem::Act::Exec:            commandRunner().run(copy.argv); break;
