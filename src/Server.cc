@@ -1210,6 +1210,40 @@ namespace bbai {
     wlr_xdg_toplevel_set_tiled(v->toplevel(), edge | WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
   }
 
+  void Server::moveFocusedToOutput(wlr_direction dir) {
+    View *v = focused_view;
+    if (!v) return;
+    Output *src = outputForView(v);
+    if (!src) return;
+    const wlr_box sb = src->fullBox();
+    wlr_output *dst_wo = wlr_output_layout_adjacent_output(
+        output_layout, dir, src->wlrOutput(),
+        sb.x + sb.width / 2.0, sb.y + sb.height / 2.0);
+    if (!dst_wo) return;                     // no head that way (POC-proven NULL)
+    Output *dst = outputForWlr(dst_wo);
+    if (!dst || dst == src) return;
+
+    if (v->isFullscreen()) {
+      setViewFullscreen(v, false);           // re-apply on the new head's fullBox
+      setViewFullscreen(v, true, dst);
+      return;
+    }
+    if (v->isMaximized()) {
+      v->remaximize(dst->workArea());
+      return;
+    }
+    // Plain view: preserve the offset within the source head, clamp onto the
+    // target so it can't land off-screen on a smaller monitor.
+    const wlr_box db = dst->fullBox();
+    int nx = db.x + (v->x() - sb.x);
+    int ny = db.y + (v->y() - sb.y);
+    if (nx > db.x + db.width  - 1) nx = db.x + db.width  - 1;
+    if (ny > db.y + db.height - 1) ny = db.y + db.height - 1;
+    if (nx < db.x) nx = db.x;
+    if (ny < db.y) ny = db.y;
+    v->setPosition(nx, ny);
+  }
+
   int Server::frameWidthForTest(View *v) const {
     return frame::frameWidth(v->contentWidth(), style_->frameMetrics());
   }
