@@ -434,6 +434,12 @@ window_ops_key_exe = executable('window-ops-key-test', files('system/window_ops_
 test('window_ops_key', window_ops_key_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Focus-follows-mouse (default-on) + the three modal-interaction guards.
+sloppy_focus_exe = executable('sloppy-focus-test', files('system/sloppy_focus_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('sloppy_focus', sloppy_focus_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

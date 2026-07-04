@@ -64,7 +64,9 @@ namespace bbai {
     std::string rootCommand;
 
     // --- focus model (session.focusModel and its sub-flags) ---
-    FocusModel focusModel = FocusModel::ClickToFocus;
+    // Sloppy focus is the product default (user-locked: focus-follows-mouse
+    // default-on). An rc session.focusModel key always wins.
+    FocusModel focusModel = FocusModel::SloppyFocus;
     bool autoRaise = false;
     bool clickRaise = false;
     bool focusNewWindows = true;   // session.focusNewWindows (reference: True)

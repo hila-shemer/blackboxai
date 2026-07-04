@@ -966,6 +966,14 @@ namespace bbai {
     wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
     View *v = viewFromNode(n);
     if (v && partAt(v, cursor->x, cursor->y) == Part::Client) {
+      // Focus-follows-mouse (default-on): the pointer entered a client's own
+      // surface. Gated to Part::Client (same condition as the pointer-enter
+      // below) so hovering our chrome doesn't thrash focus, and to !cycling_ so
+      // a stray motion mid-alt-tab can't scramble the frozen ring. Lock / open
+      // menu / screenshot / implicit-grab already returned above. focusView is
+      // itself lock-guarded, so this is belt-and-suspenders on the lock path.
+      if (config_.focusModel == FocusModel::SloppyFocus && !cycling_ && v != focused_view)
+        focusView(v);
       wlr_surface *surf = v->toplevel()->base->surface;
       wlr_seat_pointer_notify_enter(seat, surf, sx, sy);
       wlr_seat_pointer_notify_motion(seat, time, sx, sy);
