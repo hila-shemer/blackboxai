@@ -321,3 +321,22 @@ TEST_CASE("desktop background resolution: keys beat rootCommand beat flat black"
   CHECK(s3->desktop().kind == bbai::DesktopBackground::Kind::TextureBg);
   CHECK(s3->desktop().texture.color1() == bt::Color(0, 0, 0));
 }
+
+TEST_CASE("slit.marginWidth: parsed, classic default 2, clamped non-negative") {
+  bt::Resource res;
+  res.loadFromString("slit.marginWidth: 5\n");
+  auto s = Style::fromResource(res);
+  REQUIRE(s);
+  CHECK(s->slitMargin() == 5);
+
+  bt::Resource empty;
+  auto d = Style::fromResource(empty);
+  REQUIRE(d);
+  CHECK(d->slitMargin() == 2);
+
+  bt::Resource neg;
+  neg.loadFromString("slit.marginWidth: -3\n");
+  auto n = Style::fromResource(neg);
+  REQUIRE(n);
+  CHECK(n->slitMargin() == 0);
+}

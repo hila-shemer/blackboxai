@@ -93,6 +93,11 @@ namespace bbai {
     return gx >= b.x && gx < b.x + b.w && gy >= b.y && gy < b.y + b.h;
   }
 
+  int Toolbar::exposedHeight() const {
+    return auto_hide_ ? server_.currentStyle()->toolbarMetrics().hiddenHeight
+                      : currentBarRect().h;
+  }
+
   void Toolbar::rebuild(void) {
     clearNodes();
     std::shared_ptr<const Style> st = server_.currentStyle();

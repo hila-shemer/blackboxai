@@ -32,10 +32,11 @@ namespace bbai {
   class Output;
   class View;
   class Toolbar;
+  class Slit;
   class Menu;
   class SessionLock;
   struct Keyboard;
-  namespace sni { class Host; }
+  namespace sni { class Host; struct Item; }
 
   class Server {
   public:
@@ -97,6 +98,10 @@ namespace bbai {
 
     // Modal root menu (compositor chrome on layer_overlay).
     void openRootMenu(double lx, double ly);
+    // SNI context-menu dispatch - PINNED wave-2 seam (this name, int coords).
+    // v1 body is the bus proxy; the menus slice swaps ONLY the body
+    // (menu_path items -> dbusmenu-rendered bt::Menu at (lx,ly), else proxy).
+    void openSniContextMenu(const sni::Item &item, int lx, int ly);
     void openIconMenu(double lx, double ly);
     void openIconMenuForTest();
     std::vector<MenuItem> buildIconMenu();
@@ -176,6 +181,10 @@ namespace bbai {
     // private dbus-run-session bus. Inert-never-fatal either way.
     sni::Host &sniHost() { return *sni_host_; }
     sni::Host *sniHostForTest() const { return sni_host_.get(); }
+    // Checked production accessor: null on headless until the test lever
+    // runs, and the Host can be ok()==false on a busless boot - every slit
+    // path treats "no host" as "no items" (inert-never-fatal).
+    sni::Host *sniHostOrNull() const { return sni_host_.get(); }
     void createSniHostForTest();
 
     // Deviceless key injection: drives the same binding matcher the real onKey
@@ -211,6 +220,8 @@ namespace bbai {
     void addHeadlessOutputForTest(int w, int h);
     void destroyOutputForTest(int index);   // wlr_output_destroy on outputs_[index]
     Toolbar *toolbarForTest() const { return toolbar_.get(); }
+    Toolbar *toolbarOrNull() const { return toolbar_.get(); }
+    Slit *slitForTest() const { return slit_.get(); }
     const std::string &toolbarWindowTitleForTest() const;
     wlr_scene_output *activeSceneOutput() const;     // production accessor
     wlr_scene_output *activeSceneOutputForTest() const { return activeSceneOutput(); }
@@ -325,6 +336,7 @@ namespace bbai {
     void snapFocused(uint32_t edge);   // WLR_EDGE_LEFT/RIGHT -> half the work area
     void moveFocusedToOutput(wlr_direction dir);   // adjacent head; NULL past edge = no-op
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
+    void installSniHostEvents();   // Server OWNS the Host's single event slot
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
     bbai::Config config_;
@@ -358,6 +370,7 @@ namespace bbai {
     std::unique_ptr<sni::Host> sni_host_;       // tray D-Bus half (sni-core)
     WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
     std::unique_ptr<Toolbar> toolbar_;          // top-layer chrome (M4)
+    std::unique_ptr<Slit> slit_;                // primary-output tray chrome (wave-2)
     std::unique_ptr<SessionLock> session_lock_;   // ext-session-lock-v1 (lock-idle)
     wlr_idle_notifier_v1 *idle_notifier_ = nullptr;  // ext-idle-notify-v1
     Keybindings keybindings_;                   // M4 built-in keybinding table

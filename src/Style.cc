@@ -391,6 +391,7 @@ std::shared_ptr<const Style> Style::fromResource(const bt::Resource &res,
 
   // --- slit (defaults to the toolbar texture, ScreenResource.cc:499-505) ---
   s->slit_ = bt::textureResource(res, "slit", "Slit", t.bar);
+  s->slit_margin_ = std::max(res.read("slit.marginWidth", "Slit.MarginWidth", 2), 0);
 
   // --- top-level keys ---
   s->root_command_ = res.read("rootCommand", "RootCommand", "");

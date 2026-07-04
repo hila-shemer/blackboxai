@@ -2,6 +2,7 @@
 #include "Output.hh"
 #include "View.hh"
 #include "Toolbar.hh"
+#include "Slit.hh"
 #include "Keyboard.hh"
 #include "Menu.hh"
 #include "Rootmenu.hh"
@@ -241,8 +242,10 @@ namespace bbai {
     // SNI tray host. Real backends only: under headless the developer's
     // session bus must stay untouched (claiming org.kde.StatusNotifierWatcher
     // there would fight the real tray).
-    if (!headless)
+    if (!headless) {
       sni_host_ = std::make_unique<sni::Host>(loop);
+      installSniHostEvents();
+    }
 
     session_lock_ = std::make_unique<SessionLock>(*this, layer_lock);
 
@@ -256,14 +259,11 @@ namespace bbai {
       outputs_.push_back(o);
       if (!active_output) {
         active_output = o;
-        // The toolbar spans the primary output - created only if the rc says
-        // so, then the config knobs apply through the contract setters. (Also
-        // the re-plug path: if every head died, active_output is null again
-        // and the next head becomes the new primary.)
-        if (config_.toolbar.enabled) {
-          toolbar_ = std::make_unique<Toolbar>(*this, *o);
-          applyConfig();
-        }
+        // Chrome on the (new) primary comes up through applyConfig - the same
+        // gate+knobs path reconfigure and the output-death re-home use. It
+        // creates the toolbar under its rc gate and the slit unconditionally
+        // (classic has no enable knob for the slit; empty = invisible).
+        applyConfig();
         // Give the pointer an image from frame one - otherwise it's invisible
         // over our own chrome until the Super+F7 flow happens to latch one.
         // Real-output only: headless asserts byte-exact goldens and has no
@@ -351,6 +351,14 @@ namespace bbai {
       toolbar_->setPlacement(config_.toolbar.placement);
       toolbar_->setAutoHide(config_.toolbar.autoHide);
     }
+
+    // Slit: exists whenever a primary output does. Applied AFTER the toolbar
+    // knobs so the classic overlap shift reads the bar's final rect (a stale
+    // toolbar rect here is a subtle one-frame golden flake).
+    if (!slit_ && active_output)
+      slit_ = std::make_unique<Slit>(*this, *active_output);
+    if (slit_)
+      slit_->applyOptions(config_.slit);
   }
 
   void Server::restyle() {
@@ -358,6 +366,7 @@ namespace bbai {
     for (Output *o : outputs_) o->renderBackground();
     for (auto &v : views) v->restyle();
     if (toolbar_) toolbar_->restyle();
+    if (slit_) slit_->restyle();   // after the toolbar: repositions against its new rect
   }
 
   bool Server::reconfigure(const std::string &rc_override) {
@@ -411,6 +420,7 @@ namespace bbai {
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
+    slit_.reset();            // scene tree + hide Timer (registry still alive)
     autoraise_timer_.reset(); // deregisters before the TimerRegistry dies
     session_lock_.reset();    // its Timer deregisters + listeners drop before the registry/display die
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
@@ -513,6 +523,18 @@ namespace bbai {
 
   void Server::createSniHostForTest() {
     sni_host_ = std::make_unique<sni::Host>(wl_display_get_event_loop(display));
+    installSniHostEvents();
+  }
+
+  // HostEvents is a single-slot std::function - last setEvents wins, silently.
+  // So the SERVER owns the slot at every creation site and fans out; a second
+  // consumer joins here, never via its own setEvents call. Forwarding is
+  // null-safe both ways: the ctor site runs before slit_ exists, and headless
+  // servers have no host until the test lever runs.
+  void Server::installSniHostEvents() {
+    if (!sni_host_) return;
+    auto fwd = [this](const sni::Item &) { if (slit_) slit_->refresh(); };
+    sni_host_->setEvents(sni::HostEvents{fwd, fwd, fwd});
   }
 
   wlr_scene_output *Server::activeSceneOutput() const {
@@ -572,6 +594,7 @@ namespace bbai {
       // If no head survives, the next new_output re-creates it (active_output
       // is null again, so the primary branch re-fires).
       toolbar_.reset();
+      slit_.reset();   // its Strut points into the dying Output too
       applyConfig();   // workspace half is idempotent (grow-only + name re-set)
     }
     // Windows that lived on the dead head now resolve to the fallback head -
@@ -957,6 +980,7 @@ namespace bbai {
       return;   // modal: no client/toolbar/grab handling while selecting
     }
     if (toolbar_) toolbar_->handlePointerMotion(cursor->x, cursor->y);   // auto-hide edge trigger (no-op when off)
+    if (slit_) slit_->handlePointerMotion(cursor->x, cursor->y);         // same, for the slit
     if (cursor_mode == CursorMode::Move)   { processMove();   return; }
     if (cursor_mode == CursorMode::Resize) { processResize(); return; }
 
@@ -1044,6 +1068,27 @@ namespace bbai {
     }
 
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+      // Slit item clicks (classic Slit buttons, SNI-flavored). Before the
+      // desktop handlers: a right-click on the slit opens the ITEM's menu
+      // path, never the root menu. Hidden slit = no items on screen = no
+      // routing; the press still dies here as chrome (overDesktop already
+      // rejects layer_top nodes, and pointer focus was cleared over chrome,
+      // so nothing leaks to clients either way - the release is seat-filtered
+      // because its press was never delivered).
+      if (slit_ && !slit_->hidden() &&
+          slit_->containsGlobal(static_cast<int>(cursor->x), static_cast<int>(cursor->y))) {
+        const int lx = static_cast<int>(cursor->x), ly = static_cast<int>(cursor->y);
+        const int idx = slit_->itemIndexAtGlobal(lx, ly);
+        sni::Host *host = sniHostOrNull();
+        if (idx >= 0 && host && host->ok() &&
+            static_cast<std::size_t>(idx) < host->items().size()) {
+          const sni::Item &it = host->items()[static_cast<std::size_t>(idx)];
+          if (button == BTN_LEFT)        host->activate(it, lx, ly);
+          else if (button == BTN_MIDDLE) host->secondaryActivate(it, lx, ly);
+          else if (button == BTN_RIGHT)  openSniContextMenu(it, lx, ly);
+        }
+        return;   // swallow frame-gap presses too - chrome, not desktop
+      }
       // Right-click on the bare desktop opens the modal root menu.
       if (button == BTN_RIGHT && overDesktop(cursor->x, cursor->y)) {
         openRootMenu(cursor->x, cursor->y);
@@ -1670,6 +1715,14 @@ namespace bbai {
     active_menu_ = std::make_unique<Menu>(*this, title, std::move(items));
     active_menu_->show(static_cast<int>(lx), static_cast<int>(ly));
     wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
+  }
+
+  void Server::openSniContextMenu(const sni::Item &item, int lx, int ly) {
+    // v1 proxy. The coords are layout ints - on Wayland items can't position
+    // by them anyway (waybar sends the same); don't burn time making them
+    // "correct".
+    if (sni_host_ && sni_host_->ok())
+      sni_host_->contextMenu(item, lx, ly);
   }
 
   std::vector<MenuItem> Server::buildIconMenu() {
