@@ -36,25 +36,29 @@ namespace bbai::menu {
   };
 
   // Single-column layout: column width = max(title, every item width); items
-  // stack below the (optional) title bar.
+  // stack below the (optional) title bar. frame/title margins default to the
+  // pinned constants so pre-style callers are byte-identical; the runtime Menu
+  // feeds MenuLook's parsed margins (rc-style deferred this to wave-2 menus).
   inline Layout computeLayout(const std::vector<ItemMetric> &items, int item_text_h,
-                              bool show_title, int title_text_w, int title_text_h) {
+                              bool show_title, int title_text_w, int title_text_h,
+                              int frame_margin = kFrameMargin,
+                              int title_margin = kTitleMargin) {
     Layout L;
-    L.title_h = show_title ? titleHeight(title_text_h) : 0;
+    L.title_h = show_title ? (title_text_h + 2 * title_margin) : 0;
 
     int w = kMinItemWidth;
-    if (show_title) w = std::max(w, title_text_w + 2 * kTitleMargin);
+    if (show_title) w = std::max(w, title_text_w + 2 * title_margin);
     for (const ItemMetric &it : items)
       w = std::max(w, it.separator ? kMinItemWidth : itemWidth(it.text_w));
 
-    int y = L.title_h + kFrameMargin;
+    int y = L.title_h + frame_margin;
     for (const ItemMetric &it : items) {
       const int h = itemHeight(item_text_h, it.separator);
-      L.items.push_back({ kFrameMargin, y, w, h });
+      L.items.push_back({ frame_margin, y, w, h });
       y += h;
     }
-    L.width = w + 2 * kFrameMargin;
-    L.height = y + kFrameMargin;
+    L.width = w + 2 * frame_margin;
+    L.height = y + frame_margin;
     return L;
   }
 
