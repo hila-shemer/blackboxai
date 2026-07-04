@@ -556,3 +556,10 @@ bar_menu_exe = executable('bar-menu-test',
   dependencies : [harness_dep, doctest_dep, libsystemd_dep])
 test('bar_menu', dbus_run_session, args : ['--', bar_menu_exe], suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: com.canonical.dbusmenu client against a with_menu mock.
+dbusmenu_exe = executable('dbusmenu-test',
+  files('system/dbusmenu_test.cc', 'harness/SniMockItem.cc'),
+  dependencies : [harness_dep, doctest_dep, libsystemd_dep])
+test('dbusmenu', dbus_run_session, args : ['--', dbusmenu_exe], suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)

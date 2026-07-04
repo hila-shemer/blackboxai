@@ -22,6 +22,7 @@
 #include "Style.hh"
 #include "MenuItem.hh"
 
+#include <functional>
 #include <memory>
 #include <set>
 #include <string>
@@ -34,6 +35,7 @@ namespace bbai {
   class Toolbar;
   class Slit;
   class Menu;
+  class SniMenu;
   class SessionLock;
   struct Keyboard;
   namespace sni { class Host; struct Item; }
@@ -312,6 +314,12 @@ namespace bbai {
     void openWindowMenu(View *v, int lx, int ly);
     void openToolbarMenu(int lx, int ly);
     void openSlitMenu(int lx, int ly);
+    void showDbusMenu(std::vector<MenuItem> items, int lx, int ly);
+    // Tear down sni_menu_ from an event-loop idle, not synchronously: the proxy
+    // fallback decision is made INSIDE the Host's sd_bus dispatch, where freeing
+    // the client's slots would corrupt the shared bus.
+    void scheduleSniMenuReset();
+    static void sniMenuResetIdle(void *data);
     void sendViewToWorkspace(View *v, unsigned ws);
     bool overDesktop(double lx, double ly);                 // background, not a view/chrome
     void beginInteractive(View *v, CursorMode mode, uint32_t edges);
@@ -425,6 +433,9 @@ namespace bbai {
     std::set<uint32_t> swallowed_keycodes_;     // bound presses whose release we also swallow
     Action last_action_;                        // last fired binding (test introspection)
     std::unique_ptr<Menu> active_menu_;         // open root menu (nullptr = none); the modal gate
+    std::unique_ptr<SniMenu> sni_menu_;         // in-flight/open dbusmenu client (wave-2)
+    wl_event_source *sni_menu_reset_idle_ = nullptr;  // deferred sni_menu_ teardown
+    std::function<void()> sni_menu_fallback_;   // proxy call deferred out of bus dispatch
 
     // menu-file source state (M5). Stamps cover the main file + [include]s +
     // stylesdirs, from menuparser::Result::files.

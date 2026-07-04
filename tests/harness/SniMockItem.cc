@@ -32,6 +32,129 @@ namespace bbai::test {
       int report_fd = -1;
       const unsigned char *icon = kSniMockIcon;
       const char *status = "Active";
+      bool with_menu = false;
+    };
+
+    // --- com.canonical.dbusmenu mock (with_menu) ---------------------------
+    struct MenuNode {
+      int id;
+      const char *label = nullptr;      // nullptr -> omitted
+      const char *type = nullptr;       // "separator" or nullptr
+      int enabled = -1;                 // -1 omit
+      int visible = -1;                 // -1 omit
+      const char *toggle_type = nullptr;
+      int toggle_state = -2;            // -2 omit
+      bool submenu = false;
+      std::vector<MenuNode> kids;
+    };
+
+    // Deep tree: File -> {New, Recent -> {doc1, doc2}}, sep, Notifications(chk),
+    // Upgrade(disabled), Secret(hidden). Underscores are mnemonic markers.
+    MenuNode menuTree() {
+      MenuNode root{0}; root.submenu = true;
+      MenuNode file{1, "_File"}; file.submenu = true;
+      file.kids.push_back({11, "New"});
+      MenuNode recent{12, "R_ecent"}; recent.submenu = true;
+      recent.kids.push_back({121, "doc1"});
+      recent.kids.push_back({122, "doc2"});
+      file.kids.push_back(recent);
+      root.kids.push_back(file);
+      root.kids.push_back({2, nullptr, "separator"});
+      MenuNode chk{3, "Notifications"}; chk.toggle_type = "checkmark"; chk.toggle_state = 1;
+      root.kids.push_back(chk);
+      MenuNode dis{4, "Upgrade"}; dis.enabled = 0;
+      root.kids.push_back(dis);
+      MenuNode sec{5, "Secret"}; sec.visible = 0;
+      root.kids.push_back(sec);
+      return root;
+    }
+
+    unsigned g_menu_revision = 1;
+
+    int appendMenuNode(sd_bus_message *reply, const MenuNode &n) {
+      int r = sd_bus_message_open_container(reply, 'r', "ia{sv}av");
+      if (r < 0) return r;
+      if ((r = sd_bus_message_append(reply, "i", n.id)) < 0) return r;
+      if ((r = sd_bus_message_open_container(reply, 'a', "{sv}")) < 0) return r;
+      auto kv_s = [&](const char *k, const char *v) {
+        sd_bus_message_open_container(reply, 'e', "sv");
+        sd_bus_message_append(reply, "s", k);
+        sd_bus_message_append(reply, "v", "s", v);
+        sd_bus_message_close_container(reply);
+      };
+      auto kv_b = [&](const char *k, int v) {
+        sd_bus_message_open_container(reply, 'e', "sv");
+        sd_bus_message_append(reply, "s", k);
+        sd_bus_message_append(reply, "v", "b", v);
+        sd_bus_message_close_container(reply);
+      };
+      auto kv_i = [&](const char *k, int v) {
+        sd_bus_message_open_container(reply, 'e', "sv");
+        sd_bus_message_append(reply, "s", k);
+        sd_bus_message_append(reply, "v", "i", v);
+        sd_bus_message_close_container(reply);
+      };
+      if (n.label) kv_s("label", n.label);
+      if (n.type) kv_s("type", n.type);
+      if (n.enabled >= 0) kv_b("enabled", n.enabled);
+      if (n.visible >= 0) kv_b("visible", n.visible);
+      if (n.toggle_type) kv_s("toggle-type", n.toggle_type);
+      if (n.toggle_state != -2) kv_i("toggle-state", n.toggle_state);
+      if (n.submenu) kv_s("children-display", "submenu");
+      kv_s("x-mock-junk", "skip-me");     // unknown vendor key -> client skips it
+      if ((r = sd_bus_message_close_container(reply)) < 0) return r;   // a{sv}
+      if ((r = sd_bus_message_open_container(reply, 'a', "v")) < 0) return r;
+      for (const MenuNode &k : n.kids) {
+        if ((r = sd_bus_message_open_container(reply, 'v', "(ia{sv}av)")) < 0) return r;
+        if ((r = appendMenuNode(reply, k)) < 0) return r;
+        if ((r = sd_bus_message_close_container(reply)) < 0) return r;
+      }
+      if ((r = sd_bus_message_close_container(reply)) < 0) return r;   // av
+      return sd_bus_message_close_container(reply);                    // r
+    }
+
+    int onGetLayout(sd_bus_message *m, void *userdata, sd_bus_error *) {
+      auto *st = static_cast<MockState *>(userdata);
+      dprintf(st->report_fd, "GetLayout\n");
+      sd_bus_message *reply = nullptr;
+      int r = sd_bus_message_new_method_return(m, &reply);
+      if (r < 0) return r;
+      sd_bus_message_append(reply, "u", g_menu_revision);
+      MenuNode tree = menuTree();
+      appendMenuNode(reply, tree);
+      r = sd_bus_send(nullptr, reply, nullptr);
+      sd_bus_message_unref(reply);
+      return r;
+    }
+    int onAboutToShow(sd_bus_message *m, void *userdata, sd_bus_error *) {
+      auto *st = static_cast<MockState *>(userdata);
+      int id = 0; sd_bus_message_read(m, "i", &id);
+      dprintf(st->report_fd, "AboutToShow %d\n", id);
+      return sd_bus_reply_method_return(m, "b", 0);   // needUpdate=false
+    }
+    int onMenuEvent(sd_bus_message *m, void *userdata, sd_bus_error *) {
+      auto *st = static_cast<MockState *>(userdata);
+      int id = 0; const char *ev = nullptr;
+      sd_bus_message_read(m, "is", &id, &ev);
+      sd_bus_message_skip(m, "v");
+      uint32_t ts = 0; sd_bus_message_read(m, "u", &ts);
+      dprintf(st->report_fd, "Event %d %s\n", id, ev);
+      return sd_bus_reply_method_return(m, "");
+    }
+    int getMenuVersion(sd_bus *, const char *, const char *, const char *,
+                       sd_bus_message *reply, void *, sd_bus_error *) {
+      return sd_bus_message_append(reply, "u", 3u);
+    }
+
+    const sd_bus_vtable kMenuVtable[] = {
+      SD_BUS_VTABLE_START(0),
+      SD_BUS_METHOD("GetLayout", "iias", "u(ia{sv}av)", onGetLayout, SD_BUS_VTABLE_UNPRIVILEGED),
+      SD_BUS_METHOD("AboutToShow", "i", "b", onAboutToShow, SD_BUS_VTABLE_UNPRIVILEGED),
+      SD_BUS_METHOD("Event", "isvu", "", onMenuEvent, SD_BUS_VTABLE_UNPRIVILEGED),
+      SD_BUS_PROPERTY("Version", "u", getMenuVersion, 0, 0),
+      SD_BUS_SIGNAL("LayoutUpdated", "ui", 0),
+      SD_BUS_SIGNAL("ItemsPropertiesUpdated", "a(ia{sv})a(ias)", 0),
+      SD_BUS_VTABLE_END
     };
 
     int getIconPixmap(sd_bus *, const char *, const char *, const char *,
@@ -118,14 +241,20 @@ namespace bbai::test {
       SD_BUS_VTABLE_END
     };
 
-    [[noreturn]] void childMain(int cmd_fd, int report_fd, bool by_name) {
+    [[noreturn]] void childMain(int cmd_fd, int report_fd, bool by_name, bool with_menu) {
       MockState st;
       st.report_fd = report_fd;
+      st.with_menu = with_menu;
       if (sd_bus_open_user(&st.bus) < 0) _exit(1);
       if (sd_bus_add_object_vtable(st.bus, nullptr, "/StatusNotifierItem",
                                    "org.kde.StatusNotifierItem", kItemVtable,
                                    &st) < 0)
         _exit(1);
+      if (with_menu) {
+        if (sd_bus_add_object_vtable(st.bus, nullptr, "/MenuBar",
+                                     "com.canonical.dbusmenu", kMenuVtable, &st) < 0)
+          _exit(1);
+      }
       const char *reg_arg = "/StatusNotifierItem";
       if (by_name) {
         if (sd_bus_request_name(st.bus, "org.test.SniMock", 0) < 0) _exit(1);
@@ -179,13 +308,22 @@ namespace bbai::test {
                                "org.kde.StatusNotifierItem", "NewStatus", "s",
                                st.status);
           }
+          if (c == 'L') {   // bump revision + emit LayoutUpdated
+            g_menu_revision++;
+            sd_bus_emit_signal(st.bus, "/MenuBar", "com.canonical.dbusmenu",
+                               "LayoutUpdated", "ui", g_menu_revision, 0);
+          }
+          if (c == 'l') {   // emit LayoutUpdated WITHOUT bumping (revision unchanged)
+            sd_bus_emit_signal(st.bus, "/MenuBar", "com.canonical.dbusmenu",
+                               "LayoutUpdated", "ui", g_menu_revision, 0);
+          }
         }
       }
     }
 
   } // namespace
 
-  SniMockChild::SniMockChild(bool register_by_name) {
+  SniMockChild::SniMockChild(bool register_by_name, bool with_menu) {
     int cmd[2] = {-1, -1}, rep[2] = {-1, -1};
     if (pipe(cmd) < 0) return;
     if (pipe(rep) < 0) { close(cmd[0]); close(cmd[1]); return; }
@@ -194,7 +332,7 @@ namespace bbai::test {
     if (pid == 0) {
       close(cmd[1]);
       close(rep[0]);
-      childMain(cmd[0], rep[1], register_by_name);     // never returns
+      childMain(cmd[0], rep[1], register_by_name, with_menu);   // never returns
     }
     close(cmd[0]);
     close(rep[1]);
@@ -215,6 +353,7 @@ namespace bbai::test {
 
   void SniMockChild::updateIcon() { send('i'); }
   void SniMockChild::updateStatus() { send('s'); }
+  void SniMockChild::emitLayoutUpdated(bool bump_revision) { send(bump_revision ? 'L' : 'l'); }
 
   void SniMockChild::quit() {
     if (pid_ <= 0) return;

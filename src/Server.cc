@@ -8,6 +8,7 @@
 #include "Rootmenu.hh"
 #include "Windowmenu.hh"
 #include "Barmenu.hh"
+#include "SniMenu.hh"
 #include "ConfigSpelling.hh"
 #include "BarSpelling.hh"
 #include "MenuParser.hh"
@@ -547,6 +548,11 @@ namespace bbai {
     cursor_frame.disconnect();
     cursor_axis.disconnect();
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish
+    if (sni_menu_reset_idle_) {    // drop the deferred reset before the loop dies
+      wl_event_source_remove(sni_menu_reset_idle_);
+      sni_menu_reset_idle_ = nullptr;
+    }
+    sni_menu_.reset();        // cancel any in-flight dbusmenu reply before the Host's bus dies
     active_menu_.reset();     // destroys its overlay scene tree
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
@@ -1925,7 +1931,7 @@ namespace bbai {
   }
 
   void Server::openWindowMenu(View *v, int lx, int ly) {
-    if (active_menu_) return;
+    if (active_menu_ || sni_menu_) return;
     abortGrabsForMenu();
     active_menu_ = std::make_unique<Menu>(*this, std::u32string{},
                                           windowmenu::build(v, workspaces_),
@@ -1935,7 +1941,7 @@ namespace bbai {
   }
 
   void Server::openToolbarMenu(int lx, int ly) {
-    if (active_menu_ || !toolbar_) return;
+    if (active_menu_ || sni_menu_ || !toolbar_) return;
     abortGrabsForMenu();
     active_menu_ = std::make_unique<Menu>(*this, bt::decodeUtf8("Toolbar"),
                                           barmenu::buildToolbar(config_.toolbar));
@@ -1944,7 +1950,7 @@ namespace bbai {
   }
 
   void Server::openSlitMenu(int lx, int ly) {
-    if (active_menu_) return;
+    if (active_menu_ || sni_menu_) return;
     abortGrabsForMenu();
     active_menu_ = std::make_unique<Menu>(*this, bt::decodeUtf8("Slit"),
                                           barmenu::buildSlit(config_.slit));
@@ -1962,12 +1968,57 @@ namespace bbai {
     }
   }
 
+  void Server::scheduleSniMenuReset() {
+    if (sni_menu_reset_idle_) return;   // already pending
+    sni_menu_reset_idle_ = wl_event_loop_add_idle(
+        wl_display_get_event_loop(display), &Server::sniMenuResetIdle, this);
+  }
+
+  void Server::sniMenuResetIdle(void *data) {
+    auto *self = static_cast<Server *>(data);
+    self->sni_menu_reset_idle_ = nullptr;   // libwayland removes the idle after it fires
+    std::function<void()> fb = std::move(self->sni_menu_fallback_);
+    self->sni_menu_fallback_ = {};
+    self->sni_menu_.reset();                 // free the finished client's slots first
+    if (fb) fb();                            // then the proxy, on a clean non-reentrant bus
+  }
+
+  void Server::showDbusMenu(std::vector<MenuItem> items, int lx, int ly) {
+    active_menu_ = std::make_unique<Menu>(*this, std::u32string{}, std::move(items),
+                                          /*show_title=*/false);
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
   void Server::openSniContextMenu(const sni::Item &item, int lx, int ly) {
-    // v1 proxy. The coords are layout ints - on Wayland items can't position
-    // by them anyway (waybar sends the same); don't burn time making them
-    // "correct".
-    if (sni_host_ && sni_host_->ok())
-      sni_host_->contextMenu(item, lx, ly);
+    // A menu-only item (menu_path advertised) tries the com.canonical.dbusmenu
+    // client; on a GetLayout error OR empty layout it falls back to the SNI
+    // ContextMenu proxy (a faithful superset - an item pointing at a dead menu
+    // path should still give the user its SNI context menu). A busless boot or
+    // a menu-less item goes straight to the proxy.
+    if (item.menu_path.empty() || !sni_host_ || !sni_host_->ok() || !sni_host_->bus()) {
+      if (sni_host_ && sni_host_->ok()) sni_host_->contextMenu(item, lx, ly);   // proxy
+      return;
+    }
+    if (active_menu_ || sni_menu_) return;
+    const sni::Item snap = item;
+    sni_menu_ = std::make_unique<SniMenu>(
+        sni_host_->bus(), item.service, item.menu_path,
+        [this, snap, lx, ly](bool ok, std::vector<MenuItem> items) {
+          if (!ok || items.empty()) {                     // no usable dbusmenu -> proxy
+            // This lambda runs INSIDE the Host's sd_bus_process drain. Neither
+            // the proxy call (Host::callItem re-enters sd_bus_process via its
+            // own drain -> -EBUSY -> the Host tears its bus down) nor freeing
+            // the client's slots is safe here. Defer BOTH to an event-loop idle.
+            sni_menu_fallback_ = [this, snap, lx, ly] {
+              if (sni_host_ && sni_host_->ok()) sni_host_->contextMenu(snap, lx, ly);
+            };
+            scheduleSniMenuReset();
+            return;
+          }
+          showDbusMenu(std::move(items), lx, ly);
+        });
+    sni_menu_->open();
   }
 
   std::vector<MenuItem> Server::buildIconMenu() {
@@ -2020,6 +2071,15 @@ namespace bbai {
   }
 
   void Server::closeMenus() {
+    // closeMenus runs from input/reconfigure, never from a bus dispatch, so the
+    // direct teardown is safe; drop any deferred reset so it can't fire on a
+    // future sni_menu_.
+    if (sni_menu_reset_idle_) {
+      wl_event_source_remove(sni_menu_reset_idle_);
+      sni_menu_reset_idle_ = nullptr;
+      sni_menu_fallback_ = {};
+    }
+    sni_menu_.reset();   // cancel any in-flight dbusmenu reply (slots unref'd)
     active_menu_.reset();
     // While modal, onModifiers swallowed every modifier change so the client
     // wouldn't act on keys typed at the menu. Re-sync the seat now, or a modifier
