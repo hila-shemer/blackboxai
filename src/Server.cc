@@ -29,6 +29,11 @@
 #include <unistd.h>                    // access(X_OK) for TryExec
 #include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
 
+// Install-path default injected by src/meson.build (lib objects only).
+#ifndef BBAI_DEFAULT_STYLE
+#define BBAI_DEFAULT_STYLE ""
+#endif
+
 namespace {
   // Is `node` somewhere under the given scene layer tree?
   bool isUnder(wlr_scene_node *node, wlr_scene_tree *layer) {
@@ -68,6 +73,12 @@ namespace bbai {
 
   Server::Server(bool hl, std::string rc_path)
     : headless(hl), rc_path_(std::move(rc_path)) {
+    // Headless treats the install-prefix default style as absent - a box
+    // where the product IS installed must not leak prefix state into the
+    // golden suite (same stance as rc discovery below). Tests pin a fake
+    // default via setDefaultStyleForTest to exercise the middle rung. Set
+    // before Config::load so the very first loadStyleWithFallback sees it.
+    if (!headless) default_style_path_ = BBAI_DEFAULT_STYLE;
     // Config + style come first - everything below (outputs, toolbar, views)
     // renders through style_. Headless never discovers ~/.blackboxrc on its
     // own: tests must opt into an rc explicitly or a dev box's real config
@@ -316,12 +327,17 @@ namespace bbai {
   std::shared_ptr<const Style> Server::loadStyleWithFallback(const std::string &path,
                                                              bool *exact_ok) {
     if (exact_ok) *exact_ok = true;
-    if (auto s = Style::load(path, config_.rootCommand)) return s;
+    // Second face of the headless default-hiding (ctor): when the rc names no
+    // style, Config itself defaults styleFile to BBAI_DEFAULT_STYLE - refuse
+    // that exact path too, or an installed prefix reaches the goldens anyway.
+    const bool hidden = headless && !path.empty()
+                        && path == std::string(BBAI_DEFAULT_STYLE);
+    if (!hidden)
+      if (auto s = Style::load(path, config_.rootCommand)) return s;
     if (exact_ok) *exact_ok = false;
     fprintf(stderr, "blackboxai: style '%s' unreadable, falling back\n", path.c_str());
-#ifdef BBAI_DEFAULT_STYLE
-    if (auto s = Style::load(BBAI_DEFAULT_STYLE, config_.rootCommand)) return s;
-#endif
+    if (!default_style_path_.empty())
+      if (auto s = Style::load(default_style_path_, config_.rootCommand)) return s;
     return Style::builtin(config_.rootCommand);
   }
 

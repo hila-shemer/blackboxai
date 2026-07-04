@@ -131,15 +131,39 @@ TEST_CASE("reconfigure: rereads the rc, re-applies knobs, reports style fallback
   CHECK(fake.lastCommand()[0] == "/bin/sh");
   CHECK(fake.lastCommand()[2] == "xsetroot -solid gray");
 
-  // A missing style file: false, fallback applied (builtin in a build tree -
-  // BBAI_DEFAULT_STYLE points at the install prefix, which doesn't exist here).
   writeRc("session.styleFile: /nonexistent/style\n");
   CHECK_FALSE(server.reconfigure());
-  CHECK(server.currentStyle()->sourcePath().empty());   // builtin rung
+  // builtin rung on ANY box: headless hides the install-prefix default
+  // (Server::loadStyleWithFallback), so an installed product can't flip this.
+  CHECK(server.currentStyle()->sourcePath().empty());
 
   // reconfigure with an override path switches the remembered rc.
   writeRc("session.styleFile: data/styles/Twice\n");
   CHECK(server.reconfigure(kRc));
   CHECK(server.currentStyle()->sourcePath() == "data/styles/Twice");
+  std::remove(kRc);
+}
+
+TEST_CASE("style ladder middle rung: a pinned default style catches the fallback") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  writeRc("session.styleFile: /nonexistent/style\n");
+
+  Server server(/*headless=*/true, kRc);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+  // Headless boots with an EMPTY default rung: builtin, on any box.
+  CHECK(server.currentStyle()->sourcePath().empty());
+
+  // Pin a fake "installed default": the middle rung catches the fallback.
+  server.setDefaultStyleForTest("data/styles/Results");
+  CHECK_FALSE(server.reconfigure());   // the exact style still failed
+  CHECK(server.currentStyle()->sourcePath() == "data/styles/Results");
+
+  // Clear it: back to the builtin rung.
+  server.setDefaultStyleForTest("");
+  CHECK_FALSE(server.reconfigure());
+  CHECK(server.currentStyle()->sourcePath().empty());
   std::remove(kRc);
 }
