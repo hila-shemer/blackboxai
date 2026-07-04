@@ -340,7 +340,7 @@ Toolbar/Slit Options, dithering, onTop et al are documented omissions."
 - Consumes: `rootmenu::buildConfigSubmenu` (Task 1), `Server::config_` (the member - we are inside Server.cc).
 - Produces: `std::vector<MenuItem> rootmenu::buildFromParsed(const std::vector<MenuItem> &parsed, const WorkspaceModel &ws, const Config &cfg)` - the wave-2 pinned signature (const-preserving, see header). Task 4's system tests rely on the mount being live.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/unit/rootmenu_wire_test.cc`: add `#include "Config.hh"`, then replace the disabled-placeholder test (lines 48-57) with:
 
@@ -402,7 +402,7 @@ and the tail check (lines 240-244) flips from "must NOT hover-open" to the live 
   CHECK(m->submenuItemCountForTest() == 4);   // Focus Model / Placement / sep / Focus New Windows
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c 'ninja -C build-f44'
@@ -410,7 +410,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `buildFromParsed` takes 2 arguments, 3 given.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Rootmenu.hh:20-27` - replace the buildFromParsed doc + declaration:
 
@@ -484,7 +484,7 @@ Expected: compile FAILURE - `buildFromParsed` takes 2 arguments, 3 given.
         } else if (tag == "submenu") {
 ```
 
-- [ ] **Step 4: Re-bless the two mount-affected goldens, then run the full gate**
+- [x] **Step 4: Re-bless the two mount-affected goldens, then run the full gate**
 
 The Configuration row now renders enabled (normal text, not `frameDisabled` grey) in both m5-menufile captures - the declared by-design flip:
 
@@ -498,7 +498,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass. Then `git status tests/golden/` must show EXACTLY `m5-menufile.png` and `m5-menufile-cascade.png` modified - anything else is a regression, stop and investigate.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Rootmenu.hh src/Rootmenu.cc src/Server.cc src/MenuParser.cc \

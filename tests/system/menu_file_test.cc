@@ -221,7 +221,7 @@ TEST_CASE("the root menu is built from the menu file (tree + golden + cascade)")
   CHECK(m->item(2).kind == MenuItem::Kind::Submenu);            // Workspaces, filled live
   CHECK(m->item(2).submenu_items.size() == server.workspaces().count() + 3);
   CHECK(m->item(3).kind == MenuItem::Kind::Submenu);            // Configuration
-  CHECK_FALSE(m->item(3).enabled);                              // disabled placeholder
+  CHECK(m->item(3).enabled);                                    // mounted live (wave-2)
   CHECK(m->item(4).action == MenuItem::Act::Restart);
   CHECK(m->item(5).action == MenuItem::Act::Exit);
   CHECK(test::compareGolden(test::captureFrame(server),
@@ -237,11 +237,12 @@ TEST_CASE("the root menu is built from the menu file (tree + golden + cascade)")
   CHECK(test::compareGolden(test::captureFrame(server),
                             "tests/golden/m5-menufile-cascade.png", 2, 80));
 
-  // The disabled Configuration row must NOT hover-open a stray empty cascade.
+  // The Configuration row now hover-opens the live config cascade (wave-2 mount).
   const int cfg_y = oy + menu::titleHeight(18) + menu::kFrameMargin
                   + 3 * row_h + row_h / 2;
   server.injectPointerMotionForTest(ox + 30, cfg_y);
-  CHECK_FALSE(m->submenuOpenForTest());
+  REQUIRE(m->submenuOpenForTest());
+  CHECK(m->submenuItemCountForTest() == 4);   // Focus Model / Placement / sep / Focus New Windows
 }
 
 TEST_CASE("editing the menu file between opens rereads it (classic checkMenu)") {

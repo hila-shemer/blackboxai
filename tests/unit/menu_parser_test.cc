@@ -174,10 +174,8 @@ TEST_CASE("workspaces and config become MARKED placeholder submenus") {
   CHECK(r.items[1].label == u("Configuration"));
   CHECK(r.items[1].submenu_items.empty());
 
-  // [workspaces] is fully handled from here on - no diagnostic. [config]
-  // keeps a note until wave-2 configmenu populates it.
-  CHECK_FALSE(anyDiagContains(r, "workspaces"));
-  CHECK(anyDiagContains(r, "config"));
+  // Both placeholders are fully handled at open time - no diagnostics.
+  CHECK(r.diagnostics.empty());
 }
 
 TEST_CASE("[style] becomes a SetStyle item with a tilde-expanded path") {
