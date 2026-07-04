@@ -15,7 +15,18 @@ namespace bbai {
   // Server::setConfigOption's switch grows in the same per-slice groups.
   enum class ConfigOption {
     FocusClickToFocus, FocusSloppy, AutoRaise, ClickRaise, FocusNewWindows,
-    PlacementRowSmart, PlacementColSmart, PlacementCenter, PlacementCascade
+    PlacementRowSmart, PlacementColSmart, PlacementCenter, PlacementCascade,
+    // wave-2 menus: toolbar + slit knobs (radios encode target state, toggles
+    // name the knob to flip). Same setConfigOption dispatch, tail-appended.
+    ToolbarEnabled,
+    ToolbarPlaceTopLeft, ToolbarPlaceTopCenter, ToolbarPlaceTopRight,
+    ToolbarPlaceBottomLeft, ToolbarPlaceBottomCenter, ToolbarPlaceBottomRight,
+    ToolbarAutoHide,
+    SlitPlaceTopLeft, SlitPlaceCenterLeft, SlitPlaceBottomLeft,
+    SlitPlaceTopCenter, SlitPlaceBottomCenter,
+    SlitPlaceTopRight, SlitPlaceCenterRight, SlitPlaceBottomRight,
+    SlitDirHorizontal, SlitDirVertical,
+    SlitAutoHide
   };
 
   struct MenuItem {
