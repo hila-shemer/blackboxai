@@ -412,6 +412,12 @@ fullscreen_golden_exe = executable('fullscreen-golden-test',
 test('fullscreen_golden', fullscreen_golden_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# xdg protocol fix: honor client set_fullscreen/set_maximized/set_minimized.
+xdg_request_exe = executable('xdg-request-test', files('system/xdg_request_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('xdg_request', xdg_request_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

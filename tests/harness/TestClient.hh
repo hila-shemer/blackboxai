@@ -23,8 +23,10 @@ namespace bbai::test {
     enum class Deco { None, RequestSSD, RequestCSD };
 
     // argb is a packed ARGB8888 (premultiplied) constant; the window is w x h.
+    // fullscreen_before_map requests xdg fullscreen after the toplevel exists
+    // but BEFORE the first buffer commit (the mpv --fs case, gotcha #13).
     TestClient(const std::string &socket, uint32_t argb, int w, int h,
-               Deco deco = Deco::None);
+               Deco deco = Deco::None, bool fullscreen_before_map = false);
     ~TestClient();
     TestClient(const TestClient &) = delete;
     TestClient &operator=(const TestClient &) = delete;
@@ -37,6 +39,8 @@ namespace bbai::test {
     void pump();         // non-blocking: read+dispatch server events, advance state
     void closeWindow();  // destroy the toplevel/surface (server should drop the View)
     void destroyDecorationForTest();  // destroy ONLY the decoration object (keep the toplevel)
+    void setFullscreen(bool on);   // xdg_toplevel.set_fullscreen / unset_fullscreen
+    void setMaximized(bool on);    // xdg_toplevel.set_maximized / unset_maximized
 
     struct Impl;    // opaque; defined in TestClient.cc
 

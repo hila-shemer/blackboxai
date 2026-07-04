@@ -109,7 +109,13 @@ namespace bbai {
     // dynamic lookup, no stored membership, can't go stale.
     Output *outputAt(double lx, double ly);
     Output *outputForView(const View *v);
+    Output *outputForWlr(wlr_output *wo);   // tracked Output for a wlr_output, or null
     void remaximizeViewsOn(Output *o);
+    // xdg client state requests (protocol obligation: apply + configure). Called
+    // by the View's request listeners; the set_* we already make is the ack.
+    void requestFullscreen(View *v);   // client set_fullscreen -> apply + configure
+    void requestMaximize(View *v);     // client set_maximized  -> apply + configure
+    void requestMinimize(View *v);     // client set_minimized  -> iconify + configure
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }

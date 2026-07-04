@@ -27,6 +27,11 @@ namespace bbai {
       if (xdg_toplevel->base->initial_commit) {
         chooseDecorationMode();
         wlr_xdg_toplevel_set_size(xdg_toplevel, cw, ch);
+        // A client can request state before the first commit (mpv --fs); the
+        // request handlers deferred, so apply from here now that the surface is
+        // initialized and set_* can schedule a configure.
+        if (xdg_toplevel->requested.fullscreen) server.requestFullscreen(this);
+        else if (xdg_toplevel->requested.maximized) server.requestMaximize(this);
         return;
       }
       // A later commit at a new size (interactive resize) re-lays-out the frame.
@@ -49,6 +54,33 @@ namespace bbai {
     });
     destroy_.connect(&surface->events.destroy, [this](void *) {
       server.removeView(this);  // erases the owning unique_ptr -> deletes *this
+    });
+
+    // xdg state requests: the protocol REQUIRES a configure in response even if
+    // nothing changed (wlr_xdg_shell.h). We route the three we implement through
+    // the Server (it resolves the output); request_move/resize are ack-only v1.
+    req_fullscreen_.connect(&xdg_toplevel->events.request_fullscreen, [this](void *) {
+      if (xdg_toplevel->base->initialized) server.requestFullscreen(this);
+      // else: applied from the initial_commit block below (gotcha #13).
+    });
+    req_maximize_.connect(&xdg_toplevel->events.request_maximize, [this](void *) {
+      if (xdg_toplevel->base->initialized) server.requestMaximize(this);
+    });
+    req_minimize_.connect(&xdg_toplevel->events.request_minimize, [this](void *) {
+      if (xdg_toplevel->base->initialized) server.requestMinimize(this);
+    });
+    req_move_.connect(&xdg_toplevel->events.request_move, [this](void *) {});    // ack-only v1
+    req_resize_.connect(&xdg_toplevel->events.request_resize, [this](void *) {}); // ack-only v1
+    // Emitted at the top of destroy_xdg_toplevel, before it asserts every
+    // request_* signal has no listeners - disconnect ours here so a client that
+    // tears down the toplevel role (proxy) ahead of the wl_surface can't abort.
+    toplevel_destroy_.connect(&xdg_toplevel->events.destroy, [this](void *) {
+      req_maximize_.disconnect();
+      req_fullscreen_.disconnect();
+      req_minimize_.disconnect();
+      req_move_.disconnect();
+      req_resize_.disconnect();
+      toplevel_destroy_.disconnect();
     });
   }
 

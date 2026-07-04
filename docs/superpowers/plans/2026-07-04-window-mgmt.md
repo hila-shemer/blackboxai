@@ -1200,7 +1200,7 @@ Today `src/` has ZERO listeners for `request_maximize`/`request_fullscreen`/`req
 - Consumes: `xdg_toplevel->requested` (`{maximized, minimized, fullscreen, fullscreen_output}`), `xdg_toplevel->base->initialized`, `setViewFullscreen` (Task 5/6), `setMaximized`, `iconifyView`, `outputForView`.
 - Produces: `void Server::requestFullscreen(View *v)`, `void Server::requestMaximize(View *v)`, `void Server::requestMinimize(View *v)`; `TestClient::setFullscreen(bool)` / `setMaximized(bool)`.
 
-- [ ] **Step 1: Extend TestClient to send the requests**
+- [x] **Step 1: Extend TestClient to send the requests**
 
 `tests/harness/TestClient.hh`, after `destroyDecorationForTest();` (line 38):
 
@@ -1224,7 +1224,7 @@ Today `src/` has ZERO listeners for `request_maximize`/`request_fullscreen`/`req
   }
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `tests/system/xdg_request_test.cc`:
 
@@ -1325,12 +1325,12 @@ test('xdg_request', xdg_request_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Container gate, `<tests>` = `xdg_request`.
 Expected: BUILD FAILURE — `no member named 'setFullscreen'` (TestClient), then behavior failures once that compiles.
 
-- [ ] **Step 4: Implement the listeners**
+- [x] **Step 4: Implement the listeners**
 
 `src/View.hh`, add members after `deco_request_mode_, deco_destroy_;` (line 106):
 
@@ -1411,15 +1411,15 @@ In the `commit_` handler's `initial_commit` block (after `wlr_xdg_toplevel_set_s
     setViewFullscreen(v, want, target);
 ```
 
-- [ ] **Step 5: Disconnect in the dtor**
+- [x] **Step 5: Disconnect in the dtor**
 
 `src/View.cc` `~View()` — the `bt::Listener` members auto-disconnect on destruction (RAII, same as the existing `map_`/`commit_`), so no explicit teardown is needed. Confirm by matching how `deco_request_mode_` is handled (it disconnects explicitly only because the decoration outlives differently); the toplevel-owned request listeners follow `map_`/`commit_`/`destroy_` and need nothing.
 
-- [ ] **Step 6: Run to verify it passes**
+- [x] **Step 6: Run to verify it passes**
 
 Container gate, `<tests>` = `xdg_request`. Expected: 3 cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/View.hh src/View.cc src/Server.hh src/Server.cc \
