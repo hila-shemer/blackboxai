@@ -542,3 +542,9 @@ menu_multihead_exe = executable('menu-multihead-test',
   dependencies : [harness_dep, doctest_dep])
 test('menu_multihead', menu_multihead_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: Windowmenu titlebar-gesture -> real window ops + golden.
+windowmenu_exe = executable('windowmenu-test', files('system/windowmenu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('windowmenu', windowmenu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
