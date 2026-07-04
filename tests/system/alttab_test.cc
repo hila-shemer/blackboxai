@@ -478,6 +478,52 @@ TEST_CASE("a window mapping mid-cycle must not hijack the commit target") {
   CHECK(server.mruForTest() == std::vector<View *>{va, vc, vb});
 }
 
+TEST_CASE("desktop-click menus mid-cycle dissolve the cycle before going modal") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootServer(server);
+
+  test::TestClient a(server.socketName(), 0xFFFF0000u, 200, 150);
+  test::TestClient b(server.socketName(), 0xFF00FF00u, 200, 150);
+  REQUIRE(a.ok()); REQUIRE(b.ok());
+  for (int i = 0; i < 1200 && server.viewsForTest().size() < 2; ++i) {
+    a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump();
+  }
+  for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
+  REQUIRE(server.viewsForTest().size() == 2);
+  View *va = server.viewsForTest()[0].get();
+  View *vb = server.viewsForTest()[1].get();
+  clickTitlebar(server);
+  REQUIRE(server.focusedViewForTest() == vb);   // MRU: B,A
+
+  // Right-click the bare desktop while previewing A: the menu must not stack
+  // on the live cycle - two modal modes at once means the later Alt release
+  // commits the cycle (focus + possible workspace switch) under the open menu.
+  server.cycleForTest(+1);
+  REQUIRE(server.cyclingForTest());
+  server.injectPointerMotionForTest(1000, 400);
+  server.injectPointerButtonForTest(BTN_RIGHT, true);
+  CHECK(server.menuOpenForTest());
+  CHECK_FALSE(server.cyclingForTest());
+  // Since e157770 the preview is the real raise+focus: dissolving by COMMIT
+  // matches what is on screen when the user deliberately clicks.
+  CHECK(server.focusedViewForTest() == va);
+  CHECK(server.mruForTest() == std::vector<View *>{va, vb});
+  server.closeMenus();
+
+  // Same rule for the middle-click icon menu.
+  server.cycleForTest(+1);   // preview B (MRU now A,B)
+  REQUIRE(server.cyclingForTest());
+  server.injectPointerMotionForTest(1000, 400);
+  server.injectPointerButtonForTest(BTN_MIDDLE, true);
+  CHECK(server.menuOpenForTest());
+  CHECK_FALSE(server.cyclingForTest());
+  CHECK(server.focusedViewForTest() == vb);
+  server.closeMenus();
+}
+
 TEST_CASE("a single visible window is nothing to cycle to") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
