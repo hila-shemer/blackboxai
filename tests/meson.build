@@ -440,6 +440,12 @@ sloppy_focus_exe = executable('sloppy-focus-test', files('system/sloppy_focus_te
 test('sloppy_focus', sloppy_focus_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# AutoRaise (VirtualClock-driven) + ClickRaise (sloppy sub-flags).
+auto_raise_exe = executable('auto-raise-test', files('system/auto_raise_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('auto_raise', auto_raise_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

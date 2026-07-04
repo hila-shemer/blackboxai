@@ -223,6 +223,7 @@ namespace bbai {
     wlr_data_source *seatSelectionSourceForTest() const { return seat->selection_source; }
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
     bool viewLayerIsFullscreenForTest(View *v) const;   // frame_tree parents into layer_fullscreen?
+    bool isTopmostForTest(View *v);                     // v == topmost real view on its workspace
 
     wl_display *display = nullptr;
     wlr_backend *backend = nullptr;
@@ -365,6 +366,20 @@ namespace bbai {
     std::unique_ptr<SessionLock> session_lock_;   // ext-session-lock-v1 (lock-idle)
     wlr_idle_notifier_v1 *idle_notifier_ = nullptr;  // ext-idle-notify-v1
     Keybindings keybindings_;                   // M4 built-in keybinding table
+
+    // AutoRaise: a one-shot timer armed when sloppy focus settles on a window;
+    // on fire, raise it if it's still the focused one. Injectable Timer -> the
+    // VirtualClock drives it deterministically in tests.
+    struct AutoRaiseTick : TimeoutHandler {
+      explicit AutoRaiseTick(Server *s) : srv(s) {}
+      Server *srv;
+      void timeout() override { srv->onAutoRaiseTimeout(); }
+    };
+    AutoRaiseTick autoraise_handler_{ this };
+    std::unique_ptr<Timer> autoraise_timer_;
+    View *autoraise_pending_ = nullptr;
+    void armAutoRaise(View *v);       // (re)start the one-shot for v, or cancel
+    void onAutoRaiseTimeout();
     std::unique_ptr<CommandRunner> default_runner_;  // owns the production runner
     CommandRunner *command_runner_ = nullptr;        // -> default or a test fake
     std::vector<std::unique_ptr<Keyboard>> keyboards_;
