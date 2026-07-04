@@ -124,6 +124,40 @@ sni-core: nm-applet-class items are activate-only until wave-2 dbusmenu (expecte
 - Behavioral change downstream should know: headless Servers default to a
   recording FakeCommandRunner - no headless path can fork, structurally.
 
+## Wave 2 (locked 2026-07-04)
+
+User-owned, asked and answered:
+- **Focus model + placement: implement both now.** Sloppy focus + AutoRaise/ClickRaise
+  and Cascade/Center/RowSmart placement - in window-mgmt's territory (it owns
+  View/behavior); configmenu ships the live UI + persist. Kills the fixed-(160,120)
+  map wart.
+- **Sloppy focus is DEFAULT-ON** (user: "focus-follows-mouse is something I like and
+  want default-on") - when session.focusModel is absent, default SloppyFocus (no
+  AutoRaise). An rc key always wins. General principle, program-wide: behavior choices
+  like this are config-file configurable, never hardcoded.
+- **Keys confirmed**: Super+F fullscreen, Super+Shift+Left/Right snap,
+  Super+Ctrl+arrows move-to-output.
+- **Slit icon_name fallback: decode theme icons** (libpng already linked in src/ -
+  the "expensive" pricing was a scout error; cost is search-path policy only).
+- **Parity gaps accepted**: no Shade (xdg-shell has no such concept); tray context
+  menus render text-only (no icon column in bt::Menu).
+
+Plan-author calls:
+- Workspace count stays grow-only on the rc path (classic never shrank on
+  reconfigure); shrink + re-home only via the explicit RemoveWorkspace action -
+  configmenu owns the re-home debt Server.cc left it.
+- onTop rows omitted from ALL three menus (toolbar/slit/window); the parsed keys stay
+  inert; this line is the one documented deviation. No lying toggles, program law.
+- Landing order: window-mgmt -> slit -> configmenu -> menus (rationale in the wave-2
+  synthesis; menus performs the wave's ONE menu-golden re-bless if the style-margin
+  swap moves pixels at all).
+- Seam contracts pinned in the synthesis are LAW - notably
+  `void Server::openSniContextMenu(const sni::Item &item, int lx, int ly)` (slit
+  provides proxy body, menus swaps the body only) - the two scouts had pinned that
+  same function under two different names; that clash dies here.
+- Watch-item correction: the install-prefix pattern is at retheme_test.cc:138 (drifted
+  from :99) AND style_boot_test.cc:78; configmenu owns fixing both with one mechanism.
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
