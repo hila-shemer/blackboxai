@@ -235,6 +235,7 @@ namespace bbai {
     else
       clock_ = std::make_unique<bt::SystemClock>();
     timer_registry_ = std::make_unique<TimerRegistry>(*clock_, headless ? nullptr : loop);
+    autoraise_timer_ = std::make_unique<Timer>(*timer_registry_, autoraise_handler_);
 
     // SNI tray host. Real backends only: under headless the developer's
     // session bus must stay untouched (claiming org.kde.StatusNotifierWatcher
@@ -409,6 +410,7 @@ namespace bbai {
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
+    autoraise_timer_.reset(); // deregisters before the TimerRegistry dies
     session_lock_.reset();    // its Timer deregisters + listeners drop before the registry/display die
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
     sni_host_.reset();        // removes its wl_event_sources before the loop dies
@@ -957,8 +959,10 @@ namespace bbai {
       // a stray motion mid-alt-tab can't scramble the frozen ring. Lock / open
       // menu / screenshot / implicit-grab already returned above. focusView is
       // itself lock-guarded, so this is belt-and-suspenders on the lock path.
-      if (config_.focusModel == FocusModel::SloppyFocus && !cycling_ && v != focused_view)
+      if (config_.focusModel == FocusModel::SloppyFocus && !cycling_ && v != focused_view) {
         focusView(v);
+        armAutoRaise(v);   // AutoRaise off -> a no-op that just cancels any pending
+      }
       wlr_surface *surf = v->toplevel()->base->surface;
       wlr_seat_pointer_notify_enter(seat, surf, sx, sy);
       wlr_seat_pointer_notify_motion(seat, time, sx, sy);
@@ -1032,6 +1036,7 @@ namespace bbai {
       if (View *v = viewFromNode(n)) {
         const Part part = partAt(v, cursor->x, cursor->y);
         focusView(v);
+        if (config_.clickRaise) raiseView(v);   // sloppy sub-flag; inert under CTF
         if (button == BTN_LEFT) {
           if (part == Part::Titlebar) { beginInteractive(v, CursorMode::Move, 0); return; }
           if (part == Part::LeftGrip)  { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);  return; }
@@ -1242,6 +1247,26 @@ namespace bbai {
   }
   int Server::frameHeightForTest(View *v) const {
     return frame::frameHeight(v->contentHeight(), style_->frameMetrics());
+  }
+
+  bool Server::isTopmostForTest(View *v) {
+    return v && topmostViewOnWorkspace(v->workspace()) == v;
+  }
+
+  void Server::armAutoRaise(View *v) {
+    autoraise_pending_ = v;
+    if (!autoraise_timer_) return;
+    autoraise_timer_->stop();
+    if (v && config_.autoRaise)
+      autoraise_timer_->start(config_.autoRaiseDelay, /*recurring=*/false);
+  }
+
+  void Server::onAutoRaiseTimeout() {
+    // Only raise if the pending window is still the one under focus - the mouse
+    // may have moved on before the delay elapsed.
+    if (autoraise_pending_ && autoraise_pending_ == focused_view)
+      raiseView(autoraise_pending_);
+    autoraise_pending_ = nullptr;
   }
 
   // --- test-only injection + introspection --------------------------------------

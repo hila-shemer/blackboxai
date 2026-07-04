@@ -2215,7 +2215,7 @@ The two sloppy sub-flags (parsed already; inert under ClickToFocus). AutoRaise r
 - Consumes: `config().autoRaise`/`clickRaise`/`autoRaiseDelay`, `raiseView`, `Timer`/`TimeoutHandler` (`Timer.hh`), `advanceClockForTest` (`Server.cc:1571`).
 - Produces: AutoRaise/ClickRaise behavior. No new seam.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/auto_raise_test.cc`:
 
@@ -2321,12 +2321,12 @@ test('auto_raise', auto_raise_exe, suite : 'system',
 
 `isTopmostForTest(View*)` returns whether the view is `stacking_.front()` (the topmost real entity) — add it (public) using `topmostViewOnWorkspace(v->workspace()) == v` or a direct `stacking_.front()` cast.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `auto_raise`.
 Expected: BUILD FAILURE (`isTopmostForTest`) or the AutoRaise CHECK fails (no timer wired).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh`, add near the Toolbar's timer pattern (private, after `keybindings_` ~line 316):
 
@@ -2393,11 +2393,11 @@ ClickRaise in `onPointerButton`, at the client-hit PRESSED branch (right after `
         if (config_.clickRaise) raiseView(v);   // sloppy sub-flag; inert under CTF
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `auto_raise`. Expected: both cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/auto_raise_test.cc tests/meson.build
