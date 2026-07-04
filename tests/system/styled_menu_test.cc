@@ -17,6 +17,7 @@ TEST_CASE("root menu under Results: styled textures + fonts") {
   setenv("WLR_RENDERER", "pixman", 1);
   Server server(/*headless=*/true, "tests/fixtures/results.blackboxrc");
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
