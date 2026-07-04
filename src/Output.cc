@@ -18,10 +18,21 @@ namespace bbai {
     if (wlr_output_mode *mode = wlr_output_preferred_mode(output))
       wlr_output_state_set_mode(&state, mode);
     else
-      wlr_output_state_set_custom_mode(&state, 1280, 720, 0);  // headless
+      // Headless outputs advertise no mode list, but the backend already gave
+      // them the size wlr_headless_add_output was called with - keep it, or a
+      // second 800x600 test head would silently become another 1280x720 one.
+      wlr_output_state_set_custom_mode(&state,
+          output->width > 0 ? output->width : 1280,
+          output->height > 0 ? output->height : 720, 0);
     wlr_output_state_set_scale(&state, 1);
     wlr_output_commit_state(output, &state);
     wlr_output_state_finish(&state);
+
+    // Advertise the head to clients: ext_session_lock_v1.get_lock_surface takes
+    // a wl_output, and until this slice nothing ever created the global - no
+    // client could name an output at all. Compositor-wide behavior change,
+    // landed early in the train on purpose.
+    wlr_output_create_global(output, server.display);
 
     wlr_output_layout_output *lo =
       wlr_output_layout_add_auto(server.output_layout, output);

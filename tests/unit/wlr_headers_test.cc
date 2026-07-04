@@ -22,3 +22,15 @@ TEST_CASE("M3 input + decoration headers parse through wlr.hpp") {
     CHECK(WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE !=
           WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
 }
+
+TEST_CASE("session-lock + idle-notify headers parse through wlr.hpp") {
+    // Referencing the tags proves the two new includes are in the boundary
+    // header; taking the create functions' addresses proves they link.
+    wlr_session_lock_manager_v1 *lock_mgr = nullptr;
+    wlr_session_lock_v1 *lock = nullptr;
+    wlr_session_lock_surface_v1 *lock_surf = nullptr;
+    wlr_idle_notifier_v1 *idle = nullptr;
+    (void)lock_mgr; (void)lock; (void)lock_surf; (void)idle;
+    CHECK(&wlr_session_lock_manager_v1_create != nullptr);
+    CHECK(&wlr_idle_notifier_v1_create != nullptr);
+}

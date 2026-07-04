@@ -68,7 +68,8 @@ test('decoration_palette', decoration_palette_exe, suite : 'unit')
 # (wayland-client + generated client stubs); they never share a TU.
 png_dep = dependency('libpng')
 harness_lib = static_library('harness',
-  files('harness/HeadlessFixture.cc', 'harness/TestClient.cc'),
+  files('harness/HeadlessFixture.cc', 'harness/TestClient.cc',
+        'harness/LockTestClient.cc'),
   dependencies : [bbai_dep, png_dep, client_protos_dep, wayland_client_dep],
   include_directories : include_directories('harness'))
 harness_dep = declare_dependency(link_with : harness_lib,
@@ -293,6 +294,25 @@ autostart_wiring_exe = executable('autostart-wiring-test',
   files('system/autostart_wiring_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('autostart_wiring', autostart_wiring_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# lock-idle: ext-session-lock-v1 lifecycle (blank, lock surface, unlock, crash).
+session_lock_exe = executable('session-lock-test', files('system/session_lock_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('session_lock', session_lock_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# lock-idle: locking mid-modal-mode aborts the mode (menu/screenshot/cycle/grab).
+lock_interactions_exe = executable('lock-interactions-test',
+  files('system/lock_interactions_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('lock_interactions', lock_interactions_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# lock-idle: ext-idle-notify-v1 wiring (timeout=0 = deterministic, no goldens).
+idle_notify_exe = executable('idle-notify-test', files('system/idle_notify_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('idle_notify', idle_notify_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------

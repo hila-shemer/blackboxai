@@ -10,6 +10,7 @@
 #include "ClipboardImage.hh"
 #include "Autostart.hh"
 #include "SniHost.hh"
+#include "SessionLock.hh"
 
 #include <memory>
 
@@ -95,6 +96,7 @@ namespace bbai {
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_single_pixel_buffer_manager_v1_create(display);
+    idle_notifier_ = wlr_idle_notifier_v1_create(display);
 
     scene = wlr_scene_create();
     output_layout = wlr_output_layout_create(display);
@@ -105,6 +107,7 @@ namespace bbai {
     layer_window     = wlr_scene_tree_create(&scene->tree);
     layer_top        = wlr_scene_tree_create(&scene->tree);
     layer_overlay    = wlr_scene_tree_create(&scene->tree);
+    layer_lock       = wlr_scene_tree_create(&scene->tree);
 
     // Default desktop style (overridable later by a real .blackboxrc).
     style.loadFromString("BlackboxAI.desktop: flat gradient diagonal\n"
@@ -216,6 +219,8 @@ namespace bbai {
     if (!headless)
       sni_host_ = std::make_unique<sni::Host>(loop);
 
+    session_lock_ = std::make_unique<SessionLock>(*this, layer_lock);
+
     new_output.connect(&backend->events.new_output, [this](void *data) {
       auto *wlr_out = static_cast<wlr_output *>(data);
       // Light up every head: an Output per monitor, laid out left-to-right by
@@ -235,6 +240,8 @@ namespace bbai {
         if (!headless)
           wlr_cursor_set_xcursor(cursor, xcursor_mgr, "default");
       }
+      // A head lit up mid-lock must be blanked before anything renders on it.
+      if (session_lock_) session_lock_->handleNewOutput(o);
     });
 
     if (const char *sock = wl_display_add_socket_auto(display))
@@ -279,6 +286,7 @@ namespace bbai {
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
+    session_lock_.reset();    // its Timer deregisters + listeners drop before the registry/display die
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
     sni_host_.reset();        // removes its wl_event_sources before the loop dies
     if (cursor) wlr_cursor_destroy(cursor);
@@ -678,7 +686,18 @@ namespace bbai {
     grabbed_view->resizeTo(x, y, w, h);
   }
 
+  // Any input-funnel entry is user activity. Sits ABOVE the locked gate on
+  // purpose - typing at the locker must still reset swayidle's timers. Future
+  // input surfaces (an axis handler when someone adds one, touch, tablet) must
+  // call this too.
+  void Server::notifyIdleActivity() {
+    if (idle_notifier_)
+      wlr_idle_notifier_v1_notify_activity(idle_notifier_, seat);
+  }
+
   void Server::onPointerMotion(uint32_t time) {
+    notifyIdleActivity();
+    if (session_lock_ && session_lock_->locked()) return;  // lock owns the seat; pointer discarded
     if (active_menu_) {
       const int x = static_cast<int>(cursor->x), y = static_cast<int>(cursor->y);
       for (Menu *m = liveMenu(); m; m = m->parent()) {
@@ -729,6 +748,8 @@ namespace bbai {
 
   void Server::onPointerButton(uint32_t time, uint32_t button,
                                wl_pointer_button_state state) {
+    notifyIdleActivity();
+    if (session_lock_ && session_lock_->locked()) return;  // no client sees buttons under a lock
     if (active_menu_) { handleMenuButton(button, state); return; }  // modal gate
 
     if (cursor_mode == CursorMode::ScreenshotSelect) {
@@ -862,6 +883,15 @@ namespace bbai {
 
   void Server::onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode,
                      wl_keyboard_key_state state) {
+    notifyIdleActivity();
+    if (session_lock_ && session_lock_->locked()) {
+      // Every key goes to the lock surface - no bindings, no exceptions.
+      // Ctrl+Alt+Backspace's Quit is deliberately suppressed: lock means lock,
+      // and the wedged-locker escape is the kernel's VT switch, not ours.
+      wlr_seat_set_keyboard(seat, kb);
+      wlr_seat_keyboard_notify_key(seat, time, keycode, state);
+      return;
+    }
     if (!kb->xkb_state) return;   // defensive: a keymap-less device has no syms
     const xkb_keysym_t *syms = nullptr;
     const int nsyms = xkb_state_key_get_syms(kb->xkb_state, evdevToXkb(keycode), &syms);
@@ -910,6 +940,11 @@ namespace bbai {
   }
 
   void Server::onModifiers(wlr_keyboard *kb) {
+    if (session_lock_ && session_lock_->locked()) {
+      wlr_seat_set_keyboard(seat, kb);
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
+      return;
+    }
     // Commit the alt-tab cycle the moment the modifier that opened it goes up
     // (spec §3.3). commitCycle clears cycling_, so the notify below re-syncs the
     // seat with the released modifier — no separate re-sync needed on this path.
@@ -974,6 +1009,46 @@ namespace bbai {
     if (toolbar_) toolbar_->redrawWindowLabel(nullptr);
   }
 
+  void Server::handleSessionLocked() {
+    // Abort every modal mode via its canonical cancel: their exit paths
+    // re-sync the seat, and locked_ is already true (SessionLock sets it
+    // before this hook), so those re-syncs hit the gate instead of handing
+    // focus back to a client. cancelCycle's focus-restore does touch a client
+    // for an instant - the clearFocus below parks it; enter/leave with no keys
+    // in between is harmless.
+    if (active_menu_) closeMenus();
+    if (cursor_mode == CursorMode::ScreenshotSelect) cancelScreenshot();
+    if (cycling_) cancelCycle();
+    if (cursor_mode != CursorMode::Passthrough) {   // live move/resize grab
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+    // A binding pressed just before the lock must not leak its release to a
+    // client after unlock - the release erase in onKey is gated off while
+    // locked, so drop the swallow set here.
+    swallowed_keycodes_.clear();
+    focus_before_lock_ = focused_view;
+    clearFocus();
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
+  void Server::handleSessionUnlocked() {
+    // The pre-lock window may have died under the lock - re-validate the
+    // handle, else fall back to the topmost survivor (mirrors removeView).
+    if (View *v = viewForHandle(focus_before_lock_)) focusView(v);
+    else if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+    else clearFocus();
+    focus_before_lock_ = nullptr;
+    // Re-resolve pointer focus + re-sync modifiers, same as every other modal
+    // exit (closeMenus / resyncSeatAfterScreenshot).
+    onPointerMotion(nowMsec());
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(seat))
+      wlr_seat_keyboard_notify_modifiers(seat, &kb->modifiers);
+  }
+
   View *Server::viewForHandle(void *handle) {
     if (!handle) return nullptr;
     for (auto &v : views)
@@ -1017,6 +1092,8 @@ namespace bbai {
   }
 
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
+    notifyIdleActivity();
+    if (session_lock_ && session_lock_->locked()) return;  // mirror the onKey gate: no bindings
     if (active_menu_) { if (pressed) handleMenuKey(sym); return; }
     if (cursor_mode == CursorMode::ScreenshotSelect) {
       if (pressed && sym == XKB_KEY_Escape) cancelScreenshot();

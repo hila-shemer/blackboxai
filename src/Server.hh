@@ -31,6 +31,7 @@ namespace bbai {
   class View;
   class Toolbar;
   class Menu;
+  class SessionLock;
   struct Keyboard;
   namespace sni { class Host; }
 
@@ -82,6 +83,11 @@ namespace bbai {
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
+    SessionLock *sessionLockForTest() const { return session_lock_.get(); }
+    wlr_idle_notifier_v1 *idleNotifierForTest() const { return idle_notifier_; }
+    wlr_surface *focusedKeyboardSurfaceForTest() const {
+      return seat->keyboard_state.focused_surface;
+    }
     int activeMenuItemForTest() const;
     Menu *rootMenuForTest() const { return active_menu_.get(); }
 
@@ -163,11 +169,15 @@ namespace bbai {
     wlr_scene_tree *layer_window = nullptr;
     wlr_scene_tree *layer_top = nullptr;
     wlr_scene_tree *layer_overlay = nullptr;
+    // 6th, topmost: session-lock blanks + lock surfaces. Nothing renders above
+    // a locked session - screenshot/menu overlays stay on layer_overlay below.
+    wlr_scene_tree *layer_lock = nullptr;
 
     bt::Resource style;  // desktop style driving the background texture
 
   private:
     friend struct Keyboard;
+    friend class SessionLock;   // reaches outputs_/seat + the two hooks below
     enum class CursorMode { Passthrough, Move, Resize, ScreenshotSelect };
 
     // Pointer handlers shared by real cursor events and test injection.
@@ -179,6 +189,7 @@ namespace bbai {
     void removeKeyboard(Keyboard *kb);
     bool dispatchBinding(uint32_t mods, xkb_keysym_t sym);  // true if a binding fired
     void executeAction(const Action &a);
+    void notifyIdleActivity();   // ext-idle-notify: call at EVERY input-funnel entry
     void cycleWorkspace(int delta);
     // menu modal helpers
     void handleMenuButton(uint32_t button, wl_pointer_button_state state);
@@ -198,6 +209,9 @@ namespace bbai {
     void processResize();
     void focusView(View *v, bool update_mru = true);
     void clearFocus();                              // deactivate + clear keyboard focus
+    // Session-lock hooks (called by the friend SessionLock).
+    void handleSessionLocked();     // park focus + swallow-state; Task 7 adds modal aborts
+    void handleSessionUnlocked();   // Task 6: restore focus + re-sync the seat
     // Alt-tab MRU cycle (spec §3.2). cycleStep starts or advances the modal
     // session; commit/cancel end it. visibleRing is the frozen candidate set:
     // mapped, non-iconified, across all workspaces, in MRU order.
@@ -239,6 +253,8 @@ namespace bbai {
     std::unique_ptr<sni::Host> sni_host_;       // tray D-Bus half (sni-core)
     WorkspaceModel workspaces_;                 // 4 default workspaces (M4)
     std::unique_ptr<Toolbar> toolbar_;          // top-layer chrome (M4)
+    std::unique_ptr<SessionLock> session_lock_;   // ext-session-lock-v1 (lock-idle)
+    wlr_idle_notifier_v1 *idle_notifier_ = nullptr;  // ext-idle-notify-v1
     Keybindings keybindings_;                   // M4 built-in keybinding table
     std::unique_ptr<CommandRunner> default_runner_;  // owns the production runner
     CommandRunner *command_runner_ = nullptr;        // -> default or a test fake
@@ -251,6 +267,7 @@ namespace bbai {
     CursorMode cursor_mode = CursorMode::Passthrough;
     View *grabbed_view = nullptr;
     View *focused_view = nullptr;
+    void *focus_before_lock_ = nullptr;   // handle; re-validated on unlock
     double grab_x = 0, grab_y = 0;              // cursor layout pos at grab start
     int grab_geo_x = 0, grab_geo_y = 0;         // view top-left at grab start
     int grab_geo_w = 0, grab_geo_h = 0;         // content size at grab start
