@@ -52,6 +52,9 @@ namespace {
       return !v.empty() && v.back()->isMapped();
     };
     REQUIRE(pumpUntil(server, mapped, [&] { c.flush(); c.pump(); }));
+    // Wave-2 placement moved the map default off (160,120); restore it so this
+    // wave-1 test keeps the geometry it was written against.
+    server.viewsForTest().back()->setPosition(160, 120);
     for (int i = 0; i < 40; ++i) { c.flush(); server.dispatch(); c.pump(); }
   }
 

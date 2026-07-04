@@ -39,6 +39,7 @@ TEST_CASE("a mapped SSD client is wrapped in a Blackbox frame") {
         client.pump();
     }
     REQUIRE(mapped());
+    server.viewsForTest()[0]->setPosition(160, 120);
 
     // View geometry: content size fixed, frame placed at (160,120).
     const View *v = server.viewsForTest()[0].get();

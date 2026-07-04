@@ -24,6 +24,9 @@ namespace {
     };
     for (int i = 0; i < 500 && !mapped(); ++i) { client.flush(); server.dispatch(); client.pump(); }
     if (!mapped()) return nullptr;
+    // Wave-2 placement moved the map default off (160,120); restore it so this
+    // wave-1 test's fixed-geometry assertions and golden hold unchanged.
+    server.viewsForTest()[0]->setPosition(160, 120);
     for (int i = 0; i < 30; ++i) { client.flush(); server.dispatch(); client.pump(); }
     return server.viewsForTest()[0].get();
   }

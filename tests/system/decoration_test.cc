@@ -32,6 +32,9 @@ namespace {
       client.flush(); server.dispatch(); client.pump();
     }
     if (!mapped()) return nullptr;
+    // Wave-2 placement moved the map default off (160,120); restore it so this
+    // wave-1 test's fixed-geometry assertions and golden hold unchanged.
+    server.viewsForTest()[0]->setPosition(160, 120);
     // Let the client ack the decoration configure so current.mode settles.
     for (int i = 0; i < 50; ++i) { client.flush(); server.dispatch(); client.pump(); }
     return server.viewsForTest()[0].get();

@@ -41,6 +41,7 @@ TEST_CASE("a real client maps decorated and tears down cleanly on close") {
         client.pump();
     }
     REQUIRE(mapped());
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
 
     test::Frame f = test::captureFrame(server);
     REQUIRE(f.w == 1280u);
@@ -87,6 +88,8 @@ TEST_CASE("closing the focused window refocuses the topmost survivor") {
     };
     for (int i = 0; i < 800 && !mappedN(2); ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
     REQUIRE(mappedN(2));
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement: restore overlap
+    server.viewsForTest()[1]->setPosition(160, 120);
     for (int i = 0; i < 40; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
 
     View *va = server.viewsForTest()[0].get();   // red, lower
@@ -120,6 +123,7 @@ TEST_CASE("closing the sole focused window clears focus") {
     auto mapped = [&] { const auto &v = server.viewsForTest(); return !v.empty() && v[0]->isMapped(); };
     for (int i = 0; i < 500 && !mapped(); ++i) { a.flush(); server.dispatch(); a.pump(); }
     REQUIRE(mapped());
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
     for (int i = 0; i < 40; ++i) { a.flush(); server.dispatch(); a.pump(); }
 
     server.injectPointerMotionForTest(260, 130);

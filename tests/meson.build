@@ -34,6 +34,7 @@ unit_sources = files(
   'unit/work_area_geom_test.cc',
   'unit/util_test.cc',
   'unit/rootmenu_wire_test.cc',
+  'unit/placement_geom_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
@@ -444,6 +445,12 @@ test('sloppy_focus', sloppy_focus_exe, suite : 'system',
 auto_raise_exe = executable('auto-raise-test', files('system/auto_raise_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('auto_raise', auto_raise_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Window placement at map (Cascade/Center/RowSmart) - kills the fixed (160,120).
+placement_exe = executable('placement-test', files('system/placement_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('placement', placement_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------

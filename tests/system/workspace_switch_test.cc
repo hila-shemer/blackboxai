@@ -19,6 +19,7 @@ namespace {
       c.flush(); s.dispatch(); c.pump();
     }
     for (int i = 0; i < 40; ++i) { c.flush(); s.dispatch(); c.pump(); }
+    for (auto &up : s.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement restore
   }
   void clickTitlebar(Server &s) {  // focus the window under (260,130)
     s.injectPointerMotionForTest(260, 130);
@@ -58,6 +59,7 @@ TEST_CASE("workspace switch hides/shows views, restores focus, updates the label
   }
   for (int i = 0; i < 40; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement restore
   View *vb = server.viewsForTest()[1].get();
   CHECK(vb->workspace() == 1);
   CHECK(vb->visible());
@@ -100,6 +102,7 @@ TEST_CASE("switching to a populated workspace with no remembered focus picks the
     { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   for (int i = 0; i < 40; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement restore
   View *vb = server.viewsForTest()[1].get();      // topmost (later-mapped) on ws1
   REQUIRE(server.focusedViewForTest() == nullptr); // focusNewWindows off in this fixture
 

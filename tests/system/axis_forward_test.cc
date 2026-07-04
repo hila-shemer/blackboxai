@@ -26,6 +26,8 @@ namespace {
                         return !v.empty() && v.back()->isMapped(); };
     for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); s.dispatch(); c.pump(); }
     REQUIRE(mapped());
+    // Wave-2 placement moved the map default; this test's coords assume (160,120).
+    s.viewsForTest().back()->setPosition(160, 120);
     for (int i = 0; i < 30; ++i) { c.flush(); s.dispatch(); c.pump(); }
   }
   void pumpAxis(Server &s, test::TestClient &c) {

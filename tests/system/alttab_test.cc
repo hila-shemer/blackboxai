@@ -30,6 +30,9 @@ namespace {
       s.dispatch();
       c.pump(); if (extra) extra->pump();
     }
+    // Wave-2 placement moved windows off the shared (160,120); restore the stack
+    // these MRU tests were written against (topmost under a (260,130) click).
+    for (auto &up : s.viewsForTest()) up->setPosition(160, 120);
   }
   void clickTitlebar(Server &s) {  // focus the topmost window under (260,130)
     s.injectPointerMotionForTest(260, 130);
@@ -61,6 +64,7 @@ TEST_CASE("preview raises+focuses without reordering MRU; commit reorders") {
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); c.flush(); server.dispatch(); a.pump(); b.pump(); c.pump(); }
   REQUIRE(server.viewsForTest().size() == 3);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   View *vb = server.viewsForTest()[1].get();
   View *vc = server.viewsForTest()[2].get();
@@ -99,6 +103,7 @@ TEST_CASE("wraparound then cancel restores the start window and leaves MRU intac
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); c.flush(); server.dispatch(); a.pump(); b.pump(); c.pump(); }
   REQUIRE(server.viewsForTest().size() == 3);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   View *vb = server.viewsForTest()[1].get();
   View *vc = server.viewsForTest()[2].get();
@@ -139,6 +144,7 @@ TEST_CASE("committing onto a window on another workspace switches to it") {
   REQUIRE(b.ok());
   pump(server, b, 2, &a);
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *vb = server.viewsForTest()[1].get();
   REQUIRE(vb->workspace() == 1);
   clickTitlebar(server);
@@ -169,6 +175,7 @@ TEST_CASE("cross-workspace commit keeps MRU order: only the target moves to fron
   }
   for (int i = 0; i < 60; ++i) { x.flush(); a.flush(); server.dispatch(); x.pump(); a.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *vx = server.viewsForTest()[0].get();
   View *va = server.viewsForTest()[1].get();
   clickTitlebar(server);
@@ -182,6 +189,7 @@ TEST_CASE("cross-workspace commit keeps MRU order: only the target moves to fron
   REQUIRE(b.ok());
   pump(server, b, 3, &a);
   REQUIRE(server.viewsForTest().size() == 3);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *vb = server.viewsForTest()[2].get();
   REQUIRE(vb->workspace() == 1);
   clickTitlebar(server);
@@ -218,6 +226,7 @@ TEST_CASE("cycling with no focused window lands on the MRU front first") {
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   View *vb = server.viewsForTest()[1].get();
   clickTitlebar(server);
@@ -251,6 +260,7 @@ TEST_CASE("the cycle is modal: other bound keys are swallowed while cycling") {
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *vb = server.viewsForTest()[1].get();
   clickTitlebar(server);
   REQUIRE(server.focusedViewForTest() == vb);
@@ -287,6 +297,7 @@ TEST_CASE("a window turning invisible after the freeze is skipped, not previewed
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); c.flush(); server.dispatch(); a.pump(); b.pump(); c.pump(); }
   REQUIRE(server.viewsForTest().size() == 3);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   View *vc = server.viewsForTest()[2].get();
   clickTitlebar(server);
@@ -328,6 +339,7 @@ TEST_CASE("a window closed mid-cycle is pruned from the frozen ring") {
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); c.flush(); server.dispatch(); a.pump(); b.pump(); c.pump(); }
   REQUIRE(server.viewsForTest().size() == 3);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *vb = server.viewsForTest()[1].get();
   View *vc = server.viewsForTest()[2].get();
   clickTitlebar(server);
@@ -343,6 +355,7 @@ TEST_CASE("a window closed mid-cycle is pruned from the frozen ring") {
     a.flush(); b.flush(); c.flush(); server.dispatch(); a.pump(); b.pump(); c.pump();
   }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
 
   server.cycleForTest(+1);   // from B: skip the dead slot, wrap to C
   CHECK(server.focusedViewForTest() == vc);
@@ -367,6 +380,7 @@ TEST_CASE("the preview restacks: the previewed window rises to the top") {
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   clickTitlebar(server);   // focus B (topmost); MRU: B,A
 
@@ -400,6 +414,7 @@ TEST_CASE("the Alt+Tab key funnel starts/steps the cycle and Escape cancels it")
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); c.flush(); server.dispatch(); a.pump(); b.pump(); c.pump(); }
   REQUIRE(server.viewsForTest().size() == 3);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   View *vb = server.viewsForTest()[1].get();
   View *vc = server.viewsForTest()[2].get();
@@ -446,6 +461,7 @@ TEST_CASE("a window mapping mid-cycle must not hijack the commit target") {
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   View *vb = server.viewsForTest()[1].get();
   clickTitlebar(server);
@@ -465,6 +481,7 @@ TEST_CASE("a window mapping mid-cycle must not hijack the commit target") {
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); c.flush(); server.dispatch(); a.pump(); b.pump(); c.pump(); }
   REQUIRE(server.viewsForTest().size() == 3);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *vc = server.viewsForTest()[2].get();
   REQUIRE(vc->isMapped());
 
@@ -493,6 +510,7 @@ TEST_CASE("desktop-click menus mid-cycle dissolve the cycle before going modal")
   }
   for (int i = 0; i < 60; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
+  for (auto &up : server.viewsForTest()) up->setPosition(160, 120);  // wave-2 placement: restore stack
   View *va = server.viewsForTest()[0].get();
   View *vb = server.viewsForTest()[1].get();
   clickTitlebar(server);

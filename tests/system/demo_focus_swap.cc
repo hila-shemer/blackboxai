@@ -37,6 +37,7 @@ TEST_CASE("demo: focus_swap — click titlebars to transfer focus between two wi
   };
   for (int i = 0; i < 500 && !aMapped(); ++i) { ca.flush(); server.dispatch(); ca.pump(); }
   REQUIRE(aMapped());
+  server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore (B repositioned below)
   for (int i = 0; i < 30; ++i) { ca.flush(); server.dispatch(); ca.pump(); }
 
   // Window B: blue content — map then move below A.

@@ -7,6 +7,7 @@
 #include "Rootmenu.hh"
 #include "MenuParser.hh"
 #include "Frame.hh"
+#include "Placement.geom.hh"
 #include "Screenshot.hh"
 #include "ClipboardImage.hh"
 #include "Autostart.hh"
@@ -458,6 +459,28 @@ namespace bbai {
     // the key path). The new window is already in mru_/stacking from creation
     // and is focusable once the cycle ends.
     if (cycling_) return;
+    // Place the window per policy instead of the fixed (160,120) ctor default.
+    // Only plain views: a client that mapped straight into fullscreen/maximize
+    // (mpv --fs, applied from initial_commit) already owns its geometry.
+    if (!view->isFullscreen() && !view->isMaximized()) {
+      if (Output *o = outputForView(view)) {
+        const frame::FrameMetrics &fm = currentStyle()->frameMetrics();
+        std::vector<wlr_box> taken;
+        for (auto &up : views) {
+          View *o2 = up.get();
+          if (o2 == view || !o2->isMapped() || o2->workspace() != view->workspace())
+            continue;
+          taken.push_back({o2->x(), o2->y(),
+                           frame::frameWidth(o2->contentWidth(), fm),
+                           frame::frameHeight(o2->contentHeight(), fm)});
+        }
+        place::Point p = place::place(config_.windowPlacement, o->workArea(),
+                                      frame::frameWidth(view->contentWidth(), fm),
+                                      frame::frameHeight(view->contentHeight(), fm),
+                                      taken, placement_cascade_);
+        view->setPosition(p.x, p.y);
+      }
+    }
     if (config_.focusNewWindows) focusView(view);
   }
 

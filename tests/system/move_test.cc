@@ -32,6 +32,7 @@ TEST_CASE("dragging the titlebar moves the window and its frame") {
   };
   for (int i = 0; i < 500 && !mapped(); ++i) { client.flush(); server.dispatch(); client.pump(); }
   REQUIRE(mapped());
+  server.viewsForTest()[0]->setPosition(160, 120);
   for (int i = 0; i < 30; ++i) { client.flush(); server.dispatch(); client.pump(); }
 
   View *v = server.viewsForTest()[0].get();
