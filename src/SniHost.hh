@@ -81,7 +81,7 @@ namespace bbai::sni {
     void addRegistration(const std::string &service, const std::string &path,
                          const std::string &owner);
 
-    void fetchAll(Reg &reg);           // async Properties.GetAll -> Cb::onGetAll
+    int fetchAll(Reg &reg);            // async Properties.GetAll -> Cb::onGetAll; <0 = never sent
     void callItem(const Item &, const char *method, int x, int y);
     void storeItem(Item item);         // upsert + fire itemAdded/itemChanged
     void dropRegistration(const std::string &service, const std::string &path);
