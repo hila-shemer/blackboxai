@@ -17,6 +17,7 @@ TEST_CASE("right-click desktop opens the root menu; outside/Escape dismiss") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -47,6 +48,7 @@ TEST_CASE("right-click on the toolbar does NOT open the root menu") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -62,6 +64,7 @@ TEST_CASE("menu keyboard navigation: Down/Up skip separators, Return activates")
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -94,6 +97,7 @@ TEST_CASE("a press inside the menu but not on an item keeps it open") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
   REQUIRE(server.titleFont()->height() == 18);   // geometry below assumes the bundled font
@@ -122,6 +126,7 @@ TEST_CASE("an arbitrary key while the menu is modal is swallowed and leaves it o
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -142,6 +147,7 @@ TEST_CASE("the highlighted menu row renders (hilite golden)") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 

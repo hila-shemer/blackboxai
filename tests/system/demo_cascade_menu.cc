@@ -52,6 +52,7 @@ TEST_CASE("demo: cascade_menu — right-click desktop, hover submenu, dismiss wi
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 

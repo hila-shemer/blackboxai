@@ -102,7 +102,14 @@ TEST_CASE("[style] routes the expanded path into the applyStyleFile seam") {
 TEST_CASE("[reconfig] hits the reconfigure seam and invalidates the menu cache") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
-  Server server(/*headless=*/true);
+  // Real reconfigure re-reads session.menuFile from the rc (Task 9 wiring), so
+  // the dispatch menu must come from an rc the server owns - a ForTest path
+  // would be overwritten by the reload. Mechanism adapted, requirement kept:
+  // [reconfig] invalidates the cache and the next open re-parses.
+  const std::string menu = writeDispatchMenu();
+  const std::string rc = writeTemp("reconfig.blackboxrc",
+    "session.menuFile: " + menu + "\n");
+  Server server(/*headless=*/true, rc);
   boot(server);
 
   openDispatchMenu(server, 400, 200);
@@ -272,4 +279,25 @@ TEST_CASE("missing file and pipe menuFile fall back to the in-code menu") {
   server.injectPointerButtonForTest(BTN_RIGHT, true);
   REQUIRE(server.menuOpenForTest());
   CHECK(server.rootMenuForTest()->itemCount() == 7);
+}
+
+TEST_CASE("session.menuFile flows from a real rc file through reconfigure") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  boot(server);
+
+  const std::string menu = writeTemp("rc-wired.menu",
+    "[begin] (FromRc)\n  [exec] (Marker) {m}\n[end]\n");
+  const std::string rc = writeTemp("rc-wired.blackboxrc",
+    "session.menuFile: " + menu + "\n");
+
+  // The real rc-style seam: reload config from an explicit rc, then the next
+  // menu open must be built from the file the rc names.
+  server.reconfigure(rc);
+  server.injectPointerMotionForTest(400, 200);
+  server.injectPointerButtonForTest(BTN_RIGHT, true);
+  REQUIRE(server.menuOpenForTest());
+  REQUIRE(server.rootMenuForTest()->itemCount() == 1);
+  CHECK(server.rootMenuForTest()->item(0).label == bt::decodeUtf8("Marker"));
 }

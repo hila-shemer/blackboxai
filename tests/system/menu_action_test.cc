@@ -28,6 +28,7 @@ TEST_CASE("clicking the kitty entry runs it via the CommandRunner (no spawn)") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -57,6 +58,7 @@ TEST_CASE("the menu is modal: a press that would start a move is consumed") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -92,6 +94,7 @@ TEST_CASE("a click beside the menu (item-aligned Y, outside its X) dismisses, ne
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -119,6 +122,7 @@ TEST_CASE("dismissing the menu over a client delivers no orphan button release")
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -161,6 +165,7 @@ TEST_CASE("hovering beside the menu highlights no row") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -181,6 +186,7 @@ TEST_CASE("Mod4+space opens the menu mid-move and aborts the grab (window stops 
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
@@ -222,6 +228,7 @@ TEST_CASE("the Exit menu action dismisses the menu (terminate)") {
 
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
