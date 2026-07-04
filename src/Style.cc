@@ -193,23 +193,27 @@ Spec parse(const std::string &command) {
   const std::string base = slash == std::string::npos ? prog : prog.substr(slash + 1);
   if (base != "bsetroot" && base != "bsetbg") return spec;
 
-  Spec::Kind kind = Spec::Kind::None;
+  // Directive presence as booleans, like classic's sol/mod/grd flags: the
+  // same directive twice still counts once (later value wins), two DIFFERENT
+  // directives fail the (mod+sol+grd) != 1 guard (util/bsetroot.cc:98-104)
+  // and classic exits without painting - our analogue is Kind::None.
+  bool solid = false, mod = false, grad = false;
   for (size_t i = 1; i < argv.size(); ++i) {
     const std::string &a = argv[i];
     auto next = [&]() -> const std::string * {
       return (i + 1 < argv.size()) ? &argv[++i] : nullptr;
     };
     if (a == "-solid") {
-      if (const std::string *v = next()) { spec.fore = *v; kind = Spec::Kind::Solid; }
+      if (const std::string *v = next()) { spec.fore = *v; solid = true; }
     } else if (a == "-mod") {
       const std::string *x = next(), *y = x ? next() : nullptr;
       if (y) {
         spec.modX = std::max(std::atoi(x->c_str()), 1);
         spec.modY = std::max(std::atoi(y->c_str()), 1);
-        kind = Spec::Kind::Mod;
+        mod = true;
       }
     } else if (a == "-gradient") {
-      if (const std::string *v = next()) { spec.texture = *v; kind = Spec::Kind::Gradient; }
+      if (const std::string *v = next()) { spec.texture = *v; grad = true; }
     } else if (a == "-fg" || a == "-foreground" || a == "-from") {
       if (const std::string *v = next()) spec.fore = *v;
     } else if (a == "-bg" || a == "-background" || a == "-to") {
@@ -220,7 +224,14 @@ Spec parse(const std::string &command) {
     // unknown flags are skipped - a theme's exotic bsetroot variant should
     // degrade to flat black, not kill the style load
   }
-  spec.kind = kind;
+  if (int(solid) + int(mod) + int(grad) != 1) return spec;   // Kind::None
+  // Classic's completeness predicates (bsetroot.cc:109-116): -mod needs both
+  // colors, -gradient needs -from AND -to, else usage() and the root is left
+  // untouched. We used to sanitize the missing colors to black and paint
+  // black-on-black - refuse instead.
+  if (solid) spec.kind = Spec::Kind::Solid;                  // fore is set with the flag
+  else if (mod && !spec.fore.empty() && !spec.back.empty()) spec.kind = Spec::Kind::Mod;
+  else if (grad && !spec.fore.empty() && !spec.back.empty()) spec.kind = Spec::Kind::Gradient;
   return spec;
 }
 

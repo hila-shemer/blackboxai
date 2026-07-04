@@ -203,6 +203,32 @@ TEST_CASE("bsetroot::parse covers every shipped rootCommand form") {
   CHECK(parse("bsetroot").kind == Spec::Kind::None);               // no mode flag
 }
 
+TEST_CASE("bsetroot::parse refuses what classic bsetroot refuses (root untouched -> None)") {
+  using bbai::bsetroot::Spec;
+  using bbai::bsetroot::parse;
+
+  // Two DISTINCT directives: classic errors out via the (mod+sol+grd) != 1
+  // guard (util/bsetroot.cc:98-104, exit before painting). Not last-one-wins.
+  CHECK(parse("bsetroot -solid grey -mod 4 4").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -mod 4 4 -fg red -bg blue -gradient flatgradient -from red -to blue").kind
+        == Spec::Kind::None);
+
+  // The SAME directive twice keeps the classic sum at 1 (booleans) - the
+  // later value wins, exactly as classic's re-assignment does.
+  Spec s = parse("bsetroot -solid red -solid blue");
+  CHECK(s.kind == Spec::Kind::Solid);
+  CHECK(s.fore == "blue");
+
+  // -mod without -fg/-bg and -gradient missing -from/-to fail classic's
+  // completeness predicate (bsetroot.cc:111-116 -> usage(), root untouched);
+  // painting black-on-black instead was the divergence.
+  CHECK(parse("bsetroot -mod 4 4").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -mod 4 4 -fg red").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -gradient flatgradient -from red").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -gradient flatgradient -to blue").kind == Spec::Kind::None);
+  CHECK(parse("bsetroot -gradient flatgradient").kind == Spec::Kind::None);
+}
+
 TEST_CASE("modula reproduces the classic 16x16 X bitmap tile") {
   using bbai::bsetroot::renderModula;
   const bt::Color fg(255, 0, 0), bg(0, 0, 255);
