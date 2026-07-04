@@ -25,8 +25,10 @@ TEST_CASE("modifier match is by equality, not subset") {
   // Super+Tab is CycleNext; Super+Shift+Tab is CyclePrev (must not fire CycleNext).
   CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_Tab).kind == Action::CyclePrev);
   CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_ISO_Left_Tab).kind == Action::CyclePrev);
-  // An extra modifier on a single-mod binding does NOT match.
-  CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_Right).kind == Action::None);
+  // An extra modifier on a single-mod binding does NOT match. (Super+space is
+  // OpenMenu; Super+Shift+space is unbound - Super+Shift+Right is now SnapRight,
+  // so use a key that stays free to keep proving the equality-mask rule.)
+  CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_space).kind == Action::None);
   // The bare keysym with no modifier does not match a Super binding.
   CHECK(kb.dispatch(0, XKB_KEY_Right).kind == Action::None);
 }
@@ -54,4 +56,22 @@ TEST_CASE("Ctrl+Alt+Backspace is the session-quit chord") {
   Keybindings kb;
   Action a = kb.dispatch(WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT, XKB_KEY_BackSpace);
   CHECK(a.kind == Action::Quit);
+}
+
+TEST_CASE("wave-2 window-mgmt bindings") {
+  Keybindings kb;
+  const uint32_t CTRL = WLR_MODIFIER_CTRL;
+  CHECK(kb.dispatch(SUPER, XKB_KEY_f).kind == Action::ToggleFullscreen);
+  CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_Left).kind  == Action::SnapLeft);
+  CHECK(kb.dispatch(SUPER | SHIFT, XKB_KEY_Right).kind == Action::SnapRight);
+
+  Action ml = kb.dispatch(SUPER | CTRL, XKB_KEY_Left);
+  CHECK(ml.kind == Action::MoveToOutput);
+  CHECK(ml.arg == WLR_DIRECTION_LEFT);
+  Action md = kb.dispatch(SUPER | CTRL, XKB_KEY_Down);
+  CHECK(md.kind == Action::MoveToOutput);
+  CHECK(md.arg == WLR_DIRECTION_DOWN);
+
+  // Plain Super+Left still switches workspaces (must not be shadowed).
+  CHECK(kb.dispatch(SUPER, XKB_KEY_Left).kind == Action::WorkspacePrev);
 }

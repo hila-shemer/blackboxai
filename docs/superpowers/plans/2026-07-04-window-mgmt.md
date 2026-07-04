@@ -1821,7 +1821,7 @@ Now that the behavior methods exist, add the `Action::Kind` values, default bind
 - Consumes: `setViewFullscreen`/`snapFocused`/`moveFocusedToOutput` (Tasks 5/8/9), `WLR_DIRECTION_*`, `WLR_EDGE_LEFT`/`RIGHT`.
 - Produces: `Action::Kind::{ToggleFullscreen, SnapLeft, SnapRight, MoveToOutput}` (PINNED SEAM). `MoveToOutput` carries the direction in `Action::arg`.
 
-- [ ] **Step 1: Write the failing unit test**
+- [x] **Step 1: Write the failing unit test**
 
 Append to `tests/unit/keybinding_test.cc`:
 
@@ -1845,12 +1845,12 @@ TEST_CASE("wave-2 window-mgmt bindings") {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `unit`.
 Expected: BUILD FAILURE — `'ToggleFullscreen' is not a member of 'bbai::Action'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Keybindings.hh`, extend the enum (line 17-21):
 
@@ -1886,7 +1886,7 @@ Expected: BUILD FAILURE — `'ToggleFullscreen' is not a member of 'bbai::Action
     case Action::MoveToOutput: moveFocusedToOutput(static_cast<wlr_direction>(a.arg)); break;
 ```
 
-- [ ] **Step 4: Write the failing system test (keys drive the behavior)**
+- [x] **Step 4: Write the failing system test (keys drive the behavior)**
 
 Create `tests/system/window_ops_key_test.cc`:
 
@@ -1952,11 +1952,11 @@ test('window_ops_key', window_ops_key_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Container gate, `<tests>` = `unit window_ops_key`. Expected: both green. Full gate green; goldens clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Keybindings.hh src/Keybindings.cc src/Server.cc \

@@ -25,6 +25,13 @@ namespace bbai {
       { SUPER | ALT,   XKB_KEY_t,     { Action::IconMenu } },
       { SUPER,         XKB_KEY_F7,    { Action::Screenshot } },
       { CTRL | ALT,    XKB_KEY_BackSpace, { Action::Quit } },  // escape a wedged session
+      { SUPER,         XKB_KEY_f,     { Action::ToggleFullscreen } },
+      { SUPER | SHIFT, XKB_KEY_Left,  { Action::SnapLeft } },
+      { SUPER | SHIFT, XKB_KEY_Right, { Action::SnapRight } },
+      { SUPER | CTRL,  XKB_KEY_Left,  { Action::MoveToOutput, WLR_DIRECTION_LEFT } },
+      { SUPER | CTRL,  XKB_KEY_Right, { Action::MoveToOutput, WLR_DIRECTION_RIGHT } },
+      { SUPER | CTRL,  XKB_KEY_Up,    { Action::MoveToOutput, WLR_DIRECTION_UP } },
+      { SUPER | CTRL,  XKB_KEY_Down,  { Action::MoveToOutput, WLR_DIRECTION_DOWN } },
     };
   }
 

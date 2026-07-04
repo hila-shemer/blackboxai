@@ -1385,6 +1385,12 @@ namespace bbai {
     case Action::Quit:      terminate(); break;
     case Action::CycleNext: cycleStep(+1); break;
     case Action::CyclePrev: cycleStep(-1); break;
+    case Action::ToggleFullscreen:
+      if (focused_view) setViewFullscreen(focused_view, !focused_view->isFullscreen());
+      break;
+    case Action::SnapLeft:     snapFocused(WLR_EDGE_LEFT);  break;
+    case Action::SnapRight:    snapFocused(WLR_EDGE_RIGHT); break;
+    case Action::MoveToOutput: moveFocusedToOutput(static_cast<wlr_direction>(a.arg)); break;
     case Action::None:      break;
     }
   }
