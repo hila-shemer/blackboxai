@@ -34,6 +34,8 @@ TEST_CASE("raise/lower reorder the scene; setOnWorkspace hides a view") {
     a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump();
   }
   REQUIRE(mappedN(2));
+  server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement: restore overlap
+  server.viewsForTest()[1]->setPosition(160, 120);
 
   View *va = server.viewsForTest()[0].get();  // red (mapped first -> lower)
   View *vb = server.viewsForTest()[1].get();  // green (mapped second -> top)

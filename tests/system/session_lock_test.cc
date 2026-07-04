@@ -208,6 +208,7 @@ TEST_CASE("locked session: clients get no input, bindings are dead, quit key sup
         return !v.empty() && v[0]->isMapped();
     };
     REQUIRE(pumpUntil(server, appMapped, [&] { app.flush(); app.pump(); }));
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
     for (int i = 0; i < 40; ++i) { app.flush(); server.dispatch(); app.pump(); }
     server.injectPointerMotionForTest(260, 130);
     server.injectPointerButtonForTest(BTN_LEFT, true);
@@ -271,6 +272,7 @@ TEST_CASE("unlock restores the desktop pixel-for-pixel, focus and bindings inclu
         return !v.empty() && v[0]->isMapped();
     };
     REQUIRE(pumpUntil(server, appMapped, [&] { app.flush(); app.pump(); }));
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
     for (int i = 0; i < 40; ++i) { app.flush(); server.dispatch(); app.pump(); }
     server.injectPointerMotionForTest(260, 130);
     server.injectPointerButtonForTest(BTN_LEFT, true);
@@ -432,6 +434,7 @@ TEST_CASE("takeover keeps the pre-lock focus for the eventual unlock") {
         return !v.empty() && v[0]->isMapped();
     };
     REQUIRE(pumpUntil(server, aMapped, [&] { a.flush(); a.pump(); }));
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
     for (int i = 0; i < 40; ++i) { a.flush(); server.dispatch(); a.pump(); }
     server.injectPointerMotionForTest(260, 130);
     server.injectPointerButtonForTest(BTN_LEFT, true);
@@ -459,6 +462,10 @@ TEST_CASE("takeover keeps the pre-lock focus for the eventual unlock") {
     REQUIRE(pumpUntil(server,
         [&] { return server.viewsForTest().size() == 2
                   && server.viewsForTest()[1]->isMapped(); }, pumpAB));
+    // Wave-2 placement moved B off (160,120); restore the overlap so the leftover
+    // cursor at (260,130) sits over a TITLEBAR (not B's client) - otherwise the
+    // post-unlock onPointerMotion sloppy-refocuses B instead of restoring va.
+    for (auto &up : server.viewsForTest()) up->setPosition(160, 120);
     REQUIRE(server.focusedViewForTest() == nullptr);
 
     // Locker crash, then a takeover locker.

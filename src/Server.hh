@@ -375,6 +375,7 @@ namespace bbai {
     View *autoraise_pending_ = nullptr;
     void armAutoRaise(View *v);       // (re)start the one-shot for v, or cancel
     void onAutoRaiseTimeout();
+    int placement_cascade_ = 0;       // Cascade step cursor (WindowPlacement)
     std::unique_ptr<CommandRunner> default_runner_;  // owns the production runner
     CommandRunner *command_runner_ = nullptr;        // -> default or a test fake
     std::vector<std::unique_ptr<Keyboard>> keyboards_;

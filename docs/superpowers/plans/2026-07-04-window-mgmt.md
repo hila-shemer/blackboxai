@@ -2433,7 +2433,7 @@ The wave-2 decision pairs sloppy focus with "Cascade/Center/RowSmart placement r
 - Consumes: `config().windowPlacement`, `Output::workArea()`, the frame width/height helpers (`Frame.hh`), the set of already-mapped views on the target workspace.
 - Produces: `bbai::place::Point place(WindowPlacement policy, wlr_box work, int fw, int fh, const std::vector<wlr_box> &taken, int &cascade_cursor)` — pure, unit-tested; `onViewMapped` calls it and `setPosition`s the result.
 
-- [ ] **Step 1: Write the failing unit test**
+- [x] **Step 1: Write the failing unit test**
 
 Create `tests/unit/placement_geom_test.cc`:
 
@@ -2477,12 +2477,12 @@ TEST_CASE("RowSmart avoids an occupied origin, falls back when full") {
 
 Register in `unit_sources` (after the last entry).
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `unit`.
 Expected: BUILD FAILURE — `Placement.geom.hh: No such file`.
 
-- [ ] **Step 3: Implement the pure header + the map hook**
+- [x] **Step 3: Implement the pure header + the map hook**
 
 Create `src/Placement.geom.hh` with `struct Point{int x,y;}` and the `place(...)` function implementing Center (centre in work), Cascade (step `kCascadeStep` = titleHeight-ish diagonal from the work origin, wrap when `x+fw>work.right` or `y+fh>work.bottom` back to origin), and RowSmart (scan left-to-right, top-to-bottom in `fw`/`fh` strides for the first slot not intersecting any `taken` box; fall back to `{work.x, work.y}`). Keep it pure and header-only (the slit/toolbar geom headers are the pattern).
 
@@ -2510,15 +2510,15 @@ In `Server.cc` `onViewMapped` (line 447), before/replacing the fixed-position de
 
 Add `int placement_cascade_ = 0;` to `Server.hh` (the cascade cursor). Guard the whole block so a maximized/fullscreen-on-map client (rare) isn't repositioned under its own state — only place plain views.
 
-- [ ] **Step 4: Write + register the system test**
+- [x] **Step 4: Write + register the system test**
 
 Create `tests/system/placement_test.cc`: boot with each `session.windowPlacement` rc, map two clients, assert the second lands per policy (Center → centred; Cascade → offset from the first; RowSmart → not overlapping the first). Derive all expected coordinates from `workArea()` + the frame helpers, never baked. `text_env` (SSD frames carry font-derived titlebars).
 
-- [ ] **Step 5: Run + prove golden discipline**
+- [x] **Step 5: Run + prove golden discipline**
 
 Container gate, `<tests>` = `unit placement`. Then the FULL gate. Placement moves where windows open, so wave-1 tests that asserted the fixed `(160,120)` (e.g. `focus_swap_test` checks `va->x()==160`) will now see the placed position. Those are THIS slice's tests to update: either the test explicitly `setPosition`s after map (many already do), or it asserts the placed coordinate. `git status tests/golden/` MUST stay empty — the goldens that pin a window at a specific spot either `setPosition` explicitly before capture (unaffected) or are this slice's to keep green by explicit positioning, NEVER by re-bless. If a golden's window would move, add an explicit `setPosition` to restore its captured geometry (mechanism change, not a re-bless).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Placement.geom.hh src/Server.hh src/Server.cc \

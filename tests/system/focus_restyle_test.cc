@@ -36,6 +36,8 @@ TEST_CASE("titlebar click propagates focus state to both views") {
         c1.flush(); server.dispatch(); c1.pump();
     }
     REQUIRE(v1Mapped());
+    // Wave-2 placement moved the map default off (160,120); restore it (wave-1 geometry).
+    server.viewsForTest()[0]->setPosition(160, 120);
     // Settle so the frame/decoration is fully laid out.
     for (int i = 0; i < 30; ++i) { c1.flush(); server.dispatch(); c1.pump(); }
 

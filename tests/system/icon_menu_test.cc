@@ -40,6 +40,8 @@ namespace {
     for (int i = 0; i < 30; ++i) {
       ca.flush(); cb.flush(); server.dispatch(); ca.pump(); cb.pump();
     }
+    // Wave-2 placement moved A off (160,120); restore it (B is repositioned by the caller).
+    if (server.viewsForTest().size() >= 1) server.viewsForTest()[0]->setPosition(160, 120);
   }
 
   // Iconify view A by clicking its iconify button (F4.3 path).

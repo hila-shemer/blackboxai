@@ -40,6 +40,7 @@ TEST_CASE("View iconified state composes with workspace visibility") {
         client.pump();
     }
     REQUIRE(mapped());
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
 
     View *v = server.viewsForTest()[0].get();
 
@@ -82,6 +83,7 @@ TEST_CASE("View setIconified is idempotent") {
         client.pump();
     }
     REQUIRE(mapped());
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
 
     View *v = server.viewsForTest()[0].get();
 
@@ -119,6 +121,7 @@ TEST_CASE("View workspace-off + iconified: un-iconify keeps frame hidden") {
         client.pump();
     }
     REQUIRE(mapped());
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
 
     View *v = server.viewsForTest()[0].get();
 
@@ -153,6 +156,8 @@ static void pumpUntilMapped(Server &server,
     }
     // Extra settle cycles so decorations commit.
     for (int i = 0; i < 30; ++i) { ca.flush(); cb.flush(); server.dispatch(); ca.pump(); cb.pump(); }
+    // Wave-2 placement moved A off (160,120); restore it (B is repositioned by the caller).
+    if (server.viewsForTest().size() >= 1) server.viewsForTest()[0]->setPosition(160, 120);
 }
 
 TEST_CASE("iconify button press+release-inside iconifies window and re-homes focus") {
@@ -236,6 +241,7 @@ TEST_CASE("iconify button: release outside the button is a no-op") {
     };
     for (int i = 0; i < 500 && !mapped(); ++i) { ca.flush(); server.dispatch(); ca.pump(); }
     REQUIRE(mapped());
+    server.viewsForTest()[0]->setPosition(160, 120);  // wave-2 placement restore
     for (int i = 0; i < 30; ++i) { ca.flush(); server.dispatch(); ca.pump(); }
 
     View *A = server.viewsForTest()[0].get();
