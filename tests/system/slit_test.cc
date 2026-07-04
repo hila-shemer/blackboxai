@@ -9,7 +9,10 @@
 #include "Slit.hh"
 #include "SniHost.hh"
 #include "SniMockItem.hh"
+#include "TestClient.hh"
+#include "View.hh"
 
+#include <linux/input-event-codes.h>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -177,5 +180,92 @@ TEST_CASE("slit auto-hide: sliver strut, hidden golden, reveal, hide again") {
   server.advanceClockForTest(1);
   CHECK(sl->hidden());
 
+  mock.quit();
+}
+
+TEST_CASE("slit clicks route to the item over the bus - not to menus, not to clients") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutputs(server);
+  server.createSniHostForTest();
+  REQUIRE(server.sniHostForTest()->ok());
+  test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  auto pump = [&] { server.dispatch(); };
+  REQUIRE(mock.waitReport(5000, pump) == "registered");
+  REQUIRE(pumpUntil(server, [&] { return server.slitForTest()->itemCountForTest() == 1; }));
+
+  // Click coordinates derive from the accessor, never baked margin math
+  // (program rule: a later style-margin change re-blesses pixels, not tests).
+  const slit::Rect ir = server.slitForTest()->itemRectGlobalForTest(0);
+  const int cx = ir.x + ir.w / 2, cy = ir.y + ir.h / 2;
+
+  // Park a client UNDER the slit: chrome must swallow every button.
+  test::TestClient c(server.socketName(), 0xFF00FF00u, 300, 300,
+                     test::TestClient::Deco::RequestSSD);
+  REQUIRE(c.ok());
+  {
+    auto mapped = [&] {
+      const auto &v = server.viewsForTest();
+      return !v.empty() && v[0]->isMapped();
+    };
+    for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); server.dispatch(); c.pump(); }
+    REQUIRE(mapped());
+  }
+  server.viewsForTest()[0]->setPosition(cx - 150, cy - 150);
+
+  server.injectPointerMotionForTest(cx, cy);
+
+  server.injectPointerButtonForTest(BTN_LEFT, true);
+  server.injectPointerButtonForTest(BTN_LEFT, false);
+  CHECK(mock.waitReport(5000, pump).rfind("Activate ", 0) == 0);
+
+  server.injectPointerButtonForTest(BTN_MIDDLE, true);
+  server.injectPointerButtonForTest(BTN_MIDDLE, false);
+  CHECK(mock.waitReport(5000, pump).rfind("SecondaryActivate ", 0) == 0);
+
+  // BTN_RIGHT rides the PINNED seam end-to-end: gate -> openSniContextMenu
+  // -> Host proxy -> bus -> the item's report. And it is NOT the root menu.
+  server.injectPointerButtonForTest(BTN_RIGHT, true);
+  server.injectPointerButtonForTest(BTN_RIGHT, false);
+  CHECK(mock.waitReport(5000, pump).rfind("ContextMenu ", 0) == 0);
+  CHECK_FALSE(server.menuOpenForTest());
+
+  // The seam is also directly callable with exact coords (menus' contract).
+  server.openSniContextMenu(server.sniHostForTest()->items()[0], 5, 7);
+  CHECK(mock.waitReport(5000, pump) == "ContextMenu 5 7");
+
+  // The parked client saw nothing - chrome swallowed press AND release.
+  for (int i = 0; i < 30; ++i) { c.flush(); server.dispatch(); c.pump(); }
+  CHECK(c.pointerButtonEvents() == 0);
+
+  mock.quit();
+}
+
+TEST_CASE("hidden auto-hide slit routes no clicks") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  const std::string rc = writeRc("session.screen0.slit.autoHide: True\n");
+  Server server(/*headless=*/true, rc);
+  REQUIRE(server.ok());
+  bootOutputs(server);
+  server.createSniHostForTest();
+  test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  auto pump = [&] { server.dispatch(); };
+  REQUIRE(mock.waitReport(5000, pump) == "registered");
+  REQUIRE(pumpUntil(server, [&] { return server.slitForTest()->itemCountForTest() == 1; }));
+  REQUIRE(server.slitForTest()->hidden());
+
+  // Click where the item WOULD be: the slit is hidden, items aren't there.
+  const slit::Rect ir = server.slitForTest()->itemRectGlobalForTest(0);
+  server.injectPointerMotionForTest(ir.x + ir.w / 2.0, ir.y + ir.h / 2.0);
+  // Cancel the reveal the motion just armed, then click while still hidden.
+  server.injectPointerButtonForTest(BTN_LEFT, true);
+  server.injectPointerButtonForTest(BTN_LEFT, false);
+  CHECK(mock.waitReport(500, pump) == "");        // nothing crossed the bus
+  CHECK_FALSE(server.menuOpenForTest());
   mock.quit();
 }

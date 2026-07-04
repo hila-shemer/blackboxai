@@ -1011,6 +1011,27 @@ namespace bbai {
     }
 
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
+      // Slit item clicks (classic Slit buttons, SNI-flavored). Before the
+      // desktop handlers: a right-click on the slit opens the ITEM's menu
+      // path, never the root menu. Hidden slit = no items on screen = no
+      // routing; the press still dies here as chrome (overDesktop already
+      // rejects layer_top nodes, and pointer focus was cleared over chrome,
+      // so nothing leaks to clients either way - the release is seat-filtered
+      // because its press was never delivered).
+      if (slit_ && !slit_->hidden() &&
+          slit_->containsGlobal(static_cast<int>(cursor->x), static_cast<int>(cursor->y))) {
+        const int lx = static_cast<int>(cursor->x), ly = static_cast<int>(cursor->y);
+        const int idx = slit_->itemIndexAtGlobal(lx, ly);
+        sni::Host *host = sniHostOrNull();
+        if (idx >= 0 && host && host->ok() &&
+            static_cast<std::size_t>(idx) < host->items().size()) {
+          const sni::Item &it = host->items()[static_cast<std::size_t>(idx)];
+          if (button == BTN_LEFT)        host->activate(it, lx, ly);
+          else if (button == BTN_MIDDLE) host->secondaryActivate(it, lx, ly);
+          else if (button == BTN_RIGHT)  openSniContextMenu(it, lx, ly);
+        }
+        return;   // swallow frame-gap presses too - chrome, not desktop
+      }
       // Right-click on the bare desktop opens the modal root menu.
       if (button == BTN_RIGHT && overDesktop(cursor->x, cursor->y)) {
         openRootMenu(cursor->x, cursor->y);
@@ -1425,6 +1446,14 @@ namespace bbai {
     active_menu_ = std::make_unique<Menu>(*this, title, std::move(items));
     active_menu_->show(static_cast<int>(lx), static_cast<int>(ly));
     wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
+  }
+
+  void Server::openSniContextMenu(const sni::Item &item, int lx, int ly) {
+    // v1 proxy. The coords are layout ints - on Wayland items can't position
+    // by them anyway (waybar sends the same); don't burn time making them
+    // "correct".
+    if (sni_host_ && sni_host_->ok())
+      sni_host_->contextMenu(item, lx, ly);
   }
 
   std::vector<MenuItem> Server::buildIconMenu() {
