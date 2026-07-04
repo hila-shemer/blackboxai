@@ -82,4 +82,14 @@ TEST_CASE("a maximized view re-maximizes onto the target's work area") {
   const wlr_box w1 = server.outputForTest(1)->workArea();
   CHECK(v->isMaximized());
   CHECK(v->x() == w1.x);
+
+  // Un-maximize after the move: the saved premax rect must have followed to the
+  // destination head, else the restore jumps the window back to the source
+  // output it was maximized on.
+  const wlr_box o1full = server.outputForTest(1)->fullBox();
+  v->setMaximized(false, w1);
+  settle(server, c);
+  CHECK_FALSE(v->isMaximized());
+  CHECK(v->x() >= o1full.x);
+  CHECK(v->x() <  o1full.x + o1full.width);
 }
