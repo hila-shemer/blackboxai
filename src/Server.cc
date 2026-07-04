@@ -424,8 +424,10 @@ namespace bbai {
     switch (opt) {
     case ConfigOption::FocusClickToFocus:
       config_.focusModel = FocusModel::ClickToFocus;
-      config_.autoRaise = false;    // classic: CTF forces both raise flags off
-      config_.clickRaise = false;
+      // Classic zeroes the raise flags only at load-parse, never on the runtime
+      // menu toggle - keep them in memory so a CTF->Sloppy round-trip restores
+      // them. focusModelValue() short-circuits to bare "ClickToFocus" while CTF
+      // is active, so the persisted spelling is unchanged.
       break;
     case ConfigOption::FocusSloppy:
       config_.focusModel = FocusModel::SloppyFocus;   // raise flags keep their values
@@ -579,6 +581,10 @@ namespace bbai {
     if (pressed_button_view_ == view) {
       pressed_button_view_ = nullptr;
       pressed_button_part_ = Part::None;
+    }
+    if (autoraise_pending_ == view) {         // disarm before the View is freed -
+      autoraise_pending_ = nullptr;           // else a pending one-shot fires on a
+      if (autoraise_timer_) autoraise_timer_->stop();  // dangling handle
     }
     std::erase(icons_, view);
     mru_.erase(view);                 // drop from last-used order (and any frozen ring)
@@ -1369,6 +1375,7 @@ namespace bbai {
     // view back to the window layer. Keeps the "only the focused fullscreen sits
     // above the toolbar" invariant across focus swaps, workspace switches and
     // alt-tab previews.
+    bool demoted = false;
     for (auto &up : views) {
       View *v = up.get();
       if (!v->isFullscreen()) continue;
@@ -1376,8 +1383,15 @@ namespace bbai {
       if (v->sceneTree()->node.parent != want) {
         wlr_scene_node_reparent(&v->sceneTree()->node, want);
         if (v == newly_focused) raiseView(v);
+        else demoted = true;
       }
     }
+    // A demotion reparents the ex-fullscreen view to the TOP of layer_window,
+    // above the window that just took focus (and it's still fullscreen-sized, so
+    // it fully covers it). Re-raise the focused non-fullscreen window so the one
+    // you switched TO isn't left hidden behind the one you switched from.
+    if (demoted && newly_focused && !newly_focused->isFullscreen())
+      raiseView(newly_focused);
   }
 
   bool Server::viewLayerIsFullscreenForTest(View *v) const {
@@ -1439,18 +1453,20 @@ namespace bbai {
     Output *dst = outputForWlr(dst_wo);
     if (!dst || dst == src) return;
 
+    const wlr_box db = dst->fullBox();
     if (v->isFullscreen()) {
       setViewFullscreen(v, false);           // re-apply on the new head's fullBox
       setViewFullscreen(v, true, dst);
+      v->offsetPremax(db.x - sb.x, db.y - sb.y);   // un-fullscreen lands on dst
       return;
     }
     if (v->isMaximized()) {
+      v->offsetPremax(db.x - sb.x, db.y - sb.y);   // un-maximize lands on dst
       v->remaximize(dst->workArea());
       return;
     }
     // Plain view: preserve the offset within the source head, clamp onto the
     // target so it can't land off-screen on a smaller monitor.
-    const wlr_box db = dst->fullBox();
     int nx = db.x + (v->x() - sb.x);
     int ny = db.y + (v->y() - sb.y);
     if (nx > db.x + db.width  - 1) nx = db.x + db.width  - 1;
@@ -1870,7 +1886,7 @@ namespace bbai {
   }
 
   void Server::openRootMenu(double lx, double ly) {
-    if (active_menu_) return;
+    if (active_menu_ || sni_menu_) return;   // an in-flight dbusmenu fetch counts
     // A live alt-tab session must dissolve before the menu goes modal, or the
     // later modifier release commits the cycle (focus + workspace switch)
     // underneath the open menu. Commit, not cancel: the preview is the real
@@ -2019,7 +2035,7 @@ namespace bbai {
   }
 
   void Server::openIconMenu(double lx, double ly) {
-    if (active_menu_) return;
+    if (active_menu_ || sni_menu_) return;   // an in-flight dbusmenu fetch counts
     if (cycling_) commitCycle();   // same rule as openRootMenu: one modal mode at a time
     // Abort any in-progress move/resize grab before going modal — otherwise the
     // grab's terminating release is swallowed by the modal gate and the window

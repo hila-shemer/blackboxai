@@ -131,6 +131,7 @@ namespace bbai {
     void requestMaximize(View *v);     // client set_maximized  -> apply + configure
     void requestMinimize(View *v);     // client set_minimized  -> iconify + configure
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
+    bool sniMenuInFlightForTest() const { return sni_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
     SessionLock *sessionLockForTest() const { return session_lock_.get(); }
@@ -244,6 +245,12 @@ namespace bbai {
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
     bool viewLayerIsFullscreenForTest(View *v) const;   // frame_tree parents into layer_fullscreen?
     bool isTopmostForTest(View *v);                     // v == topmost real view on its workspace
+    // Armed-autoraise state, to prove removeView disarms it (raw value compare
+    // only - never dereferenced: after a scrub-miss it would be dangling).
+    const void *autoRaisePendingForTest() const { return autoraise_pending_; }
+    bool autoRaiseTimerArmedForTest() const {
+      return autoraise_timer_ && autoraise_timer_->active();
+    }
 
     wl_display *display = nullptr;
     wlr_backend *backend = nullptr;

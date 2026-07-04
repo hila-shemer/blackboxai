@@ -60,6 +60,11 @@ namespace bbai {
     // is untouched so a later un-maximize still restores the original.
     void remaximize(wlr_box work);
     bool isMaximized() const { return maximized_; }
+    // Shift the saved pre-maximize/fullscreen rect by (dx,dy). Move-to-output
+    // re-fills the destination head but leaves premax in source coords; without
+    // this a later un-maximize/un-fullscreen jumps the window back to the source
+    // output. premax_* are private, so the head-delta lives here.
+    void offsetPremax(int dx, int dy) { premax_x += dx; premax_y += dy; }
 
     // Fullscreen: fill `full` (LAYOUT coords, always the output's fullBox -
     // never the work area) with chrome hidden. Shares ONE saved rect with
