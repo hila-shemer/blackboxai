@@ -191,6 +191,9 @@ namespace bbai {
     View *focusedViewForTest() const { return focused_view; }
     void focusViewForTest(View *v) { focusView(v); }
     void toggleFullscreenForTest();   // defined in Server.cc (View is incomplete here)
+    void snapFocusedForTest(uint32_t edge) { snapFocused(edge); }
+    int frameWidthForTest(View *v) const;    // frame::frameWidth(content, metrics)
+    int frameHeightForTest(View *v) const;   // frame::frameHeight(content, metrics)
 
     // Alt-tab cycle seams: drive the same session state machine the CycleNext/
     // CyclePrev bindings and the onModifiers commit / Escape cancel funnels use.
@@ -320,6 +323,7 @@ namespace bbai {
     // (Task 6) the layer_fullscreen hop. on_output pins a specific head (a
     // client's requested fullscreen_output); null resolves by frame centre.
     void setViewFullscreen(View *v, bool on, Output *on_output = nullptr);
+    void snapFocused(uint32_t edge);   // WLR_EDGE_LEFT/RIGHT -> half the work area
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()

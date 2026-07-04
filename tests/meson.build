@@ -416,6 +416,12 @@ xdg_request_exe = executable('xdg-request-test', files('system/xdg_request_test.
 test('xdg_request', xdg_request_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Half-screen snap to the work area (keybinding-only, new behavior).
+snap_exe = executable('snap-test', files('system/snap_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('snap', snap_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

@@ -1187,6 +1187,36 @@ namespace bbai {
     if (v->toplevel()->requested.minimized && !v->isIconified()) iconifyView(v);
   }
 
+  void Server::snapFocused(uint32_t edge) {
+    View *v = focused_view;
+    if (!v) return;
+    Output *o = outputForView(v);
+    if (!o) return;
+    // Leave fullscreen/maximize first - snap is a plain geometry state, and its
+    // restore rects are those modes' concern, not ours (un-maximize restores
+    // premax, THEN snap overwrites the live geometry).
+    if (v->isFullscreen()) setViewFullscreen(v, false);
+    if (v->isMaximized()) v->setMaximized(false, o->workArea());
+
+    const wlr_box work = o->workArea();
+    const frame::FrameMetrics &fm = currentStyle()->frameMetrics();
+    const int halfW = work.width / 2;
+    const int contentW = halfW - 2 * fm.border;
+    const int contentH = work.height - fm.titleHeight - fm.handleHeight;
+    const int x = (edge == WLR_EDGE_LEFT) ? work.x : work.x + (work.width - halfW);
+    v->resizeTo(x, work.y, contentW, contentH);
+    // Advertise the tiled edges so a cooperating client drops its rounded
+    // corners / drop shadow on the snapped side (best-effort; ignored otherwise).
+    wlr_xdg_toplevel_set_tiled(v->toplevel(), edge | WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
+  }
+
+  int Server::frameWidthForTest(View *v) const {
+    return frame::frameWidth(v->contentWidth(), style_->frameMetrics());
+  }
+  int Server::frameHeightForTest(View *v) const {
+    return frame::frameHeight(v->contentHeight(), style_->frameMetrics());
+  }
+
   // --- test-only injection + introspection --------------------------------------
 
   void Server::injectPointerMotionForTest(double lx, double ly) {
