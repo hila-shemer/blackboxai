@@ -37,6 +37,7 @@ unit_sources = files(
   'unit/placement_geom_test.cc',
   'unit/slit_geom_test.cc',
   'unit/slit_icon_test.cc',
+  'unit/configmenu_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +

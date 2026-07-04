@@ -5,6 +5,7 @@
 
 #include "MenuItem.hh"
 #include "Workspace.hh"
+#include "Config.hh"
 
 #include <string>
 #include <vector>
@@ -17,6 +18,13 @@ namespace bbai::rootmenu {
   // Switch rows for every workspace + separator + New + Remove Last.
   // Used as the child items for the Workspaces submenu (F3.2+).
   std::vector<MenuItem> buildWorkspacesSubmenu(const WorkspaceModel &ws);
+
+  // The Configuration submenu, checked/enabled off the live Config (classic
+  // Configmenu::refresh semantics). Only rows with real behavior behind them:
+  // Focus Model, Window Placement, Focus New Windows. Toolbar/Slit Options,
+  // dithering, onTop and the rest of classic's toggle pile are omitted -
+  // no lying rows (program law; deviations documented in the wave-2 plan).
+  std::vector<MenuItem> buildConfigSubmenu(const Config &cfg);
 
   // Live fixup of a parsed menu-file tree: [workspaces] placeholders get the
   // real workspace submenu (rebuilt per open, so the current-mark stays
