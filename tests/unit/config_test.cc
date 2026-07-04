@@ -17,8 +17,8 @@ static Config parse(const std::string &body, unsigned screen = 0) {
 
 TEST_CASE("absent keys take the blackboxwm reference defaults") {
   Config c = parse("");  // nothing set -> every field is the reference default
-  CHECK(c.focusModel == FocusModel::ClickToFocus);
-  CHECK(c.autoRaise == false);
+  CHECK(c.focusModel == FocusModel::SloppyFocus);   // user-locked default-on
+  CHECK(c.autoRaise == false);                      // no AutoRaise by default
   CHECK(c.clickRaise == false);
   CHECK(c.focusNewWindows == true);            // reference defaults True
   CHECK(c.autoRaiseDelay == 400);
@@ -154,7 +154,7 @@ TEST_CASE("Config::load reads a fixture file from disk") {
 
 TEST_CASE("Config::load on a missing file yields all defaults") {
   Config c = Config::load("/nonexistent/path/.blackboxrc");
-  CHECK(c.focusModel == FocusModel::ClickToFocus);
+  CHECK(c.focusModel == FocusModel::SloppyFocus);   // default-on (missing file = all defaults)
   CHECK(c.workspaceCount == 4u);
   CHECK(c.toolbar.placement == Placement::BottomCenter);
 }

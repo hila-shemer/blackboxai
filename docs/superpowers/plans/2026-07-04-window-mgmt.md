@@ -1989,7 +1989,7 @@ The user-locked behavior and the most trap-dense change in the slice. `onPointer
 - Consumes: `config().focusModel`, `focusView` (already lock-guarded, returns early while locked), `cycling_`, the existing `viewFromNode`/`partAt` hit-test in `onPointerMotion`.
 - Produces: focus-follows-mouse behind the four gates. Task 12 adds AutoRaise/ClickRaise on top.
 
-- [ ] **Step 1: Flip the Config default + fix the pinned tests**
+- [x] **Step 1: Flip the Config default + fix the pinned tests**
 
 `src/Config.hh` line 67:
 
@@ -2014,7 +2014,7 @@ The user-locked behavior and the most trap-dense change in the slice. `onPointer
 
 (Leave the explicit-`ClickToFocus` cases at lines 38/50/73-78/157 alone — they set the key, so they still hold. Only the default-constructed/empty-parse assertions flip.)
 
-- [ ] **Step 2: Write the failing system test (behavior + the three guards)**
+- [x] **Step 2: Write the failing system test (behavior + the three guards)**
 
 Create `tests/system/sloppy_focus_test.cc`:
 
@@ -2146,12 +2146,12 @@ test('sloppy_focus', sloppy_focus_exe, suite : 'system',
 
 `cyclingForTest()` / `menuOpenForTest()` — reuse if present (`alttab_test.cc` / `menu_action_test.cc` drive these), else add trivial accessors returning `cycling_` / `active_menu_ != nullptr`.
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Container gate, `<tests>` = `sloppy_focus unit`.
 Expected: the first case fails (hover doesn't refocus — no sloppy code yet); `unit` `config_test` now passes with the flipped defaults.
 
-- [ ] **Step 4: Implement the refocus**
+- [x] **Step 4: Implement the refocus**
 
 `src/Server.cc`, in `onPointerMotion`, at the client hit-test tail (lines 928-937), refocus BEFORE forwarding the pointer. Every disqualifying state already returned above (locked :890, menu :891, screenshot :908, implicit-grab :920); the one new guard is `!cycling_`:
 
@@ -2176,11 +2176,11 @@ Expected: the first case fails (hover doesn't refocus — no sloppy code yet); `
     }
 ```
 
-- [ ] **Step 5: Run to verify it passes AND prove zero golden churn**
+- [x] **Step 5: Run to verify it passes AND prove zero golden churn**
 
 Container gate, `<tests>` = `sloppy_focus`. Expected: 4 cases pass. Then the FULL gate. This is the moment sloppy-default-on could churn a wave-1 golden: `git status tests/golden/` MUST be empty and every wave-1 focus/golden test MUST stay green. If a golden or a focus assertion flips, the cause is a test whose cursor genuinely rests over a *different* window's client than its intended focus — such a test's premise was click-to-focus. Fix it by prepending an explicit `session.focusModel: ClickToFocus\n` rc to THAT test (a test-mechanism change, not a behavior regression, and not a re-bless). Do NOT `BLESS=1` anything. (Expected: `focus_swap_test` and friends stay green untouched — their cursor ends over the window they focus, or over a titlebar which is not Part::Client, so sloppy is a no-op there.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Config.hh src/Config.cc src/Server.cc \

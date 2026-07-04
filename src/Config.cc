@@ -89,7 +89,7 @@ namespace bbai {
       res.read("session.focusModel", "Session.FocusModel",
                res.read(screenName(screen, "focusModel"),
                         screenClass(screen, "FocusModel"),
-                        "ClickToFocus"));
+                        "SloppyFocus"));   // user-locked default-on; an rc key wins
     if (fm.find("ClickToFocus") != std::string::npos) {
       cfg.focusModel = FocusModel::ClickToFocus;
       cfg.autoRaise = false;
