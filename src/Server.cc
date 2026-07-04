@@ -529,11 +529,13 @@ namespace bbai {
     if (primary_died) {
       // The toolbar's registered strut points into `o` - tear it down while
       // `o` is still alive (we're inside its destroy handler), then rebuild
-      // on the survivor. If no head survives, the next new_output re-creates
-      // it (active_output is null again, so the primary branch re-fires).
+      // on the survivor through applyConfig, the same gate+knobs path the
+      // new_output handler uses: a disabled toolbar stays disabled and the
+      // rebuilt one keeps its rc placement/autoHide instead of ctor defaults.
+      // If no head survives, the next new_output re-creates it (active_output
+      // is null again, so the primary branch re-fires).
       toolbar_.reset();
-      if (active_output)
-        toolbar_ = std::make_unique<Toolbar>(*this, *active_output);
+      applyConfig();   // workspace half is idempotent (grow-only + name re-set)
     }
     // Windows that lived on the dead head now resolve to the fallback head -
     // snap maximized ones onto a real work area instead of a ghost rectangle.
