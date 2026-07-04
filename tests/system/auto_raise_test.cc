@@ -67,6 +67,42 @@ TEST_CASE("AutoRaise raises the hovered window after the delay") {
   CHECK(server.isTopmostForTest(a));          // now raised
 }
 
+TEST_CASE("closing a window with autoraise armed disarms the pending raise") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  const std::string rc = writeRc("session.focusModel: SloppyFocus AutoRaise\n");
+  Server server(/*headless=*/true, rc);
+  boot(server);
+  test::TestClient ca(server.socketName(), 0xFFFF0000u, 200, 150,
+                      test::TestClient::Deco::RequestSSD);
+  View *a = mapAt(server, ca, 150, 150);
+  test::TestClient cb(server.socketName(), 0xFF0000FFu, 200, 150,
+                      test::TestClient::Deco::RequestSSD);
+  View *b = mapAt(server, cb, 400, 400);
+
+  // Hover A: focus follows and the one-shot autoraise timer arms with A as the
+  // sole handle (autoraise_pending_).
+  server.injectPointerMotionForTest(a->x() + 30, a->y() + 40);
+  for (int i = 0; i < 10; ++i) { ca.flush(); cb.flush(); server.dispatch(); ca.pump(); cb.pump(); }
+  REQUIRE(server.focusedViewForTest() == a);
+  REQUIRE(server.autoRaisePendingForTest() == a);
+  REQUIRE(server.autoRaiseTimerArmedForTest());
+
+  // Close A before the delay elapses. removeView (driven by the surface-destroy
+  // handler) must scrub the armed pointer and stop the timer, else
+  // autoraise_pending_ dangles at freed memory with the one-shot still pending.
+  const void *a_addr = a;
+  ca.closeWindow();
+  for (int i = 0; i < 60 && server.viewsForTest().size() > 1; ++i) {
+    ca.flush(); cb.flush(); server.dispatch(); ca.pump(); cb.pump();
+  }
+  REQUIRE(server.viewsForTest().size() == 1);   // A is gone
+  CHECK(server.autoRaisePendingForTest() != a_addr);   // not left pointing at freed A
+  CHECK(server.autoRaisePendingForTest() == nullptr);
+  CHECK_FALSE(server.autoRaiseTimerArmedForTest());
+  server.advanceClockForTest(1);   // must not fire a stale raise on freed memory
+}
+
 TEST_CASE("ClickRaise raises on a click in the window") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
