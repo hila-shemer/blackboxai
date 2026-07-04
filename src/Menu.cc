@@ -1,5 +1,6 @@
 #include "Menu.hh"
 #include "Server.hh"
+#include "Output.hh"
 #include "DataBuffer.hh"
 #include "Style.hh"
 
@@ -52,13 +53,17 @@ namespace bbai {
   }
 
   void Menu::show(int gx, int gy) {
-    int ow = 1280, oh = 720;
-    server_.activeOutputSize(ow, oh);
-    // Clamp so the whole menu stays on-screen.
-    if (gx + layout_.width > ow) gx = ow - layout_.width;
-    if (gy + layout_.height > oh) gy = oh - layout_.height;
-    if (gx < 0) gx = 0;
-    if (gy < 0) gy = 0;
+    // Clamp so the whole menu stays on the output UNDER the requested point,
+    // in layout coords. Pre-fix this used the primary's size at origin (0,0),
+    // which snapped second-head menus back to head 1. outputAt floors to the
+    // active output, so a fallback box only bites when there is no output at
+    // all (headless-no-output: keep the historical 1280x720).
+    wlr_box b{0, 0, 1280, 720};
+    if (Output *o = server_.outputAt(gx, gy)) b = o->fullBox();
+    if (gx + layout_.width  > b.x + b.width)  gx = b.x + b.width  - layout_.width;
+    if (gy + layout_.height > b.y + b.height) gy = b.y + b.height - layout_.height;
+    if (gx < b.x) gx = b.x;
+    if (gy < b.y) gy = b.y;
     gx_ = gx; gy_ = gy;
     wlr_scene_node_set_position(&tree_->node, gx_, gy_);
 
