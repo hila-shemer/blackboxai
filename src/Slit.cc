@@ -7,7 +7,45 @@
 #include "Style.hh"
 #include "Image.hh"
 
+#include <png.h>
+#include <cstring>
+
 namespace bbai {
+
+  std::vector<std::string> sliticon::themeCandidates(const std::string &icon_name,
+                                                     const std::string &icon_theme_path) {
+    static const char *sizes[] = { "24x24", "22x22", "32x32", "48x48" };
+    std::vector<std::string> dirs;
+    if (!icon_theme_path.empty()) {
+      dirs.push_back(icon_theme_path);
+      for (const char *s : sizes)
+        dirs.push_back(icon_theme_path + "/hicolor/" + s + "/apps");
+    }
+    for (const char *s : sizes)
+      dirs.push_back(std::string("/usr/share/icons/hicolor/") + s + "/apps");
+    dirs.push_back("/usr/share/pixmaps");
+    std::vector<std::string> out;
+    out.reserve(dirs.size());
+    for (const std::string &d : dirs) out.push_back(d + "/" + icon_name + ".png");
+    return out;
+  }
+
+  std::vector<uint32_t> sliticon::decodePng(const std::string &path, int &w, int &h) {
+    png_image img;
+    std::memset(&img, 0, sizeof img);
+    img.version = PNG_IMAGE_VERSION;
+    if (!png_image_begin_read_from_file(&img, path.c_str())) return {};
+    // Little-endian bytes B,G,R,A == packed 0xAARRGGBB (POC-verified format).
+    img.format = PNG_FORMAT_BGRA;
+    std::vector<uint32_t> px(static_cast<std::size_t>(img.width) * img.height);
+    if (!png_image_finish_read(&img, nullptr, px.data(), 0, nullptr)) {
+      png_image_free(&img);
+      return {};
+    }
+    w = static_cast<int>(img.width);
+    h = static_cast<int>(img.height);
+    return px;
+  }
 
   std::vector<uint32_t> sliticon::cellPixels(const sni::Item &item, int slot) {
     // Bus pixmap first - exactly what the app rendered. SNI bytes are STRAIGHT
@@ -18,7 +56,17 @@ namespace bbai {
       slit::premultiply(px);
       return slit::nearestScale(px, f->width, f->height, slot);
     }
-    // (the icon_name theme-PNG fallback task inserts its rung here)
+    // Theme PNG by IconName - the nm-applet class ships no pixmap at all.
+    if (!item.icon_name.empty()) {
+      for (const std::string &p : themeCandidates(item.icon_name, item.icon_theme_path)) {
+        int w = 0, h = 0;
+        std::vector<uint32_t> px = decodePng(p, w, h);
+        if (!px.empty()) {
+          slit::premultiply(px);
+          return slit::nearestScale(px, w, h, slot);
+        }
+      }
+    }
     // Placeholder: a grey ring inset 4px - visibly "item without an icon",
     // not a hole a user reads as a compositor bug.
     std::vector<uint32_t> px(static_cast<std::size_t>(slot) * slot, 0);

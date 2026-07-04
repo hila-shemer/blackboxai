@@ -29,6 +29,15 @@ namespace bbai {
   // bus pixmap -> theme PNG (added by the icon_name-fallback task) ->
   // placeholder ring.
   namespace sliticon {
+    // Locked modest search policy: the item's own IconThemePath, then system
+    // hicolor sizes bracketing the slot, then pixmaps. NOT a freedesktop
+    // icon-theme resolver (no index.theme, no scalable/, no inherits) - PNG
+    // by name only; anything fancier waits until it actually hurts.
+    std::vector<std::string> themeCandidates(const std::string &icon_name,
+                                             const std::string &icon_theme_path);
+    // Packed 0xAARRGGBB, STRAIGHT alpha (PNG convention) - caller
+    // premultiplies. Empty on missing/undecodable.
+    std::vector<uint32_t> decodePng(const std::string &path, int &w, int &h);
     std::vector<uint32_t> cellPixels(const sni::Item &item, int slot);
   }
 
