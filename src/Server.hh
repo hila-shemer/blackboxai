@@ -342,6 +342,13 @@ namespace bbai {
     void moveFocusedToOutput(wlr_direction dir);   // adjacent head; NULL past edge = no-op
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
     void installSniHostEvents();   // Server OWNS the Host's single event slot
+    // Configuration-menu row dispatch: mutate config_ in memory, re-apply the
+    // live knobs, persist ONE rc key with the classic spelling. Deliberately
+    // NOT reconfigure() - that reloads the style, re-runs the rc rootCommand
+    // and reverts unpersisted in-memory state on every toggle. Classic
+    // Configmenu is toggle = set + save; this is that. menus appends its
+    // ConfigOption values' cases here (append-only, tail).
+    void setConfigOption(ConfigOption opt);
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
     bbai::Config config_;

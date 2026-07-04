@@ -6,6 +6,7 @@
 #include "Keyboard.hh"
 #include "Menu.hh"
 #include "Rootmenu.hh"
+#include "ConfigSpelling.hh"
 #include "MenuParser.hh"
 #include "Frame.hh"
 #include "Placement.geom.hh"
@@ -397,6 +398,61 @@ namespace bbai {
     if (!rc_path_.empty() && !bbai::updateRcKey(rc_path_, "session.styleFile", path))
       fprintf(stderr, "blackboxai: could not persist styleFile to %s\n", rc_path_.c_str());
     return true;
+  }
+
+  void Server::setConfigOption(ConfigOption opt) {
+    switch (opt) {
+    case ConfigOption::FocusClickToFocus:
+      config_.focusModel = FocusModel::ClickToFocus;
+      config_.autoRaise = false;    // classic: CTF forces both raise flags off
+      config_.clickRaise = false;
+      break;
+    case ConfigOption::FocusSloppy:
+      config_.focusModel = FocusModel::SloppyFocus;   // raise flags keep their values
+      break;
+    case ConfigOption::AutoRaise:   config_.autoRaise  = !config_.autoRaise;  break;
+    case ConfigOption::ClickRaise:  config_.clickRaise = !config_.clickRaise; break;
+    case ConfigOption::FocusNewWindows:
+      config_.focusNewWindows = !config_.focusNewWindows;
+      break;
+    case ConfigOption::PlacementRowSmart: config_.windowPlacement = WindowPlacement::RowSmart; break;
+    case ConfigOption::PlacementColSmart: config_.windowPlacement = WindowPlacement::ColSmart; break;
+    case ConfigOption::PlacementCenter:   config_.windowPlacement = WindowPlacement::Center;   break;
+    case ConfigOption::PlacementCascade:  config_.windowPlacement = WindowPlacement::Cascade;  break;
+    }
+
+    std::string key, value;
+    switch (opt) {
+    case ConfigOption::FocusClickToFocus:
+    case ConfigOption::FocusSloppy:
+    case ConfigOption::AutoRaise:
+    case ConfigOption::ClickRaise:
+      key = "session.focusModel";
+      value = configmenu::focusModelValue(config_);
+      break;
+    case ConfigOption::FocusNewWindows:
+      key = "session.focusNewWindows";
+      value = bt::boolAsString(config_.focusNewWindows);
+      break;
+    case ConfigOption::PlacementRowSmart:
+    case ConfigOption::PlacementColSmart:
+    case ConfigOption::PlacementCenter:
+    case ConfigOption::PlacementCascade:
+      key = "session.windowPlacement";
+      value = configmenu::windowPlacementValue(config_.windowPlacement);
+      break;
+    }
+
+    // Nothing WE mutate feeds applyConfig today (focus/placement are read
+    // live by their consumers) - the call is the seam contract, so menus'
+    // Toolbar*/Slit* values apply for free when they extend the switch.
+    applyConfig();
+    // Loud-but-nonfatal persist, applyStyleFile precedent (Server.cc:380).
+    // The !empty guard matters: a headless test Server has no rc path and
+    // updateRcKey("") would create a file literally named "".
+    if (!rc_path_.empty() && !bbai::updateRcKey(rc_path_, key, value))
+      fprintf(stderr, "blackboxai: could not persist %s to %s\n",
+              key.c_str(), rc_path_.c_str());
   }
 
   Server::~Server() {
@@ -1830,6 +1886,7 @@ namespace bbai {
       break;
     case MenuItem::Act::WorkspacesMenu:      // submenu markers - a Submenu is
     case MenuItem::Act::ConfigMenu:  break;  // never dispatched as a command
+    case MenuItem::Act::ConfigOption:    setConfigOption(copy.option); break;
     case MenuItem::Act::Deiconify:
       if (View *v = viewForHandle(copy.target)) deiconifyView(v);
       break;
@@ -1843,7 +1900,8 @@ namespace bbai {
     for (Menu *m = liveMenu(); m; m = m->parent()) {
       const int idx = m->itemIndexAtGlobal(x, y);
       if (idx >= 0) {
-        if (m->item(idx).kind == MenuItem::Kind::Submenu && m->item(idx).selectable()) {
+        if (!m->item(idx).selectable()) return;   // disabled row: swallow, keep the chain open
+        if (m->item(idx).kind == MenuItem::Kind::Submenu) {
           m->openSubmenuAt(idx);
           return;
         }

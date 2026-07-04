@@ -230,6 +230,13 @@ menu_file_exe = executable('menu-file-test', files('system/menu_file_test.cc'),
 test('menu_file', menu_file_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# wave-2 configmenu: Configuration submenu click-through -> in-memory flip +
+# classic-spelling persist. text_env: click coordinates ride the pinned font.
+configmenu_exe = executable('configmenu-test', files('system/configmenu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('configmenu', configmenu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F4.2 View iconified state: composes with workspace visibility (nonvisual, no golden).
 iconify_exe = executable('iconify-test', files('system/iconify_test.cc'),
   dependencies : [harness_dep, doctest_dep])
