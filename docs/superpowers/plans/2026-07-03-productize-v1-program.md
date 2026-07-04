@@ -110,6 +110,20 @@ sni-core: nm-applet-class items are activate-only until wave-2 dbusmenu (expecte
   Server::loadMenuFile reads menu_file_[0] behind a guard a future caller could
   bypass; work-area's hot-unplug re-home semantics are new behavior.
 
+- Review round (2026-07-04): 5-dimension review + per-finding adversarial verify
+  over 643395e..HEAD -> 23 confirmed, 0 refuted (4 must-fix: toolbar re-home rc
+  bypass, strut-vs-live-metrics, focus-on-map under lock, SNI 32-bit dim wrap).
+  Fixed in 4 territory-disjoint worktrees (w1fix/{server,style,sni,tests}), all
+  23 fixed, none deferred, merged conflict-free. Final gate 52/52, 91%, goldens
+  clean. Pushed to the fork @ 8a3fc49. Full findings JSON in the session
+  scratchpad wave1-review/ (ephemeral; everything actionable is in the commits).
+- New watch item from the fix round: tests/system/retheme_test.cc:99
+  CHECK(sourcePath().empty()) is install-prefix-sensitive (BBAI_DEFAULT_STYLE
+  ships in data/styles) - same class as the menuFile pins; fix mechanism differs,
+  owed to wave 2.
+- Behavioral change downstream should know: headless Servers default to a
+  recording FakeCommandRunner - no headless path can fork, structurally.
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
