@@ -75,6 +75,8 @@ TEST_CASE("headless with no rc: builtin style, no HOME leakage") {
   setenv("WLR_RENDERER", "pixman", 1);
   Server server(/*headless=*/true);
   REQUIRE(server.ok());
+  // builtin on ANY box: Config defaults styleFile to the compiled prefix
+  // path, and headless refuses exactly that path (install-prefix hiding).
   CHECK(server.currentStyle()->sourcePath().empty());   // builtin rung
   FakeCommandRunner fake;
   server.setCommandRunnerForTest(&fake);

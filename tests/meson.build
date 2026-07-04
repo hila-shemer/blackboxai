@@ -37,6 +37,7 @@ unit_sources = files(
   'unit/placement_geom_test.cc',
   'unit/slit_geom_test.cc',
   'unit/slit_icon_test.cc',
+  'unit/configmenu_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
@@ -229,6 +230,28 @@ test('rootmenu_submenu', rootmenu_submenu_exe, suite : 'system',
 menu_file_exe = executable('menu-file-test', files('system/menu_file_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('menu_file', menu_file_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 configmenu: Configuration submenu click-through -> in-memory flip +
+# classic-spelling persist. text_env: click coordinates ride the pinned font.
+configmenu_exe = executable('configmenu-test', files('system/configmenu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('configmenu', configmenu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 configmenu: workspace shrink re-home via the explicit RemoveWorkspace
+# action (the rc path stays grow-only).
+workspace_remove_exe = executable('workspace-remove-test',
+  files('system/workspace_remove_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('workspace_remove', workspace_remove_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 configmenu: strftimeFormat rendering swap (default format identical -
+# the zero-golden-churn claim is the full suite staying green).
+clock_format_exe = executable('clock-format-test', files('system/clock_format_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('clock_format', clock_format_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
 # F4.2 View iconified state: composes with workspace visibility (nonvisual, no golden).

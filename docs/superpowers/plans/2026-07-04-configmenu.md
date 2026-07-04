@@ -86,7 +86,7 @@ We develop in parallel from the wave-1 tip (`8a3fc49`) and land THIRD (window-mg
 - Consumes: `bbai::Config` fields `focusModel/autoRaise/clickRaise/focusNewWindows/windowPlacement` (`src/Config.hh:66-75`, read-only), `MenuItem` (`checked`/`enabled` already rendered by Menu.cc drawCheck/disabled - zero rendering work).
 - Produces: `enum class bbai::ConfigOption { FocusClickToFocus, FocusSloppy, AutoRaise, ClickRaise, FocusNewWindows, PlacementRowSmart, PlacementColSmart, PlacementCenter, PlacementCascade }` (namespace-level in MenuItem.hh, THIS order - menus appends after `PlacementCascade`); `MenuItem::Act::ConfigOption` (immediately after `ConfigMenu`); `MenuItem::option` field; `std::vector<MenuItem> rootmenu::buildConfigSubmenu(const Config &cfg)`. Tasks 2 and 4 consume all of these under these exact names.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/configmenu_test.cc`. Do NOT assert a default-constructed Config's focus model anywhere - window-mgmt flips the default to SloppyFocus (locked) and lands before us; explicit fields keep this file green on both sides of the merge.
 
@@ -182,7 +182,7 @@ Register it - in `tests/meson.build`, add to `unit_sources` after `'unit/rootmen
   'unit/configmenu_test.cc',
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -192,7 +192,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `buildConfigSubmenu` is not a member of `bbai::rootmenu`, `ConfigOption` not declared.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/MenuItem.hh` - append `ConfigOption` to `Act` (after `ConfigMenu`, line 22) and add the namespace-level enum + field:
 
@@ -301,7 +301,7 @@ Add `#include "Config.hh"` to `src/Rootmenu.hh` (below `#include "Workspace.hh"`
   }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -312,7 +312,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all suites pass (the new unit cases run inside the `unit` test).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/MenuItem.hh src/Rootmenu.hh src/Rootmenu.cc tests/unit/configmenu_test.cc tests/meson.build
@@ -340,7 +340,7 @@ Toolbar/Slit Options, dithering, onTop et al are documented omissions."
 - Consumes: `rootmenu::buildConfigSubmenu` (Task 1), `Server::config_` (the member - we are inside Server.cc).
 - Produces: `std::vector<MenuItem> rootmenu::buildFromParsed(const std::vector<MenuItem> &parsed, const WorkspaceModel &ws, const Config &cfg)` - the wave-2 pinned signature (const-preserving, see header). Task 4's system tests rely on the mount being live.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `tests/unit/rootmenu_wire_test.cc`: add `#include "Config.hh"`, then replace the disabled-placeholder test (lines 48-57) with:
 
@@ -402,7 +402,7 @@ and the tail check (lines 240-244) flips from "must NOT hover-open" to the live 
   CHECK(m->submenuItemCountForTest() == 4);   // Focus Model / Placement / sep / Focus New Windows
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c 'ninja -C build-f44'
@@ -410,7 +410,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `buildFromParsed` takes 2 arguments, 3 given.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Rootmenu.hh:20-27` - replace the buildFromParsed doc + declaration:
 
@@ -484,7 +484,7 @@ Expected: compile FAILURE - `buildFromParsed` takes 2 arguments, 3 given.
         } else if (tag == "submenu") {
 ```
 
-- [ ] **Step 4: Re-bless the two mount-affected goldens, then run the full gate**
+- [x] **Step 4: Re-bless the two mount-affected goldens, then run the full gate**
 
 The Configuration row now renders enabled (normal text, not `frameDisabled` grey) in both m5-menufile captures - the declared by-design flip:
 
@@ -498,7 +498,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass. Then `git status tests/golden/` must show EXACTLY `m5-menufile.png` and `m5-menufile-cascade.png` modified - anything else is a regression, stop and investigate.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Rootmenu.hh src/Rootmenu.cc src/Server.cc src/MenuParser.cc \
@@ -527,7 +527,7 @@ for a lifeboat menu - not worth it)."
 - Consumes: `bbai::Config`, `bbai::updateRcKey` (`src/Config.hh:94`) and `Config::load` in tests only.
 - Produces: `std::string bbai::configmenu::focusModelValue(const Config &cfg)`; `const char *bbai::configmenu::windowPlacementValue(WindowPlacement p)`. Task 4's `setConfigOption` consumes both.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/configmenu_test.cc` (add `#include "ConfigSpelling.hh"` and `#include <cstdio>` at the top):
 
@@ -577,7 +577,7 @@ TEST_CASE("persist spellings: windowPlacement strings round-trip") {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c 'ninja -C build-f44'
@@ -585,7 +585,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `ConfigSpelling.hh: No such file or directory`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `src/ConfigSpelling.hh`:
 
@@ -628,7 +628,7 @@ namespace bbai::configmenu {
 #endif // BLACKBOXAI_CONFIGSPELLING_HH
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -639,7 +639,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/ConfigSpelling.hh tests/unit/configmenu_test.cc
@@ -664,7 +664,7 @@ can't live there. Round-tripped through updateRcKey + Config::load."
 - Consumes: `ConfigOption` + `MenuItem::option` (Task 1), the mount (Task 2), `configmenu::focusModelValue`/`windowPlacementValue` (Task 3), `bbai::updateRcKey`, `Server::applyConfig()` (Server.hh:280), `bt::boolAsString` (toolkit/Resource.hh:43), Menu accessors `rectXForTest/rectYForTest/itemIndexAtGlobal/child/submenuOpenForTest/item/itemCount` (src/Menu.hh:29-50).
 - Produces: `void Server::setConfigOption(ConfigOption opt)` (private, pinned name - menus appends its enum values' cases to this switch); `case MenuItem::Act::ConfigOption` in `activateMenuItem`; the disabled-row swallow in `handleMenuButton` (menus' gestures inherit it).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/configmenu_test.cc`:
 
@@ -889,7 +889,7 @@ test('configmenu', configmenu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -900,7 +900,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: FAIL - clicking row 3 dispatches nothing (`Act::ConfigOption` has no case yet, falls to no switch match → compile error actually surfaces first if `-Wswitch` promotes; otherwise the `config().focusNewWindows` CHECK fails). Either failure mode is the right red.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh` - one declaration after `void applyConfig();` (line 280):
 
@@ -998,7 +998,7 @@ Expected: FAIL - clicking row 3 dispatches nothing (`Act::ConfigOption` has no c
 
 (The old `&& m->item(idx).selectable()` on the Submenu line is subsumed - remove it. Behavior change vs wave-1: clicking a disabled submenu row used to dismiss the whole chain through the no-op `Act::ConfigMenu` dispatch; now it's inert. That was placeholder-era behavior nobody pinned - the disabled-row test in Step 1 pins the new, classic-correct one.)
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1009,7 +1009,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass, including the new `configmenu` suite entry. `git status tests/golden/` unchanged since Task 2.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Server.hh src/Server.cc tests/system/configmenu_test.cc tests/meson.build
@@ -1036,7 +1036,7 @@ separators, so a dead row would have dispatched."
 - Consumes: `WorkspaceModel::{count,current,focused,setFocused,removeLastWorkspace}` (src/Workspace.hh), `View::{workspace,setWorkspace,setOnWorkspace}` (src/View.hh:44-47), `Server::setCurrentWorkspace` (Server.cc:1265, gotcha #29 semantics), `Toolbar::redrawWorkspaceLabel`.
 - Produces: `void Server::removeLastWorkspaceAndRehome()` (private; `Act::RemoveWorkspace`'s new target). The rc/applyConfig path stays grow-only - locked.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/workspace_remove_test.cc`:
 
@@ -1168,7 +1168,7 @@ test('workspace_remove', workspace_remove_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1179,7 +1179,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: FAIL at `CHECK(vb->workspace() == 1u)` - today's `Act::RemoveWorkspace` calls the bare model op and B's index still says 2 (a dead workspace: the window is lost forever, which is exactly the parked debt).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh` - after the `setCurrentWorkspace` declaration (line ~88):
 
@@ -1234,7 +1234,7 @@ Expected: FAIL at `CHECK(vb->workspace() == 1u)` - today's `Act::RemoveWorkspace
     case MenuItem::Act::RemoveWorkspace: removeLastWorkspaceAndRehome(); break;
 ```
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1245,7 +1245,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass - including the pre-existing menu/workspace suites (the empty-workspace RemoveWorkspace path behaves as before: no tenants, model op + label).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Server.hh src/Server.cc tests/system/workspace_remove_test.cc tests/meson.build
@@ -1272,7 +1272,7 @@ only shrink."
 - Consumes: `bt::formatClock(int64_t, const char *fmt)` (toolkit/Clock.hh:42, gmtime_r-based), `Config::strftimeFormat` (parsed since wave 1, default `"%I:%M %p"` - identical to formatClock's default, which is why zero goldens churn), `Toolbar::clockText` (public, Toolbar.hh:60), the VirtualClock epoch 14:05:00 UTC (Server.cc:228).
 - Produces: nothing new - a live rc knob. NOTE for the merge slot: `Config.hh:84`'s "parse-only this wave (locked)" comment goes stale here; it is window-mgmt's file, so the one-line comment fix happens in the train commit (header checklist), not in this worktree.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/clock_format_test.cc`:
 
@@ -1357,7 +1357,7 @@ test('clock_format', clock_format_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1368,7 +1368,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: FAIL - `clockText() == "14:05"` gets `"02:05 PM"` (the format never leaves the parser today).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Toolbar.cc:74-76`:
 
@@ -1379,7 +1379,7 @@ Expected: FAIL - `clockText() == "14:05"` gets `"02:05 PM"` (the format never le
   }
 ```
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1390,7 +1390,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: ALL pass - especially `toolbar`, `clock_seam`, and every golden test: the default format string is byte-identical to `formatClock`'s default, so `m4-toolbar*.png` and friends must not move. Any golden diff here means the one-liner did something else - stop.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Toolbar.cc tests/system/clock_format_test.cc tests/meson.build
@@ -1416,7 +1416,7 @@ custom-format fixture is the new coverage. %H/%M cases only in tests -
 
 **Mechanism (one, for both files):** headless Servers treat the compiled install-prefix default style as absent - both faces of the macro: the ladder's middle rung comes from `default_style_path_` (empty on headless), and an incoming request for the macro path itself (Config defaults `styleFile` to it when the rc names none) is refused. Same stance as the ctor's rc discovery: a box where the product is installed must not leak prefix state into the golden suite. Real backends are untouched. Bonus: the test lever makes the ladder's middle rung CI-coverable for the first time (today it only runs on installed boxes, i.e. never in CI).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/system/retheme_test.cc`:
 
@@ -1446,7 +1446,7 @@ TEST_CASE("style ladder middle rung: a pinned default style catches the fallback
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c 'ninja -C build-f44'
@@ -1454,7 +1454,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `setDefaultStyleForTest` is not a member of `bbai::Server`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.cc` - add the empty-macro guard near the top (Config.cc:23-25 pattern), right after the includes:
 
@@ -1533,7 +1533,7 @@ Add anchoring comments in the two watch-item tests (assertions unchanged - they 
   CHECK(server.currentStyle()->sourcePath().empty());   // builtin rung
 ```
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1544,7 +1544,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass. In CI the container never has an installed prefix, so pre-existing behavior is bit-identical - the change only bites on installed dev boxes. **Verification limit, stated:** the real-backend branch (`default_style_path_` = the macro) can't run in CI; it is exercised by reasoning plus the next `meson install` hand-check on the user's TTY box. The middle-rung logic itself IS now covered via the lever.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Server.hh src/Server.cc tests/system/retheme_test.cc tests/system/style_boot_test.cc
@@ -1571,7 +1571,7 @@ CI-coverable for the first time; the real-backend face stays a TTY check."
 - Consumes: everything above; `test::captureFrame`/`compareGolden` (tests/harness/HeadlessFixture.hh).
 - Produces: the slice's one NEW golden; the pre-merge evidence bundle (suite green, coverage >= 80, golden delta = exactly the declared set).
 
-- [ ] **Step 1: Write the golden test**
+- [x] **Step 1: Write the golden test**
 
 Append to `tests/system/configmenu_test.cc`:
 
@@ -1600,7 +1600,7 @@ TEST_CASE("golden: Configuration submenu + Focus Model cascade (builtin style)")
 }
 ```
 
-- [ ] **Step 2: Bless it, eyeball it, run it clean**
+- [x] **Step 2: Bless it, eyeball it, run it clean**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1612,7 +1612,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: both runs pass; `tests/golden/v1-configmenu.png` created. Open the PNG and confirm: root menu + Configuration cascade + Focus Model cascade; Sloppy Focus and Auto Raise carry checkmarks; nothing rendered grey EXCEPT nothing (all four focus rows are enabled under sloppy - the grey pair shows in the disabled-row TEST, not this golden; what matters here is checks + arrows + three-deep cascade geometry).
 
-- [ ] **Step 3: Full gate + coverage + golden-delta audit**
+- [x] **Step 3: Full gate + coverage + golden-delta audit**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1625,13 +1625,13 @@ git -C "$WT" status --short tests/golden/
 
 Expected: every suite green; gcovr exits 0 at the project's usual ~91% (specifically `src/Rootmenu.cc` and the new Server methods near-full - they are pure/headless by construction). Golden delta across the WHOLE branch = exactly: `m5-menufile.png` (M, Task 2), `m5-menufile-cascade.png` (M, Task 2), `v1-configmenu.png` (A, this task). Anything else fails the slice's zero-churn promise - fix before commit.
 
-- [ ] **Step 4: Self-check before hand-off (run, don't skip)**
+- [x] **Step 4: Self-check before hand-off (run, don't skip)**
 
 - Grep the diff for territory: `git diff <base> --stat` must show NO hunks in `src/Config.cc`, `src/Config.hh`, `src/Menu.cc`, `src/Menu.hh`, `src/Menu.geom.hh`, `src/View.*`, `src/Style.*`, `src/SniHost.*`.
 - Seam spellings verbatim: `Act::ConfigOption` right after `ConfigMenu`; `ConfigOption` values in the pinned order ending at `PlacementCascade`; `Server::setConfigOption(ConfigOption)`; `rootmenu::buildConfigSubmenu(const Config &)`.
 - No test asserts a default-constructed Config's focus model (grep `focusModel` in tests touched - every use explicit).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add tests/system/configmenu_test.cc tests/golden/v1-configmenu.png

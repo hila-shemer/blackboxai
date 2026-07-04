@@ -6,6 +6,7 @@
 #include "Keyboard.hh"
 #include "Menu.hh"
 #include "Rootmenu.hh"
+#include "ConfigSpelling.hh"
 #include "MenuParser.hh"
 #include "Frame.hh"
 #include "Placement.geom.hh"
@@ -27,6 +28,11 @@
 #include <sys/stat.h>                  // stat-on-open menu reload (classic checkMenu)
 #include <unistd.h>                    // access(X_OK) for TryExec
 #include <linux/input-event-codes.h>   // BTN_LEFT / BTN_RIGHT
+
+// Install-path default injected by src/meson.build (lib objects only).
+#ifndef BBAI_DEFAULT_STYLE
+#define BBAI_DEFAULT_STYLE ""
+#endif
 
 namespace {
   // Is `node` somewhere under the given scene layer tree?
@@ -67,6 +73,12 @@ namespace bbai {
 
   Server::Server(bool hl, std::string rc_path)
     : headless(hl), rc_path_(std::move(rc_path)) {
+    // Headless treats the install-prefix default style as absent - a box
+    // where the product IS installed must not leak prefix state into the
+    // golden suite (same stance as rc discovery below). Tests pin a fake
+    // default via setDefaultStyleForTest to exercise the middle rung. Set
+    // before Config::load so the very first loadStyleWithFallback sees it.
+    if (!headless) default_style_path_ = BBAI_DEFAULT_STYLE;
     // Config + style come first - everything below (outputs, toolbar, views)
     // renders through style_. Headless never discovers ~/.blackboxrc on its
     // own: tests must opt into an rc explicitly or a dev box's real config
@@ -315,12 +327,17 @@ namespace bbai {
   std::shared_ptr<const Style> Server::loadStyleWithFallback(const std::string &path,
                                                              bool *exact_ok) {
     if (exact_ok) *exact_ok = true;
-    if (auto s = Style::load(path, config_.rootCommand)) return s;
+    // Second face of the headless default-hiding (ctor): when the rc names no
+    // style, Config itself defaults styleFile to BBAI_DEFAULT_STYLE - refuse
+    // that exact path too, or an installed prefix reaches the goldens anyway.
+    const bool hidden = headless && !path.empty()
+                        && path == std::string(BBAI_DEFAULT_STYLE);
+    if (!hidden)
+      if (auto s = Style::load(path, config_.rootCommand)) return s;
     if (exact_ok) *exact_ok = false;
     fprintf(stderr, "blackboxai: style '%s' unreadable, falling back\n", path.c_str());
-#ifdef BBAI_DEFAULT_STYLE
-    if (auto s = Style::load(BBAI_DEFAULT_STYLE, config_.rootCommand)) return s;
-#endif
+    if (!default_style_path_.empty())
+      if (auto s = Style::load(default_style_path_, config_.rootCommand)) return s;
     return Style::builtin(config_.rootCommand);
   }
 
@@ -397,6 +414,61 @@ namespace bbai {
     if (!rc_path_.empty() && !bbai::updateRcKey(rc_path_, "session.styleFile", path))
       fprintf(stderr, "blackboxai: could not persist styleFile to %s\n", rc_path_.c_str());
     return true;
+  }
+
+  void Server::setConfigOption(ConfigOption opt) {
+    switch (opt) {
+    case ConfigOption::FocusClickToFocus:
+      config_.focusModel = FocusModel::ClickToFocus;
+      config_.autoRaise = false;    // classic: CTF forces both raise flags off
+      config_.clickRaise = false;
+      break;
+    case ConfigOption::FocusSloppy:
+      config_.focusModel = FocusModel::SloppyFocus;   // raise flags keep their values
+      break;
+    case ConfigOption::AutoRaise:   config_.autoRaise  = !config_.autoRaise;  break;
+    case ConfigOption::ClickRaise:  config_.clickRaise = !config_.clickRaise; break;
+    case ConfigOption::FocusNewWindows:
+      config_.focusNewWindows = !config_.focusNewWindows;
+      break;
+    case ConfigOption::PlacementRowSmart: config_.windowPlacement = WindowPlacement::RowSmart; break;
+    case ConfigOption::PlacementColSmart: config_.windowPlacement = WindowPlacement::ColSmart; break;
+    case ConfigOption::PlacementCenter:   config_.windowPlacement = WindowPlacement::Center;   break;
+    case ConfigOption::PlacementCascade:  config_.windowPlacement = WindowPlacement::Cascade;  break;
+    }
+
+    std::string key, value;
+    switch (opt) {
+    case ConfigOption::FocusClickToFocus:
+    case ConfigOption::FocusSloppy:
+    case ConfigOption::AutoRaise:
+    case ConfigOption::ClickRaise:
+      key = "session.focusModel";
+      value = configmenu::focusModelValue(config_);
+      break;
+    case ConfigOption::FocusNewWindows:
+      key = "session.focusNewWindows";
+      value = bt::boolAsString(config_.focusNewWindows);
+      break;
+    case ConfigOption::PlacementRowSmart:
+    case ConfigOption::PlacementColSmart:
+    case ConfigOption::PlacementCenter:
+    case ConfigOption::PlacementCascade:
+      key = "session.windowPlacement";
+      value = configmenu::windowPlacementValue(config_.windowPlacement);
+      break;
+    }
+
+    // Nothing WE mutate feeds applyConfig today (focus/placement are read
+    // live by their consumers) - the call is the seam contract, so menus'
+    // Toolbar*/Slit* values apply for free when they extend the switch.
+    applyConfig();
+    // Loud-but-nonfatal persist, applyStyleFile precedent (Server.cc:380).
+    // The !empty guard matters: a headless test Server has no rc path and
+    // updateRcKey("") would create a file literally named "".
+    if (!rc_path_.empty() && !bbai::updateRcKey(rc_path_, key, value))
+      fprintf(stderr, "blackboxai: could not persist %s to %s\n",
+              key.c_str(), rc_path_.c_str());
   }
 
   Server::~Server() {
@@ -1602,6 +1674,38 @@ namespace bbai {
     if (toolbar_) toolbar_->redrawWorkspaceLabel();
   }
 
+  void Server::removeLastWorkspaceAndRehome() {
+    const unsigned n = workspaces_.count();
+    if (n <= 1) return;                       // model floor: never below 1
+    const unsigned dying = n - 1, survivor = n - 2;
+    const bool current_on_dying = (workspaces_.current() == dying);
+    // Captured BEFORE re-homing: afterwards every tenant claims the survivor.
+    View *keep = (focused_view && focused_view->workspace() == dying)
+                     ? focused_view : nullptr;
+
+    for (auto &v : views)
+      if (v->workspace() == dying) v->setWorkspace(survivor);
+
+    // Gotcha #29: setCurrentWorkspace's restore branch focuses the incoming
+    // workspace's REMEMBERED view - point the survivor's memory at the view
+    // that actually holds focus first, so the restore lands on it (focusView
+    // early-returns) instead of yanking focus to a stale memory.
+    if (keep) workspaces_.setFocused(survivor, keep);
+
+    if (current_on_dying) {
+      setCurrentWorkspace(survivor);   // full switch: show/hide + focus restore + label
+    } else {
+      // No switch happened: sync visibility for the re-homed views (hidden
+      // unless the survivor IS current). Idempotent for existing tenants.
+      for (auto &v : views)
+        if (v->workspace() == survivor)
+          v->setOnWorkspace(survivor == workspaces_.current());
+    }
+
+    workspaces_.removeLastWorkspace();        // pops the dying slot, clamps current_
+    if (toolbar_) toolbar_->redrawWorkspaceLabel();
+  }
+
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
     notifyIdleActivity();
     if (session_lock_ && session_lock_->locked()) return;  // mirror the onKey gate: no bindings
@@ -1708,7 +1812,7 @@ namespace bbai {
       loadMenuFile();
     std::vector<MenuItem> items = menu_file_.empty()
         ? rootmenu::build(workspaces_)
-        : rootmenu::buildFromParsed(menu_items_, workspaces_);
+        : rootmenu::buildFromParsed(menu_items_, workspaces_, config_);
     const std::u32string title =
         (!menu_file_.empty() && !menu_title_.empty()) ? menu_title_
                                                       : rootmenu::title();
@@ -1799,7 +1903,7 @@ namespace bbai {
     case MenuItem::Act::Exec:            commandRunner().run(copy.argv); break;
     case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(copy.workspace); break;
     case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
-    case MenuItem::Act::RemoveWorkspace: workspaces_.removeLastWorkspace(); break;
+    case MenuItem::Act::RemoveWorkspace: removeLastWorkspaceAndRehome(); break;
     case MenuItem::Act::Exit:            terminate(); break;
     case MenuItem::Act::Restart:         requestRestart({}); break;
     case MenuItem::Act::RestartOther:    requestRestart(copy.argv); break;
@@ -1814,6 +1918,7 @@ namespace bbai {
       break;
     case MenuItem::Act::WorkspacesMenu:      // submenu markers - a Submenu is
     case MenuItem::Act::ConfigMenu:  break;  // never dispatched as a command
+    case MenuItem::Act::ConfigOption:    setConfigOption(copy.option); break;
     case MenuItem::Act::Deiconify:
       if (View *v = viewForHandle(copy.target)) deiconifyView(v);
       break;
@@ -1827,7 +1932,8 @@ namespace bbai {
     for (Menu *m = liveMenu(); m; m = m->parent()) {
       const int idx = m->itemIndexAtGlobal(x, y);
       if (idx >= 0) {
-        if (m->item(idx).kind == MenuItem::Kind::Submenu && m->item(idx).selectable()) {
+        if (!m->item(idx).selectable()) return;   // disabled row: swallow, keep the chain open
+        if (m->item(idx).kind == MenuItem::Kind::Submenu) {
           m->openSubmenuAt(idx);
           return;
         }

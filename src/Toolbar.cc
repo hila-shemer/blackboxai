@@ -72,7 +72,8 @@ namespace bbai {
   }
 
   std::string Toolbar::clockText(void) const {
-    return bt::formatClock(server_.clock().wallSeconds());
+    return bt::formatClock(server_.clock().wallSeconds(),
+                           server_.config().strftimeFormat.c_str());
   }
 
   void Toolbar::redrawWorkspaceLabel(void) { rebuild(); }

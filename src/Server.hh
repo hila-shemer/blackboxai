@@ -88,6 +88,13 @@ namespace bbai {
     // restore added in B5). No-op if i is out of range or already current.
     void setCurrentWorkspace(unsigned i);
 
+    // Explicit workspace removal (menu Act::RemoveWorkspace): re-home the
+    // dying workspace's views to the last survivor BEFORE the model pops the
+    // slot, follow with the current workspace when it is the one dying, and
+    // repair focus memory per gotcha #29. The rc/applyConfig path stays
+    // grow-only (locked) - this is the ONLY shrink path.
+    void removeLastWorkspaceAndRehome();
+
     CommandRunner &commandRunner() { return *command_runner_; }
     void setCommandRunnerForTest(CommandRunner *r) { command_runner_ = r; }
 
@@ -138,6 +145,11 @@ namespace bbai {
     // path = the in-code menu. The ForTest name is the independence shim until
     // rc-style's Config::menuFile lands - production wiring is one ctor line.
     void setMenuFileForTest(const std::string &path);
+
+    // Pin the style ladder's middle rung (empty = skip straight to builtin).
+    // Headless boots it empty so an installed prefix can't leak into goldens;
+    // this is how tests exercise the default-style rung at all.
+    void setDefaultStyleForTest(const std::string &path) { default_style_path_ = path; }
 
     // Restart leaves through main.cc: requestRestart stashes the argv (empty =
     // re-exec self) and terminates the loop; main execs after full teardown.
@@ -337,8 +349,16 @@ namespace bbai {
     void moveFocusedToOutput(wlr_direction dir);   // adjacent head; NULL past edge = no-op
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
     void installSniHostEvents();   // Server OWNS the Host's single event slot
+    // Configuration-menu row dispatch: mutate config_ in memory, re-apply the
+    // live knobs, persist ONE rc key with the classic spelling. Deliberately
+    // NOT reconfigure() - that reloads the style, re-runs the rc rootCommand
+    // and reverts unpersisted in-memory state on every toggle. Classic
+    // Configmenu is toggle = set + save; this is that. menus appends its
+    // ConfigOption values' cases here (append-only, tail).
+    void setConfigOption(ConfigOption opt);
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
+    std::string default_style_path_;   // style ladder middle rung; empty on headless
     bbai::Config config_;
     std::shared_ptr<const Style> style_;
 
