@@ -52,6 +52,11 @@ namespace bbai::sni {
 
     bool ok() const { return bus_ != nullptr; }
 
+    // The client half of a menu-only item (wave-2 dbusmenu) rides THIS bus:
+    // slots on one sd_bus share its fd source, so SniMenu never opens a second
+    // connection or a second pump. Null on a busless boot (ok()==false).
+    sd_bus *bus() const { return bus_; }
+
     const std::vector<Item> &items() const { return items_; }
     void setEvents(HostEvents ev) { events_ = std::move(ev); }
 

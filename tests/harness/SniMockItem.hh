@@ -23,7 +23,12 @@ namespace bbai::test {
     // the watcher (retrying until one exists), then reports "registered".
     // register_by_name=true: the child claims org.test.SniMock and registers
     // by that name (KDE convention) instead of by object path (ayatana).
-    explicit SniMockChild(bool register_by_name = false);
+    // with_menu=true: ALSO publish com.canonical.dbusmenu at /MenuBar (a 3-level
+    // tree) so the wave-2 dbusmenu client has something to fetch. Default off,
+    // so the item advertises Menu=/MenuBar with NO server there - GetLayout
+    // errors and the client falls back to the SNI ContextMenu proxy (which is
+    // what the slit tests pin).
+    explicit SniMockChild(bool register_by_name = false, bool with_menu = false);
     ~SniMockChild();                          // SIGKILL + reap if still alive
     SniMockChild(const SniMockChild &) = delete;
     SniMockChild &operator=(const SniMockChild &) = delete;
@@ -40,6 +45,10 @@ namespace bbai::test {
     // "" on timeout. `pump` runs every poll slice - pass the Host's pump so
     // the watcher in THIS process keeps serving while we wait.
     std::string waitReport(int timeout_ms = 5000, std::function<void()> pump = {});
+
+    // Bump (or not) the layout revision and emit LayoutUpdated - drives the
+    // client's refetch-on-revision-change gate.
+    void emitLayoutUpdated(bool bump_revision);
 
   private:
     void send(char c);
