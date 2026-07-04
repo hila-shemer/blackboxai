@@ -202,3 +202,45 @@ TEST_CASE("slit.* pre-parse (wave-2 slit never opens Config.cc)") {
   CHECK(d.slit.alwaysOnTop == false);
   CHECK(d.slit.autoHide == false);
 }
+
+#include <cstdio>
+#include <fstream>
+#include <sstream>
+
+namespace {
+  std::string slurp(const std::string &p) {
+    std::ifstream f(p);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    return ss.str();
+  }
+}
+
+TEST_CASE("updateRcKey: replace-in-place, append, create") {
+  const std::string p = "/tmp/bbai-updaterc-test.rc";
+  std::remove(p.c_str());
+
+  // create
+  CHECK(bbai::updateRcKey(p, "session.styleFile", "/a/b/Night"));
+  CHECK(slurp(p) == "session.styleFile: /a/b/Night\n");
+
+  // replace in place, other lines untouched (incl. a comment mentioning the key)
+  {
+    std::ofstream f(p);
+    f << "! session.styleFile: not a setting\n"
+      << "session.focusModel: SloppyFocus\n"
+      << "session.styleFile:   /old/style\n"
+      << "session.menuFile: ~/menu\n";
+  }
+  CHECK(bbai::updateRcKey(p, "session.styleFile", "/new/style"));
+  CHECK(slurp(p) ==
+        "! session.styleFile: not a setting\n"
+        "session.focusModel: SloppyFocus\n"
+        "session.styleFile: /new/style\n"
+        "session.menuFile: ~/menu\n");
+
+  // append when absent
+  CHECK(bbai::updateRcKey(p, "session.workspaces", "6"));
+  CHECK(slurp(p).find("session.workspaces: 6\n") != std::string::npos);
+  std::remove(p.c_str());
+}
