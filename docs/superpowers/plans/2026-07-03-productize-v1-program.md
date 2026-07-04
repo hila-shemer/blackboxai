@@ -171,7 +171,11 @@ Two-phase because menus consumes all three others' seams as real (not stubs):
   decl, tests/meson.build) - git-mediate; gate 67/67, 92%, goldens clean.
 - Phase B: menus branches off 4180861 (the integrated tip) so containsGlobal /
   Slit::currentRect / openSniContextMenu-proxy / Act::ConfigOption are all REAL.
-  [in progress]
+- Stop 4 `menus`: clean merge (branched off the integrated tip); gate 71/71, 91%,
+  goldens clean. menus caught + fixed TWO real bugs in its own plan's SniMenu
+  design (async sd-bus needs a post-queue flush; proxy-fallback + client teardown
+  must defer to a wl_event_loop idle so it never re-enters the Host's sd_bus_process
+  dispatch - without it slit's landed ContextMenu test regressed). WAVE 2 CODE-COMPLETE.
 
 ## Parked defects (found by scouts, not wave-1 work)
 
