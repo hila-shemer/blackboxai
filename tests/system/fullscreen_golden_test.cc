@@ -78,5 +78,17 @@ TEST_CASE("unfocused fullscreen demotes: alt-tab preview of a normal window show
   server.injectKeyForTest(XKB_KEY_Tab, WLR_MODIFIER_ALT, true);
   for (int i = 0; i < 20; ++i) { fs.flush(); nm.flush(); server.dispatch(); fs.pump(); nm.pump(); }
   CHECK_FALSE(server.viewLayerIsFullscreenForTest(vfs));   // demoted on unfocus
+
+  // Layer membership alone is not enough: reparenting the ex-fullscreen view
+  // into layer_window inserts it at the TOP, above the just-raised preview.
+  // vfs is still fullscreen-sized (fills the output), so if it stays on top it
+  // fully covers vnm - the window you switched TO. Assert vnm's client pixels
+  // win, not vfs's fill.
+  test::Frame f = test::captureFrame(server);
+  REQUIRE(f.w == 1280u);
+  REQUIRE(f.h == 720u);
+  auto pix = [&](int x, int y) { return f.pixels[static_cast<size_t>(y) * f.w + x] & 0x00FFFFFFu; };
+  CHECK(pix(vnm->x() + 100, vnm->y() + 90) == 0xFF0000u);   // vnm on top, not vfs (0x1188FF)
+
   server.injectKeyForTest(XKB_KEY_Alt_L, 0, false);        // commit the cycle
 }
