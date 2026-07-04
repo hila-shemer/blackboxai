@@ -32,6 +32,10 @@ namespace bbai::test {
     void createLockSurface(int output_index, uint32_t argb);
     int configuredWidth(int output_index) const;   // -1 until configured
     int configuredHeight(int output_index) const;
+    // Destroy the i-th created lock surface while the lock stays alive (a
+    // locker dropping one head's surface - drives the server's handoff of
+    // the keyboard to a surviving lock surface).
+    void destroyLockSurface(int surface_index);
     void unlockAndDestroy();        // the clean unlock path
 
     struct Impl;

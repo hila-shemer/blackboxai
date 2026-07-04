@@ -182,6 +182,13 @@ namespace bbai {
       wlr_seat_keyboard_notify_enter(server_.seat, surface, nullptr, 0, nullptr);
   }
 
+  int SessionLock::mappedLockSurfaceCountForTest() const {
+    int n = 0;
+    for (const auto &e : surfaces_)
+      if (e->surface->surface->mapped) ++n;
+    return n;
+  }
+
   wlr_surface *SessionLock::focusedLockSurface() const {
     for (const auto &e : surfaces_)
       if (e->surface->surface->mapped) return e->surface->surface;

@@ -268,6 +268,59 @@ TEST_CASE("a client mapping before the lock surface must not block its keyboard"
     CHECK(server.focusedKeyboardSurfaceForTest() != nullptr);
 }
 
+TEST_CASE("destroying the focused lock surface hands the keyboard to a survivor") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+    server.addHeadlessOutputForTest(800, 600);
+    REQUIRE(pumpUntil(server, [&] { return server.outputCountForTest() == 2; },
+                      [&] {}));
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    auto pump = [&] { lc.flush(); lc.pump(); };
+    REQUIRE(pumpUntil(server,
+        [&] { return lc.sawLockManager() && lc.outputCount() == 2; }, pump));
+    lc.lock();
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->locked(); }, pump));
+
+    // Surface A first, alone, so it deterministically holds the keyboard;
+    // then surface B on the second head.
+    lc.createLockSurface(0, 0xFF00FF00u);
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->mappedLockSurfaceCountForTest() == 1; },
+        pump));
+    wlr_surface *first = server.focusedKeyboardSurfaceForTest();
+    REQUIRE(first != nullptr);
+    REQUIRE(first == server.sessionLockForTest()->focusedLockSurface());
+    lc.createLockSurface(1, 0xFF0000FFu);
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->mappedLockSurfaceCountForTest() == 2; },
+        pump));
+    CHECK(server.focusedKeyboardSurfaceForTest() == first);   // B mapping steals nothing
+
+    // The focused surface dies (multi-head locker dropping one head's surface):
+    // the session stays locked and the keyboard must land on the survivor -
+    // or the user cannot type their password anywhere.
+    lc.destroyLockSurface(0);
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->mappedLockSurfaceCountForTest() == 1; },
+        pump));
+    CHECK(server.sessionLockForTest()->locked());
+    wlr_surface *survivor = server.sessionLockForTest()->focusedLockSurface();
+    REQUIRE(survivor != nullptr);
+    CHECK(survivor != first);
+    CHECK(server.focusedKeyboardSurfaceForTest() == survivor);
+
+    // Clean unlock afterwards: the surface bookkeeping dropped the dead entry.
+    lc.unlockAndDestroy();
+    REQUIRE(pumpUntil(server, [&] { return !server.sessionLockForTest()->locked(); },
+                      pump));
+}
+
 TEST_CASE("locking aborts a live titlebar-drag move grab") {
     setenv("WLR_BACKENDS", "headless", 1);
     setenv("WLR_RENDERER", "pixman", 1);
