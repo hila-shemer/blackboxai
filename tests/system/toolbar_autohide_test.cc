@@ -44,6 +44,36 @@ TEST_CASE("toolbar auto-hide: starts hidden, reveals on pointer-over, hides on p
   CHECK(tb->hiddenForTest());         // hidden again
 }
 
+TEST_CASE("toolbar auto-hide: an auto-hidden bar is not a click/wheel hit target") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  Toolbar *tb = server.toolbarForTest();
+  REQUIRE(tb != nullptr);
+  const auto b = tb->barRectForTest();               // the SHOWN footprint
+  const int cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+
+  CHECK(tb->containsGlobal(cx, cy));                  // shown bar IS a target
+
+  // Auto-hidden: the shown footprint is off-screen chrome, so a window/desktop
+  // occupying it must get the click/wheel - containsGlobal must say "not mine"
+  // (Toolbar.hh contract). This is the single gate the right-click (Server.cc)
+  // and vertical-wheel routes share.
+  tb->setAutoHide(true);
+  REQUIRE(tb->hiddenForTest());
+  CHECK_FALSE(tb->containsGlobal(cx, cy));            // hidden bar is NOT a target
+
+  tb->onPointerOverToolbar(true);
+  server.advanceClockForTest(1);                      // reveal
+  REQUIRE_FALSE(tb->hiddenForTest());
+  CHECK(tb->containsGlobal(cx, cy));                  // revealed -> a target again
+}
+
 TEST_CASE("toolbar auto-hide: debounce delay is real (no immediate flip)") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
