@@ -199,3 +199,31 @@ TEST_CASE("dbusmenu cascade clamps within the head it opened on") {
   server.injectKeyForTest(XKB_KEY_Escape, 0, true);
   mock.quit();
 }
+
+TEST_CASE("root/icon menu openers bail while an SNI dbusmenu fetch is in flight") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  boot(server);
+  test::SniMockChild mock(/*register_by_name=*/false, /*with_menu=*/true);
+  REQUIRE(mock.ok());
+  const sni::Item it = bringUpMenuItem(server, mock);
+  REQUIRE_FALSE(it.menu_path.empty());
+
+  // Kick the dbusmenu client but do NOT pump the reply: sni_menu_ is set while
+  // active_menu_ stays null across the async AboutToShow/GetLayout round-trip -
+  // exactly the window in which a stray right/middle-click can reach the
+  // desktop openers.
+  server.openSniContextMenu(it, 200, 200);
+  REQUIRE(server.sniMenuInFlightForTest());
+  REQUIRE_FALSE(server.menuOpenForTest());        // no active_menu_ yet
+
+  // The two stragglers must respect sni_menu_ like the other four openers, or a
+  // late GetLayout reply (showDbusMenu) clobbers the menu the user just opened.
+  server.openRootMenu(100, 100);
+  CHECK_FALSE(server.menuOpenForTest());          // root menu refused while in flight
+  server.openIconMenu(100, 100);
+  CHECK_FALSE(server.menuOpenForTest());          // icon menu refused too
+
+  mock.quit();
+}

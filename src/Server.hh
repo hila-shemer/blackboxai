@@ -131,6 +131,7 @@ namespace bbai {
     void requestMaximize(View *v);     // client set_maximized  -> apply + configure
     void requestMinimize(View *v);     // client set_minimized  -> iconify + configure
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
+    bool sniMenuInFlightForTest() const { return sni_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
     SessionLock *sessionLockForTest() const { return session_lock_.get(); }
