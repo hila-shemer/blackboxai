@@ -1453,7 +1453,7 @@ Classic has no half-snap (only move-time edge thresholds), so this is deliberate
 - Consumes: `outputForView`, `Output::workArea()`, `currentStyle()->frameMetrics()` (for the border/title insets), `View::setMaximized`/`setFullscreen`/`resizeTo`, `wlr_xdg_toplevel_set_tiled`, `WLR_EDGE_LEFT`/`WLR_EDGE_RIGHT`.
 - Produces: `void Server::snapFocused(uint32_t edge)` (edge = `WLR_EDGE_LEFT`/`WLR_EDGE_RIGHT`); `void Server::snapFocusedForTest(uint32_t edge)`. Task 10 wires it to keys.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/snap_test.cc`:
 
@@ -1546,12 +1546,12 @@ test('snap', snap_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `snap`.
 Expected: BUILD FAILURE — `no member named 'snapFocusedForTest'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh`, after the fullscreen decls:
 
@@ -1592,11 +1592,11 @@ Public test wrapper (near the other `*ForTest`):
   }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `snap`. Expected: both cases pass. Full gate green; goldens clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/snap_test.cc tests/meson.build
