@@ -6,6 +6,7 @@
 #include "Keyboard.hh"
 #include "Menu.hh"
 #include "Rootmenu.hh"
+#include "Windowmenu.hh"
 #include "ConfigSpelling.hh"
 #include "MenuParser.hh"
 #include "Frame.hh"
@@ -1177,6 +1178,10 @@ namespace bbai {
         const Part part = partAt(v, cursor->x, cursor->y);
         focusView(v);
         if (config_.clickRaise) raiseView(v);   // sloppy sub-flag; inert under CTF
+        if (button == BTN_RIGHT && (part == Part::Titlebar || part == Part::Label)) {
+          openWindowMenu(v, static_cast<int>(cursor->x), static_cast<int>(cursor->y));
+          return;   // the titlebar right-click was free (only ever reached the seat)
+        }
         if (button == BTN_LEFT) {
           if (part == Part::Titlebar) { beginInteractive(v, CursorMode::Move, 0); return; }
           if (part == Part::LeftGrip)  { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);  return; }
@@ -1821,6 +1826,41 @@ namespace bbai {
     wlr_seat_pointer_notify_clear_focus(seat);   // input is modal while open
   }
 
+  // The openRootMenu preamble, factored for the new gesture openers so we do
+  // NOT edit the landed openRootMenu/openIconMenu. One modal mode at a time:
+  // a live alt-tab commits (the preview IS the real focus), an in-progress
+  // move/resize grab aborts (its terminating release would be swallowed modal).
+  void Server::abortGrabsForMenu() {
+    if (cycling_) commitCycle();
+    if (cursor_mode != CursorMode::Passthrough) {
+      if (cursor_mode == CursorMode::Resize && grabbed_view)
+        wlr_xdg_toplevel_set_resizing(grabbed_view->toplevel(), false);
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+  }
+
+  void Server::openWindowMenu(View *v, int lx, int ly) {
+    if (active_menu_) return;
+    abortGrabsForMenu();
+    active_menu_ = std::make_unique<Menu>(*this, std::u32string{},
+                                          windowmenu::build(v, workspaces_),
+                                          /*show_title=*/false);
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);   // modal while open
+  }
+
+  void Server::sendViewToWorkspace(View *v, unsigned ws) {
+    if (ws >= workspaces_.count() || ws == v->workspace()) return;
+    v->setWorkspace(ws);
+    v->setOnWorkspace(ws == workspaces_.current());   // hidden unless target is current
+    if (!v->visible() && focused_view == v) {          // focus left with the window
+      if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+      else clearFocus();
+    }
+  }
+
   void Server::openSniContextMenu(const sni::Item &item, int lx, int ly) {
     // v1 proxy. The coords are layout ints - on Wayland items can't position
     // by them anyway (waybar sends the same); don't burn time making them
@@ -1922,6 +1962,22 @@ namespace bbai {
     case MenuItem::Act::Deiconify:
       if (View *v = viewForHandle(copy.target)) deiconifyView(v);
       break;
+    case MenuItem::Act::Iconify:
+      if (View *v = viewForHandle(copy.target)) iconifyView(v);
+      break;
+    case MenuItem::Act::MaximizeToggle:
+      if (View *v = viewForHandle(copy.target))
+        if (Output *o = outputForView(v))
+          v->setMaximized(!v->isMaximized(), o->workArea());
+      break;
+    case MenuItem::Act::Close:
+      if (View *v = viewForHandle(copy.target))
+        wlr_xdg_toplevel_send_close(v->toplevel());
+      break;
+    case MenuItem::Act::SendToWorkspace:
+      if (View *v = viewForHandle(copy.target)) sendViewToWorkspace(v, copy.workspace);
+      break;
+    case MenuItem::Act::DbusmenuEvent: break;   // fired before closeMenus (Task 8)
     case MenuItem::Act::None:            break;
     }
   }

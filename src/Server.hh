@@ -303,6 +303,9 @@ namespace bbai {
     void itemClicked(int index);
     Menu *liveMenu();                                        // deepest open menu in the chain
     void activateMenuItem(const MenuItem &it);               // dispatch + dismiss whole chain
+    void abortGrabsForMenu();   // commit alt-tab + drop any move/resize grab
+    void openWindowMenu(View *v, int lx, int ly);
+    void sendViewToWorkspace(View *v, unsigned ws);
     bool overDesktop(double lx, double ly);                 // background, not a view/chrome
     void beginInteractive(View *v, CursorMode mode, uint32_t edges);
     void beginScreenshot();   // arm region-select mode (crosshair); aborts any grab
