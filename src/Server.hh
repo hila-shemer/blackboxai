@@ -249,6 +249,12 @@ namespace bbai {
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
     bool viewLayerIsFullscreenForTest(View *v) const;   // frame_tree parents into layer_fullscreen?
     bool isTopmostForTest(View *v);                     // v == topmost real view on its workspace
+    // Armed-autoraise state, to prove removeView disarms it (raw value compare
+    // only - never dereferenced: after a scrub-miss it would be dangling).
+    const void *autoRaisePendingForTest() const { return autoraise_pending_; }
+    bool autoRaiseTimerArmedForTest() const {
+      return autoraise_timer_ && autoraise_timer_->active();
+    }
 
     wl_display *display = nullptr;
     wlr_backend *backend = nullptr;

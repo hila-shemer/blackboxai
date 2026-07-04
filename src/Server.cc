@@ -580,6 +580,10 @@ namespace bbai {
       pressed_button_view_ = nullptr;
       pressed_button_part_ = Part::None;
     }
+    if (autoraise_pending_ == view) {         // disarm before the View is freed -
+      autoraise_pending_ = nullptr;           // else a pending one-shot fires on a
+      if (autoraise_timer_) autoraise_timer_->stop();  // dangling handle
+    }
     std::erase(icons_, view);
     mru_.erase(view);                 // drop from last-used order (and any frozen ring)
     std::erase(cycle_ring_, view);
