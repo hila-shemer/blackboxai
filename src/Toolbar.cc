@@ -202,16 +202,18 @@ namespace bbai {
     updateStrut();
   }
 
-  // The strut derives from the LIVE bar rect - when rc-style makes the bar
-  // height style-driven, work areas follow with zero changes here. Auto-hide
-  // reserves the classic 2px sliver (kHiddenHeight), not zero: a maximized
+  // The strut derives from the LIVE bar rect (style metrics + config width),
+  // the same one rebuild/applyPosition draw - never the constexpr defaults,
+  // or a style-sized bar overlaps maximized windows. Auto-hide reserves the
+  // style's sliver (classic 2px under default metrics), not zero: a maximized
   // window must not cover the reveal trigger.
   void Toolbar::updateStrut(void) {
-    const toolbar::Rect bar = toolbar::barRect(ow_, oh_, placement_);
+    const toolbar::Rect bar = currentBarRect();
     const bool top = (placement_ == toolbar::Placement::TopLeft ||
                       placement_ == toolbar::Placement::TopCenter ||
                       placement_ == toolbar::Placement::TopRight);
-    const int exposed = auto_hide_ ? toolbar::kHiddenHeight : bar.h;
+    const int exposed = auto_hide_
+      ? server_.currentStyle()->toolbarMetrics().hiddenHeight : bar.h;
     strut_ = Strut{};
     if (top) strut_.top = exposed;
     else     strut_.bottom = exposed;

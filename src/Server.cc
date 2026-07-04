@@ -271,7 +271,15 @@ namespace bbai {
       socket_name = sock;
 
     // Exec runner for menu actions (spawned children inherit our WAYLAND_DISPLAY).
-    default_runner_ = std::make_unique<PosixCommandRunner>(socket_name);
+    // Headless gets a recording non-spawning default: the ctor's !headless
+    // gates below are 'don't even try at boot', this is 'no path can fork on
+    // a CI box' - reconfigure() re-runs rootCommand unconditionally, and any
+    // future action must not depend on every test remembering to install a
+    // fake. Tests that assert argv still install their own FakeCommandRunner.
+    if (headless)
+      default_runner_ = std::make_unique<FakeCommandRunner>();
+    else
+      default_runner_ = std::make_unique<PosixCommandRunner>(socket_name);
     command_runner_ = default_runner_.get();
 
     started_ = wlr_backend_start(backend);
@@ -354,9 +362,9 @@ namespace bbai {
     applyConfig();
     restyle();
     // rc rootCommand re-runs (classic runs it on every style load). No
-    // headless gate here - by reconfigure time a test owns the runner; the
-    // ctor keeps its gate because fixtures with rootCommand exist for the
-    // parse tests.
+    // headless gate here and none needed: the headless default runner cannot
+    // spawn (ctor), so this is safe on CI whether or not a test installed
+    // its own fake.
     runRootCommand();
     return style_ok;
   }
@@ -437,6 +445,11 @@ namespace bbai {
   }
 
   void Server::onViewMapped(View *view) {
+    // Mid-alt-tab the commit target is focused_view and the MRU is frozen; a
+    // map must not hijack either (same rule the onKey modal block enforces on
+    // the key path). The new window is already in mru_/stacking from creation
+    // and is focusable once the cycle ends.
+    if (cycling_) return;
     if (config_.focusNewWindows) focusView(view);
   }
 
@@ -514,11 +527,13 @@ namespace bbai {
     if (primary_died) {
       // The toolbar's registered strut points into `o` - tear it down while
       // `o` is still alive (we're inside its destroy handler), then rebuild
-      // on the survivor. If no head survives, the next new_output re-creates
-      // it (active_output is null again, so the primary branch re-fires).
+      // on the survivor through applyConfig, the same gate+knobs path the
+      // new_output handler uses: a disabled toolbar stays disabled and the
+      // rebuilt one keeps its rc placement/autoHide instead of ctor defaults.
+      // If no head survives, the next new_output re-creates it (active_output
+      // is null again, so the primary branch re-fires).
       toolbar_.reset();
-      if (active_output)
-        toolbar_ = std::make_unique<Toolbar>(*this, *active_output);
+      applyConfig();   // workspace half is idempotent (grow-only + name re-set)
     }
     // Windows that lived on the dead head now resolve to the fallback head -
     // snap maximized ones onto a real work area instead of a ghost rectangle.
@@ -605,6 +620,14 @@ namespace bbai {
   }
 
   void Server::focusView(View *v, bool update_mru) {
+    // The lock owns the seat: no caller may focus a client while locked - not
+    // onViewMapped (focusNewWindows), not removeView's focus handoff. The
+    // locked onKey branch forwards keys to the seat's focused surface, so a
+    // steal here delivers the locker's keystrokes (the password) to an app;
+    // a steal before the lock surface maps blocks its null-focus keyboard
+    // grab entirely. Unlock restores focus via handleSessionUnlocked, which
+    // runs after locked_ drops.
+    if (session_lock_ && session_lock_->locked()) return;
     if (focused_view == v) return;   // already at the MRU front; nothing to re-order
     if (focused_view) {
       wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
@@ -1177,7 +1200,7 @@ namespace bbai {
     if (toolbar_) toolbar_->redrawWindowLabel(nullptr);
   }
 
-  void Server::handleSessionLocked() {
+  void Server::handleSessionLocked(bool takeover) {
     // Abort every modal mode via its canonical cancel: their exit paths
     // re-sync the seat, and locked_ is already true (SessionLock sets it
     // before this hook), so those re-syncs hit the gate instead of handing
@@ -1198,7 +1221,13 @@ namespace bbai {
     // client after unlock - the release erase in onKey is gated off while
     // locked, so drop the swallow set here.
     swallowed_keycodes_.clear();
-    focus_before_lock_ = focused_view;
+    // Same reasoning for a pending titlebar-button press: its terminating
+    // release is discarded by the locked pointer gate, so a stale entry would
+    // fire the pre-lock action (or swallow a legit client release) on the
+    // first release after unlock.
+    pressed_button_view_ = nullptr;
+    pressed_button_part_ = Part::None;
+    if (!takeover) focus_before_lock_ = focused_view;
     clearFocus();
     wlr_seat_pointer_notify_clear_focus(seat);
   }
@@ -1346,6 +1375,11 @@ namespace bbai {
 
   void Server::openRootMenu(double lx, double ly) {
     if (active_menu_) return;
+    // A live alt-tab session must dissolve before the menu goes modal, or the
+    // later modifier release commits the cycle (focus + workspace switch)
+    // underneath the open menu. Commit, not cancel: the preview is the real
+    // raise+focus, so committing matches what is on screen at the click.
+    if (cycling_) commitCycle();
     // Abort any in-progress move/resize grab before going modal — otherwise the
     // grab's terminating release is swallowed by the modal gate and the window
     // would keep following the cursor after the menu closes.
@@ -1384,6 +1418,7 @@ namespace bbai {
 
   void Server::openIconMenu(double lx, double ly) {
     if (active_menu_) return;
+    if (cycling_) commitCycle();   // same rule as openRootMenu: one modal mode at a time
     // Abort any in-progress move/resize grab before going modal — otherwise the
     // grab's terminating release is swallowed by the modal gate and the window
     // would keep following the cursor after the menu closes.

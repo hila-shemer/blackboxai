@@ -8,6 +8,7 @@
 #include "HeadlessFixture.hh"
 #include "Server.hh"
 #include "Style.hh"
+#include "Output.hh"
 #include "Toolbar.hh"
 #include "Toolbar.geom.hh"
 
@@ -58,6 +59,44 @@ TEST_CASE("applyStyleFile: live repaint + persisted choice") {
   // an unreadable style: false, nothing changes
   CHECK_FALSE(server.applyStyleFile("/nonexistent/style"));
   CHECK(server.currentStyle()->sourcePath() == "data/styles/Twice");
+  std::remove(kRc);
+}
+
+TEST_CASE("re-theme with different toolbar metrics: the strut follows the drawn bar") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  writeRc("session.styleFile: data/styles/Results\n");
+
+  Server server(/*headless=*/true, kRc);
+  REQUIRE(server.ok());
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+
+  // A style whose computed bar height diverges from the constexpr defaults
+  // via marginWidth (not font size - deterministic under the LiberationMono
+  // pin): barHeight = labelHeight + 2*5, hiddenHeight = 5.
+  const char *kStyle = "/tmp/bbai-retheme-margin.style";
+  { std::ofstream f(kStyle, std::ios::trunc); f << "toolbar.marginWidth: 5\n"; }
+  REQUIRE(server.applyStyleFile(kStyle));
+
+  Toolbar *tb = server.toolbarForTest();
+  REQUIRE(tb != nullptr);
+  const toolbar::ToolbarMetrics m = server.currentStyle()->toolbarMetrics();
+  const int barH = tb->barRectForTest().h;
+  REQUIRE(barH == m.barHeight);
+  REQUIRE(barH != toolbar::kBarHeight);   // else this test pins nothing
+
+  // The strut must reserve what is actually drawn - a maximized window may
+  // neither overlap the bar nor leave a dead gap.
+  Output *out = server.activeOutputForTest();
+  CHECK(out->workArea().height == out->fullBox().height - barH);
+
+  // Auto-hide reserves the style's sliver, not the constexpr 2px.
+  REQUIRE(m.hiddenHeight == 5);
+  tb->setAutoHide(true);
+  CHECK(out->workArea().height == out->fullBox().height - m.hiddenHeight);
+
+  std::remove(kStyle);
   std::remove(kRc);
 }
 

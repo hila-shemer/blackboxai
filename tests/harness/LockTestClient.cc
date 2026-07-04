@@ -1,4 +1,5 @@
 #include "LockTestClient.hh"
+#include "ConnectRetry.hh"
 
 #include <wayland-client.h>
 #include "ext-session-lock-v1-client-protocol.h"
@@ -124,7 +125,7 @@ namespace bbai::test {
 
   LockTestClient::LockTestClient(const std::string &socket) {
     impl = new Impl();
-    impl->display = wl_display_connect(socket.c_str());
+    impl->display = connectWithRetry(socket.c_str());
     if (!impl->display) return;
     impl->registry = wl_display_get_registry(impl->display);
     wl_registry_add_listener(impl->registry, &s_lk_registry_listener, impl);
@@ -190,6 +191,17 @@ namespace bbai::test {
     impl->surfaces.push_back(ls);
     wl_display_flush(impl->display);
   }
+  void LockTestClient::destroyLockSurface(int i) {
+    if (i < 0 || i >= static_cast<int>(impl->surfaces.size())) return;
+    LockSurfaceState *s = impl->surfaces[i];
+    if (s->lock_surface) ext_session_lock_surface_v1_destroy(s->lock_surface);
+    if (s->surface) wl_surface_destroy(s->surface);
+    if (s->buffer) wl_buffer_destroy(s->buffer);
+    delete s;
+    impl->surfaces.erase(impl->surfaces.begin() + i);
+    wl_display_flush(impl->display);
+  }
+
   int LockTestClient::configuredWidth(int i) const {
     return i < static_cast<int>(impl->surfaces.size())
       ? impl->surfaces[i]->configured_w : -1;
@@ -241,7 +253,7 @@ namespace bbai::test {
 
   IdleTestClient::IdleTestClient(const std::string &socket) {
     impl = new Impl();
-    impl->display = wl_display_connect(socket.c_str());
+    impl->display = connectWithRetry(socket.c_str());
     if (!impl->display) return;
     impl->registry = wl_display_get_registry(impl->display);
     wl_registry_add_listener(impl->registry, &s_idle_registry_listener, impl);

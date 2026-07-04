@@ -43,7 +43,10 @@ namespace bbai {
     lock_unlock_.connect(&lock->events.unlock, [this](void *) { onUnlock(); });
     lock_destroy_.connect(&lock->events.destroy, [this](void *) { onLockDestroy(); });
 
-    server_.handleSessionLocked();   // idempotent: modes already dead under a takeover
+    // On a takeover the modal-mode cancels are already-dead no-ops, but the
+    // hook must NOT re-capture focus_before_lock_ (focused_view was parked to
+    // null by the first lock - re-capturing erases the real pre-lock window).
+    server_.handleSessionLocked(takeover);
 
     // Fresh lock: blank every head and wait for one post-blank commit each.
     // Takeover: the blanks never came down and each head already committed a
@@ -76,9 +79,9 @@ namespace bbai {
     // Hot-unplug while locked: wlroots destroys the head's lock surface itself
     // (it listens on output destroy), but this entry would keep a dangling
     // Output* and a listener into the dying wlr_output. Drop it, then recount
-    // - one fewer head to wait on can be what sends `locked`. Defensive-only:
-    // headless outputs can't be destroyed from a test, so this path is
-    // review-verified, not test-verified.
+    // - one fewer head to wait on can be what sends `locked`. Covered by the
+    // mid-wait unplug case in session_lock_test (work-area's
+    // destroyOutputForTest made headless output destruction drivable).
     po->output_destroy.connect(&o->wlrOutput()->events.destroy,
                                [this, p = po.get()](void *) {
       if (p->blank) wlr_scene_node_destroy(&p->blank->node);
@@ -177,6 +180,13 @@ namespace bbai {
                                      kb->num_keycodes, &kb->modifiers);
     else
       wlr_seat_keyboard_notify_enter(server_.seat, surface, nullptr, 0, nullptr);
+  }
+
+  int SessionLock::mappedLockSurfaceCountForTest() const {
+    int n = 0;
+    for (const auto &e : surfaces_)
+      if (e->surface->surface->mapped) ++n;
+    return n;
   }
 
   wlr_surface *SessionLock::focusedLockSurface() const {

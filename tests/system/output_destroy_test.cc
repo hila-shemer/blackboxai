@@ -86,3 +86,58 @@ TEST_CASE("primary dies: survivor becomes primary, toolbar re-homes with its str
   const wlr_box w = second->workArea();         // re-normalizes x to 0
   CHECK(w.height == full.height - barH);        // the strut moved with the bar
 }
+
+TEST_CASE("primary dies with the toolbar disabled: the re-home must not resurrect it") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true, "tests/fixtures/notoolbar.blackboxrc");
+  REQUIRE(server.ok());
+  settleOutputs(server, 1);
+  REQUIRE(server.toolbarForTest() == nullptr);   // rc says no toolbar
+  server.addHeadlessOutputForTest(1280, 720);
+  settleOutputs(server, 2);
+  REQUIRE(server.outputCountForTest() == 2);
+  Output *second = server.outputForTest(1);
+
+  server.destroyOutputForTest(0);
+  settleOutputs(server, 1);
+  REQUIRE(server.activeOutputForTest() == second);
+
+  // The user disabled the bar; hot-unplugging the primary is not consent.
+  CHECK(server.toolbarForTest() == nullptr);
+  const wlr_box full = second->fullBox();
+  const wlr_box w = second->workArea();
+  CHECK(w.height == full.height);               // no ghost strut either
+}
+
+TEST_CASE("primary dies: the re-homed toolbar keeps the rc placement/autoHide/width") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  // toolbar.blackboxrc: TopCenter, widthPercent 80, autoHide True.
+  Server server(/*headless=*/true, "tests/fixtures/toolbar.blackboxrc");
+  REQUIRE(server.ok());
+  settleOutputs(server, 1);
+  REQUIRE(server.toolbarForTest() != nullptr);
+  server.addHeadlessOutputForTest(1280, 720);
+  settleOutputs(server, 2);
+  REQUIRE(server.outputCountForTest() == 2);
+  Output *second = server.outputForTest(1);
+
+  server.destroyOutputForTest(0);
+  settleOutputs(server, 1);
+  REQUIRE(server.activeOutputForTest() == second);
+
+  Toolbar *tb = server.toolbarForTest();
+  REQUIRE(tb != nullptr);
+  // The rebuilt bar must come back through the config knobs, not ctor defaults.
+  CHECK(tb->placementForTest() == toolbar::Placement::TopCenter);
+  CHECK(tb->hiddenForTest());                   // autoHide re-applied
+  CHECK(tb->currentBarRect().w == 1024);        // 80% of 1280
+  // Auto-hidden TopCenter reserves the sliver at the TOP edge, not 23 at the bottom.
+  const wlr_box full = second->fullBox();
+  const wlr_box w = second->workArea();
+  CHECK(w.y == full.y + 2);
+  CHECK(w.height == full.height - 2);
+}

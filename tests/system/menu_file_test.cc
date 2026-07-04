@@ -122,6 +122,34 @@ TEST_CASE("[reconfig] hits the reconfigure seam and invalidates the menu cache")
   CHECK(server.rootMenuForTest()->itemCount() == 6);   // reparsed fine
 }
 
+TEST_CASE("[reconfig] with an rc rootCommand cannot fork under headless") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  // The ctor's !headless gate skips rootCommand at boot, but reconfigure()
+  // re-runs it unconditionally (classic behavior) - the no-spawn invariant
+  // must therefore be structural: the headless default runner records instead
+  // of forking, so a menu click can never exec on a CI box.
+  const std::string menu = writeDispatchMenu();
+  const std::string rc = writeTemp("rootcmd.blackboxrc",
+    "session.menuFile: " + menu + "\n"
+    "rootCommand: xterm\n");
+  Server server(/*headless=*/true, rc);
+  boot(server);
+
+  auto *fake = dynamic_cast<FakeCommandRunner *>(&server.commandRunner());
+  REQUIRE(fake != nullptr);                            // structural, not comment-enforced
+  CHECK(fake->runCount() == 0);                        // ctor gate still held
+
+  openDispatchMenu(server, 400, 200);
+  clickRow(server, 400, 200, 2);                       // Reconfigure
+  CHECK_FALSE(server.menuOpenForTest());
+  CHECK(server.reconfigureRequestsForTest() == 1);
+  // The exact line that used to fork in CI, now recorded.
+  CHECK(fake->runCount() == 1);
+  CHECK(fake->lastCommand()
+        == std::vector<std::string>{"/bin/sh", "-c", "xterm"});
+}
+
 TEST_CASE("[restart] bare requests a self-restart and stops the loop") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
