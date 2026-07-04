@@ -1045,7 +1045,23 @@ namespace bbai {
       return;
     }
 
-    // [Task 4 inserts the wheel-region workspace gate here.]
+    // Classic wheel gestures (buttons 4/5). Vertical scroll up = delta < 0 =
+    // next workspace (classic button4, Screen.cc:2058-2063). Toolbar footprint
+    // first (its own key), then the bare desktop; each swallows the event so it
+    // never doubles as a client scroll.
+    if (orientation == WL_POINTER_AXIS_VERTICAL_SCROLL && delta != 0.0) {
+      const int cx = static_cast<int>(cursor->x), cy = static_cast<int>(cursor->y);
+      const int dir = (delta < 0.0) ? +1 : -1;
+      if (toolbar_ && config_.toolbarActionsWithMouseWheel &&
+          toolbar_->containsGlobal(cx, cy)) {
+        cycleWorkspace(dir);
+        return;
+      }
+      if (config_.changeWorkspaceWithMouseWheel && overDesktop(cursor->x, cursor->y)) {
+        cycleWorkspace(dir);
+        return;
+      }
+    }
 
     // Default: forward to whatever surface currently holds pointer focus
     // (focused-surface-only delivery, so this is a safe no-op with no focus).

@@ -525,7 +525,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: `Toolbar::currentBarRect()` (`Toolbar.hh:49`), `config().changeWorkspaceWithMouseWheel`/`toolbarActionsWithMouseWheel` (Task 2), `overDesktop` (`Server.cc`, private), `cycleWorkspace` (`Server.cc:1186`).
 - Produces: `bool Toolbar::containsGlobal(int gx, int gy) const` (PINNED SEAM — menus reuses it). The wheel gate in `onPointerAxis`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/wheel_workspace_test.cc`:
 
@@ -617,12 +617,12 @@ test('wheel_workspace', wheel_workspace_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `wheel_workspace`.
 Expected: BUILD FAILURE — `no member named 'containsGlobal'` (once the gate is added), or CHECK failures on workspace count (before the gate). Either red is fine.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Toolbar.hh`, after `toolbar::Rect currentBarRect() const;` (line 49):
 
@@ -665,11 +665,11 @@ Expected: BUILD FAILURE — `no member named 'containsGlobal'` (once the gate is
     }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `wheel_workspace`. Expected: 3 cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Toolbar.hh src/Toolbar.cc src/Server.cc \
