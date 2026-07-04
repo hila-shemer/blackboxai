@@ -246,7 +246,7 @@ The parked defect: `Server.cc:205-221` wires motion/motion_absolute/button/frame
 - Consumes: `wlr_seat_pointer_notify_axis` (7-arg, `wlr_seat.h`), `notifyIdleActivity` (`Server.cc:883`), the modal state (`session_lock_`, `active_menu_`, `cursor_mode`, `cycling_`), `seat->pointer_state`.
 - Produces: `void Server::onPointerAxis(uint32_t time, wl_pointer_axis orientation, double delta, int32_t delta_discrete, wl_pointer_axis_source source, wl_pointer_axis_relative_direction rel)`; `void Server::injectPointerAxisForTest(wl_pointer_axis orientation, double delta, int32_t delta_discrete)` (PINNED SEAM); `TestClient::pointerAxisEvents()`. Task 4 extends `onPointerAxis` with the wheel-region gate.
 
-- [ ] **Step 1: Extend TestClient with an axis counter**
+- [x] **Step 1: Extend TestClient with an axis counter**
 
 `tests/harness/TestClient.cc`, in `struct Impl` after `int pointer_buttons = 0;` (line 35):
 
@@ -274,7 +274,7 @@ After `int TestClient::pointerButtonEvents() const { ... }` (line 196):
     int pointerAxisEvents() const;    // count of wl_pointer.axis events received
 ```
 
-- [ ] **Step 2: Write the failing system test**
+- [x] **Step 2: Write the failing system test**
 
 Create `tests/system/axis_forward_test.cc`:
 
@@ -400,12 +400,12 @@ test('axis_forward', axis_forward_exe, suite : 'system',
 
 Note on introspection hooks used above: `lockForTest`, `idleActivityCountForTest`, `currentWorkspaceForTest` — check `Server.hh` first; if any is missing, add the trivial accessor in this task (`lockForTest` should route through the existing `SessionLock` friend path used by `lock_interactions_test.cc`; `idleActivityCountForTest` bumps a counter in `notifyIdleActivity`; `currentWorkspaceForTest` returns `workspaces_.current()`). Do NOT invent a new lock mechanism — reuse whatever `lock_interactions_test.cc` already drives.
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Container gate, `<tests>` = `axis_forward`.
 Expected: BUILD FAILURE — `no member named 'injectPointerAxisForTest'`.
 
-- [ ] **Step 4: Implement the funnel**
+- [x] **Step 4: Implement the funnel**
 
 `src/Server.hh`: add the axis listener beside the others (line 296):
 
@@ -490,11 +490,11 @@ Add the injector after `injectPointerButtonForTest` (after line 1057):
   }
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Container gate, `<tests>` = `axis_forward`. Expected: 3 cases pass. Then the FULL gate (empty `<tests>`) — nothing else regresses. Confirm `git status tests/golden/` is empty.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/harness/TestClient.hh tests/harness/TestClient.cc \

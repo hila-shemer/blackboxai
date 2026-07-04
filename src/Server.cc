@@ -219,6 +219,11 @@ namespace bbai {
     cursor_frame.connect(&cursor->events.frame, [this](void *) {
       wlr_seat_pointer_notify_frame(seat);
     });
+    cursor_axis.connect(&cursor->events.axis, [this](void *data) {
+      auto *e = static_cast<wlr_pointer_axis_event *>(data);
+      onPointerAxis(e->time_msec, e->orientation, e->delta, e->delta_discrete,
+                    e->source, e->relative_direction);
+    });
 
     // Clock + timer registry. Headless tests use a VirtualClock at a fixed UTC
     // epoch (14:05:00 -> "02:05 PM") and drive timers by hand via
@@ -397,6 +402,7 @@ namespace bbai {
     cursor_motion_absolute.disconnect();
     cursor_button.disconnect();
     cursor_frame.disconnect();
+    cursor_axis.disconnect();
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish
     active_menu_.reset();     // destroys its overlay scene tree
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
@@ -881,6 +887,7 @@ namespace bbai {
   // input surfaces (an axis handler when someone adds one, touch, tablet) must
   // call this too.
   void Server::notifyIdleActivity() {
+    ++idle_activity_count_;   // test: proves an input funnel ran even when it discards
     if (idle_notifier_)
       wlr_idle_notifier_v1_notify_activity(idle_notifier_, seat);
   }
@@ -1018,6 +1025,34 @@ namespace bbai {
     wlr_seat_pointer_notify_button(seat, time, button, state);
   }
 
+  void Server::onPointerAxis(uint32_t time, wl_pointer_axis orientation, double delta,
+                             int32_t delta_discrete, wl_pointer_axis_source source,
+                             wl_pointer_axis_relative_direction rel) {
+    notifyIdleActivity();                                    // above the lock gate, always
+    if (session_lock_ && session_lock_->locked()) return;   // lock owns the seat
+    if (active_menu_) return;                                // modal: menus don't scroll
+    if (cursor_mode == CursorMode::ScreenshotSelect) return;
+    if (cycling_) return;                                    // alt-tab owns input
+
+    // Implicit grab: a button held over the focused client keeps ALL pointer
+    // delivery on it (motion does the same at :920-926). Checked BEFORE the
+    // wheel-region gate so a mid-drag scroll can't be stolen by the desktop/
+    // toolbar gesture - it goes to the grabbed surface, full stop.
+    if (seat->pointer_state.button_count > 0 && focused_view &&
+        seat->pointer_state.focused_surface == focused_view->toplevel()->base->surface) {
+      wlr_seat_pointer_notify_axis(seat, time, orientation, delta, delta_discrete,
+                                   source, rel);
+      return;
+    }
+
+    // [Task 4 inserts the wheel-region workspace gate here.]
+
+    // Default: forward to whatever surface currently holds pointer focus
+    // (focused-surface-only delivery, so this is a safe no-op with no focus).
+    wlr_seat_pointer_notify_axis(seat, time, orientation, delta, delta_discrete,
+                                 source, rel);
+  }
+
   // --- title-bar button dispatch (F4.3+) ----------------------------------------
 
   void Server::dispatchButtonRelease(View *v, Part part) {
@@ -1054,6 +1089,19 @@ namespace bbai {
     onPointerButton(nowMsec(), button,
                     pressed ? WL_POINTER_BUTTON_STATE_PRESSED
                             : WL_POINTER_BUTTON_STATE_RELEASED);
+  }
+
+  void Server::injectPointerAxisForTest(wl_pointer_axis orientation, double delta,
+                                        int32_t delta_discrete) {
+    onPointerAxis(nowMsec(), orientation, delta, delta_discrete,
+                  WL_POINTER_AXIS_SOURCE_WHEEL,
+                  WL_POINTER_AXIS_RELATIVE_DIRECTION_IDENTICAL);
+  }
+
+  void Server::lockForTest() {
+    if (!session_lock_) return;
+    session_lock_->forceLockedForTest();
+    handleSessionLocked(/*takeover=*/false);   // park focus + abort modal modes
   }
 
   View *Server::viewAtForTest(double lx, double ly) {

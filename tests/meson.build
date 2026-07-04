@@ -386,6 +386,13 @@ idle_notify_exe = executable('idle-notify-test', files('system/idle_notify_test.
 test('idle_notify', idle_notify_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# ---- wave-2 window-mgmt (suite: 'system') -----------------------------------
+# Scroll wheel forwarding + the locked-discard + the mid-drag implicit-grab case.
+axis_forward_exe = executable('axis-forward-test', files('system/axis_forward_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('axis_forward', axis_forward_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

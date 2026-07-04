@@ -37,6 +37,9 @@ namespace bbai {
     int blankRectCountForTest() const { return static_cast<int>(per_output_.size()); }
     bool hasActiveLockForTest() const { return lock_ != nullptr; }
     int mappedLockSurfaceCountForTest() const;
+    // Force the locked state without a real locker client, so a test can drive
+    // the input gates that check locked(). Pairs with Server::lockForTest.
+    void forceLockedForTest() { locked_ = true; }
 
   private:
     // One blank rect + post-blank commit tracking per head.
