@@ -244,6 +244,13 @@ workspace_remove_exe = executable('workspace-remove-test',
 test('workspace_remove', workspace_remove_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# wave-2 configmenu: strftimeFormat rendering swap (default format identical -
+# the zero-golden-churn claim is the full suite staying green).
+clock_format_exe = executable('clock-format-test', files('system/clock_format_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('clock_format', clock_format_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # F4.2 View iconified state: composes with workspace visibility (nonvisual, no golden).
 iconify_exe = executable('iconify-test', files('system/iconify_test.cc'),
   dependencies : [harness_dep, doctest_dep])

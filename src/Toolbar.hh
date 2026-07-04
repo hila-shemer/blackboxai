@@ -52,6 +52,7 @@ namespace bbai {
     void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
     void setAutoHide(bool on);                 // hidden sliver still struts (2px)
     bool hiddenForTest(void) const { return hidden_; }
+    std::string clockTextForTest(void) const { return clockText(); }  // wave-2 strftimeFormat
 
   private:
     void rebuild(void);

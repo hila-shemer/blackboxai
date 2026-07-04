@@ -1272,7 +1272,7 @@ only shrink."
 - Consumes: `bt::formatClock(int64_t, const char *fmt)` (toolkit/Clock.hh:42, gmtime_r-based), `Config::strftimeFormat` (parsed since wave 1, default `"%I:%M %p"` - identical to formatClock's default, which is why zero goldens churn), `Toolbar::clockText` (public, Toolbar.hh:60), the VirtualClock epoch 14:05:00 UTC (Server.cc:228).
 - Produces: nothing new - a live rc knob. NOTE for the merge slot: `Config.hh:84`'s "parse-only this wave (locked)" comment goes stale here; it is window-mgmt's file, so the one-line comment fix happens in the train commit (header checklist), not in this worktree.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/clock_format_test.cc`:
 
@@ -1357,7 +1357,7 @@ test('clock_format', clock_format_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1368,7 +1368,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: FAIL - `clockText() == "14:05"` gets `"02:05 PM"` (the format never leaves the parser today).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Toolbar.cc:74-76`:
 
@@ -1379,7 +1379,7 @@ Expected: FAIL - `clockText() == "14:05"` gets `"02:05 PM"` (the format never le
   }
 ```
 
-- [ ] **Step 4: Run the full gate**
+- [x] **Step 4: Run the full gate**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1390,7 +1390,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: ALL pass - especially `toolbar`, `clock_seam`, and every golden test: the default format string is byte-identical to `formatClock`'s default, so `m4-toolbar*.png` and friends must not move. Any golden diff here means the one-liner did something else - stop.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/Toolbar.cc tests/system/clock_format_test.cc tests/meson.build
