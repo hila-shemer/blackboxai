@@ -147,6 +147,16 @@ namespace bbai {
     // cursor events use) ---
     void injectPointerMotionForTest(double lx, double ly);
     void injectPointerButtonForTest(uint32_t button, bool pressed);
+    // Mirrors the real onPointerAxis funnel (modal gates + implicit-grab lock);
+    // defaults source=WHEEL, rel=IDENTICAL, time=nowMsec (gotcha #17/#29: tests
+    // must exercise the SAME funnel, not a shortcut).
+    void injectPointerAxisForTest(wl_pointer_axis orientation, double delta,
+                                  int32_t delta_discrete);
+    // Drive the session into the locked state without a real locker client, then
+    // run the same focus-parking hook a real lock does (mirrors the gate that
+    // lock_interactions_test drives through a LockTestClient).
+    void lockForTest();
+    int idleActivityCountForTest() const { return idle_activity_count_; }
     View *viewAtForTest(double lx, double ly);
     Part partAtForTest(double lx, double ly);
     wlr_surface *focusedPointerSurfaceForTest() const;
@@ -234,6 +244,9 @@ namespace bbai {
     // Pointer handlers shared by real cursor events and test injection.
     void onPointerMotion(uint32_t time);
     void onPointerButton(uint32_t time, uint32_t button, wl_pointer_button_state state);
+    void onPointerAxis(uint32_t time, wl_pointer_axis orientation, double delta,
+                       int32_t delta_discrete, wl_pointer_axis_source source,
+                       wl_pointer_axis_relative_direction rel);
     // Keyboard handlers (called by the per-device Keyboard).
     void onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode, wl_keyboard_key_state state);
     void onModifiers(wlr_keyboard *kb);
@@ -298,7 +311,7 @@ namespace bbai {
     bt::Listener new_xdg_toplevel;
     bt::Listener new_toplevel_decoration;
     bt::Listener new_input;
-    bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame;
+    bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame, cursor_axis;
     Output *active_output = nullptr;            // the primary (first) head: toolbar + work-area
     std::vector<Output *> outputs_;             // every lit head (M7); each self-deletes on its output's destroy
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
@@ -351,6 +364,7 @@ namespace bbai {
     int grab_geo_w = 0, grab_geo_h = 0;         // content size at grab start
     uint32_t resize_edges = 0;                  // wlr_edges bitmask
     uint32_t next_time = 1;                      // monotonic event time seam
+    int idle_activity_count_ = 0;                // test: every input-funnel entry bumps this
 
     // ScreenshotSelect drag state + GNOME-dim overlay (under layer_overlay).
     bool screenshot_dragging_ = false;

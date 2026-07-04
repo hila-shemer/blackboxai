@@ -33,6 +33,7 @@ namespace bbai::test {
     bool created = false;
     bool got_close = false;       // compositor requested xdg_toplevel.close
     int pointer_buttons = 0;      // count of wl_pointer.button events received
+    int pointer_axis = 0;         // count of wl_pointer.axis events received
   };
 
   static wl_buffer *makeShmBuffer(TestClient::Impl *c) {
@@ -120,7 +121,9 @@ namespace bbai::test {
   static void ptr_button(void *data, wl_pointer *, uint32_t, uint32_t, uint32_t, uint32_t) {
     static_cast<TestClient::Impl *>(data)->pointer_buttons++;
   }
-  static void ptr_axis(void *, wl_pointer *, uint32_t, uint32_t, wl_fixed_t) {}
+  static void ptr_axis(void *data, wl_pointer *, uint32_t, uint32_t, wl_fixed_t) {
+    static_cast<TestClient::Impl *>(data)->pointer_axis++;
+  }
   static const wl_pointer_listener s_pointer_listener = {
     .enter = ptr_enter, .leave = ptr_leave, .motion = ptr_motion,
     .button = ptr_button, .axis = ptr_axis };
@@ -194,6 +197,8 @@ namespace bbai::test {
   bool TestClient::gotCloseRequest() const { return impl && impl->got_close; }
 
   int TestClient::pointerButtonEvents() const { return impl ? impl->pointer_buttons : 0; }
+
+  int TestClient::pointerAxisEvents() const { return impl ? impl->pointer_axis : 0; }
 
   void TestClient::flush() {
     if (impl->display) wl_display_flush(impl->display);
