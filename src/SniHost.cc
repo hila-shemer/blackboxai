@@ -371,27 +371,36 @@ namespace bbai::sni {
     reg->service = service;
     reg->path = path;
     reg->owner = owner;
-    regs_.push_back(std::move(reg));
+    // Arm the death-watch + the GetAll BEFORE committing. A name sd-bus's own
+    // validator rejects ("" or "a b", -EINVAL from track_add_name and from the
+    // async call) must not be announced at all: the only thing that saved the
+    // old order from a permanent zombie was an sd-bus quirk - an EMPTY track
+    // dispatches its handler on every process pass (verified on 259), so the
+    // failed reg self-dropped through onTrack, spraying a garbage
+    // Registered/Unregistered signal pair on the way. Reject-before-commit
+    // needs neither the quirk nor a name-syntax reimplementation.
+    if (sd_bus_track_new(bus_, &reg->track, Cb::onTrack, reg.get()) < 0 ||
+        sd_bus_track_add_name(reg->track, service.c_str()) < 0)
+      return;                           // reg dies here, nothing was announced
+    if (fetchAll(*reg) < 0)
+      return;
+    regs_.push_back(std::move(reg));    // Reg* stays stable - unique_ptr
     sd_bus_emit_signal(bus_, kWatcherPath, kWatcherIface,
                        "StatusNotifierItemRegistered", "s",
                        (service + path).c_str());
     sd_bus_emit_properties_changed(bus_, kWatcherPath, kWatcherIface,
                                    "RegisteredStatusNotifierItems", nullptr);
-    Reg *r = regs_.back().get();
-    if (sd_bus_track_new(bus_, &r->track, Cb::onTrack, r) >= 0)
-      sd_bus_track_add_name(r->track, service.c_str());
-    fetchAll(*regs_.back());
   }
 
-  void Host::fetchAll(Reg &reg) {
+  int Host::fetchAll(Reg &reg) {
     if (reg.getall_slot) {
       sd_bus_slot_unref(reg.getall_slot);   // supersede an in-flight fetch
       reg.getall_slot = nullptr;
     }
-    sd_bus_call_method_async(bus_, &reg.getall_slot, reg.service.c_str(),
-                             reg.path.c_str(),
-                             "org.freedesktop.DBus.Properties", "GetAll",
-                             Cb::onGetAll, &reg, "s", kItemIface);
+    return sd_bus_call_method_async(bus_, &reg.getall_slot, reg.service.c_str(),
+                                    reg.path.c_str(),
+                                    "org.freedesktop.DBus.Properties", "GetAll",
+                                    Cb::onGetAll, &reg, "s", kItemIface);
   }
 
   void Host::storeItem(Item item) {

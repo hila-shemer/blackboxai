@@ -39,7 +39,8 @@ namespace {
 
   struct SigWatch {
     bool fired = false;
-    std::string arg;
+    int count = 0;
+    std::string arg;    // the LAST emission's argument
   };
 
   int onSig(sd_bus_message *m, void *userdata, sd_bus_error *) {
@@ -47,6 +48,7 @@ namespace {
     const char *s = nullptr;
     if (sd_bus_message_read(m, "s", &s) >= 0 && s) w->arg = s;
     w->fired = true;
+    ++w->count;
     return 0;
   }
 
@@ -260,6 +262,51 @@ TEST_CASE("path-variant registration: signal fires, property lists service+path"
   CHECK(items[0][0] == ':');                   // sender's unique name...
   CHECK(items[0].find("/StatusNotifierItem") != std::string::npos);  // ...+ path
   CHECK(reg_sig.arg == items[0]);
+
+  sd_bus_flush_close_unref(item_conn);
+  sd_bus_flush_close_unref(observer);
+}
+
+TEST_CASE("invalid registration args leave no zombie in the registry") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch reg_sig;
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierItemRegistered", onSig, &reg_sig) >= 0);
+
+  sd_bus *item_conn = nullptr;
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kEmptyItemVtable, nullptr) >= 0);
+  // Names sd-bus's own validator rejects: neither the death-watch nor the
+  // GetAll can ever arm for them, so accepting one = a Reg nothing can remove.
+  for (const char *bad : { "", "a b", "not.a valid.name" })
+    REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                     "org.kde.StatusNotifierWatcher",
+                                     "/StatusNotifierWatcher",
+                                     "org.kde.StatusNotifierWatcher",
+                                     "RegisterStatusNotifierItem", nullptr,
+                                     nullptr, "s", bad) >= 0);
+  // A valid registration afterwards: the watcher serves in order, so once
+  // this one's signal fires the bad three were already judged.
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "/StatusNotifierItem") >= 0);
+
+  CHECK(pumpUntil(host, {observer, item_conn}, [&] { return reg_sig.fired; }));
+  CHECK(reg_sig.count == 1);                   // no signal for any bad name
+  std::vector<std::string> items = registeredItems(host, observer);
+  REQUIRE(items.size() == 1);                  // no "/StatusNotifierItem" ghost
+  CHECK(items[0][0] == ':');
+  CHECK(items[0] == reg_sig.arg);
 
   sd_bus_flush_close_unref(item_conn);
   sd_bus_flush_close_unref(observer);
