@@ -533,6 +533,13 @@ namespace bbai {
     return outputAt(v->x() + fw / 2.0, v->y() + fh / 2.0);
   }
 
+  Output *Server::outputForWlr(wlr_output *wo) {
+    if (!wo) return nullptr;
+    for (Output *o : outputs_)
+      if (o->wlrOutput() == wo) return o;
+    return nullptr;
+  }
+
   void Server::remaximizeViewsOn(Output *o) {
     if (!o) return;
     for (auto &v : views)
@@ -1159,6 +1166,25 @@ namespace bbai {
 
   bool Server::viewLayerIsFullscreenForTest(View *v) const {
     return v && v->sceneTree()->node.parent == layer_fullscreen;
+  }
+
+  void Server::requestFullscreen(View *v) {
+    const bool want = v->toplevel()->requested.fullscreen;
+    // fullscreen_output can name a specific head; read it at handler time (never
+    // cache it - wlroots clears it via a private destroy listener on unplug).
+    Output *target = nullptr;
+    if (wlr_output *wo = v->toplevel()->requested.fullscreen_output)
+      target = outputForWlr(wo);
+    setViewFullscreen(v, want, target);
+  }
+
+  void Server::requestMaximize(View *v) {
+    Output *o = outputForView(v);
+    if (o) v->setMaximized(v->toplevel()->requested.maximized, o->workArea());
+  }
+
+  void Server::requestMinimize(View *v) {
+    if (v->toplevel()->requested.minimized && !v->isIconified()) iconifyView(v);
   }
 
   // --- test-only injection + introspection --------------------------------------
