@@ -19,6 +19,7 @@ TEST_CASE("root menu under Results: styled textures + fonts") {
   // Results' modula and change the desktop baked into the golden.
   Server server(/*headless=*/true, "tests/fixtures/results-nocmd.blackboxrc");
   REQUIRE(server.ok());
+  server.setMenuFileForTest("");   // pin the in-code menu - hermetic vs an installed default menu
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
 
