@@ -88,7 +88,7 @@ Resolves the two asserted-but-unverified critiques against this slice as a repro
 - Consumes: nothing (host headers under `/usr/include/wlroots-0.20`).
 - Produces: a documented conclusion baked into Task 5/7's comments — *no `wlr_xdg_toplevel_set_wm_capabilities` call is needed*; the axis event struct + `wlr_seat_pointer_notify_axis` arg order + `wlr_output_layout_adjacent_output` edge behavior are confirmed.
 
-- [ ] **Step 1: Write the probe**
+- [x] **Step 1: Write the probe**
 
 Create `api_probe.cc` in the scratchpad dir:
 
@@ -133,7 +133,7 @@ int main() {
 }
 ```
 
-- [ ] **Step 2: Compile + run in the container**
+- [x] **Step 2: Compile + run in the container** (compiled as C to sidestep gotcha #25's `[static N]` C++ parse issue; confirmed caps field bit=2, fullscreen cap bit=4, symbols link, LEFT=4 RIGHT=8 — conclusion: no `set_wm_capabilities` call needed)
 
 ```bash
 docker run --rm -v /tmp/claude-1000:/tmp/claude-1000 blackboxai-ci:f44 bash -c '
@@ -144,7 +144,7 @@ docker run --rm -v /tmp/claude-1000:/tmp/claude-1000 blackboxai-ci:f44 bash -c '
 
 Expected: it prints the four lines with non-null function pointers, `RIGHT=8 LEFT=4`, and a positive fullscreen cap bit. Conclusion recorded: **no `set_wm_capabilities` call is added anywhere in this slice** — the xdg-shell default (all caps advertised by omission) already matches our now-complete support. If the compile fails, the container image is wrong; stop and re-pull `blackboxai-ci:f44`.
 
-- [ ] **Step 3: No commit** (scratchpad-only). Proceed to Task 2.
+- [x] **Step 3: No commit** (scratchpad-only). Proceed to Task 2.
 
 ---
 
@@ -159,7 +159,7 @@ Expected: it prints the four lines with non-null function pointers, `RIGHT=8 LEF
 - Consumes: `bt::Resource::read` (existing), the `screenName`/`screenClass` helpers (`Config.cc:45-50`).
 - Produces: `bool Config::changeWorkspaceWithMouseWheel` (default `true`), `bool Config::toolbarActionsWithMouseWheel` (default `true`). Task 4's `onPointerAxis` reads both via `config()`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/config_test.cc`:
 
@@ -179,12 +179,12 @@ TEST_CASE("mouse-wheel bools: classic keys, classic default True") {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `unit`.
 Expected: BUILD FAILURE — `no member named 'changeWorkspaceWithMouseWheel' in 'bbai::Config'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Config.hh`, in `struct Config` after `int doubleClickInterval = 250;` (line 72):
 
@@ -209,11 +209,11 @@ Expected: BUILD FAILURE — `no member named 'changeWorkspaceWithMouseWheel' in 
                "Session.toolbarActionsWithMouseWheel", true);
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `unit`. Expected: `unit` OK.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Config.hh src/Config.cc tests/unit/config_test.cc

@@ -125,6 +125,14 @@ namespace bbai {
     else
       cfg.windowPlacement = WindowPlacement::RowSmart;
 
+    // --- mouse-wheel gestures (global session keys, classic spellings) ---
+    cfg.changeWorkspaceWithMouseWheel =
+      res.read("session.changeWorkspaceWithMouseWheel",
+               "Session.changeWorkspaceWithMouseWheel", true);
+    cfg.toolbarActionsWithMouseWheel =
+      res.read("session.toolbarActionsWithMouseWheel",
+               "Session.toolbarActionsWithMouseWheel", true);
+
     // --- per-screen workspaces ---
     cfg.workspaceCount =
       static_cast<unsigned>(res.read(screenName(screen, "workspaces"),

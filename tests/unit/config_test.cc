@@ -203,6 +203,20 @@ TEST_CASE("slit.* pre-parse (wave-2 slit never opens Config.cc)") {
   CHECK(d.slit.autoHide == false);
 }
 
+TEST_CASE("mouse-wheel bools: classic keys, classic default True") {
+  // Verified against reference/blackboxwm/src/BlackboxResource.cc:197-208 -
+  // BOTH default true. A wrong default silently changes desktop-scroll for
+  // every existing rc, so this is pinned, not guessed.
+  Config d = parse("");
+  CHECK(d.changeWorkspaceWithMouseWheel == true);
+  CHECK(d.toolbarActionsWithMouseWheel == true);
+
+  Config off = parse("session.changeWorkspaceWithMouseWheel: False\n"
+                     "session.toolbarActionsWithMouseWheel: False\n");
+  CHECK(off.changeWorkspaceWithMouseWheel == false);
+  CHECK(off.toolbarActionsWithMouseWheel == false);
+}
+
 #include <cstdio>
 #include <fstream>
 #include <sstream>
