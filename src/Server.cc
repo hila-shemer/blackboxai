@@ -436,6 +436,11 @@ namespace bbai {
   }
 
   void Server::onViewMapped(View *view) {
+    // Mid-alt-tab the commit target is focused_view and the MRU is frozen; a
+    // map must not hijack either (same rule the onKey modal block enforces on
+    // the key path). The new window is already in mru_/stacking from creation
+    // and is focusable once the cycle ends.
+    if (cycling_) return;
     if (config_.focusNewWindows) focusView(view);
   }
 
