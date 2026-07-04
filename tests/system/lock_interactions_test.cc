@@ -137,6 +137,81 @@ TEST_CASE("locking dissolves an alt-tab cycle session") {
     CHECK(server.focusedViewForTest() != nullptr);   // restore chain landed
 }
 
+TEST_CASE("a window mapping under the lock must not steal the locker's keyboard") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    auto pumpL = [&] { lc.flush(); lc.pump(); };
+    REQUIRE(pumpUntil(server,
+        [&] { return lc.sawLockManager() && lc.outputCount() >= 1; }, pumpL));
+    lc.lock();
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->locked(); }, pumpL));
+    lc.createLockSurface(0, 0xFF00FF00u);
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->focusedLockSurface() != nullptr; },
+        pumpL));
+    wlr_surface *locker = server.focusedKeyboardSurfaceForTest();
+    REQUIRE(locker != nullptr);
+    REQUIRE(locker == server.sessionLockForTest()->focusedLockSurface());
+
+    // A client maps mid-lock. focusNewWindows (default True) must not re-point
+    // the seat at it - the locked onKey branch forwards every key to the seat's
+    // focused surface, i.e. the password would land in this app.
+    test::TestClient app(server.socketName(), 0xFFFF0000u, 200, 150);
+    REQUIRE(app.ok());
+    auto pumpBoth = [&] { app.flush(); app.pump(); lc.flush(); lc.pump(); };
+    mapOne(server, app);
+    for (int i = 0; i < 40; ++i) { pumpBoth(); server.dispatch(); }
+
+    CHECK(server.focusedViewForTest() == nullptr);
+    CHECK(server.focusedKeyboardSurfaceForTest() == locker);
+
+    // Unlock still lands focus on a client (the map bookkeeping survived).
+    lc.unlockAndDestroy();
+    REQUIRE(pumpUntil(server, [&] { return !server.sessionLockForTest()->locked(); },
+                      pumpBoth));
+    CHECK(server.focusedViewForTest() != nullptr);
+}
+
+TEST_CASE("a client mapping before the lock surface must not block its keyboard") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    auto pumpL = [&] { lc.flush(); lc.pump(); };
+    REQUIRE(pumpUntil(server,
+        [&] { return lc.sawLockManager() && lc.outputCount() >= 1; }, pumpL));
+    lc.lock();
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->locked(); }, pumpL));
+
+    // The ordering variant: the client wins the race and maps FIRST. If its
+    // map takes the seat, the lock surface's null-focus guard never fires and
+    // the user types their password into the void.
+    test::TestClient app(server.socketName(), 0xFFFF0000u, 200, 150);
+    REQUIRE(app.ok());
+    mapOne(server, app);
+
+    lc.createLockSurface(0, 0xFF00FF00u);
+    auto pumpBoth = [&] { app.flush(); app.pump(); lc.flush(); lc.pump(); };
+    REQUIRE(pumpUntil(server,
+        [&] { return server.sessionLockForTest()->focusedLockSurface() != nullptr; },
+        pumpBoth));
+    CHECK(server.focusedKeyboardSurfaceForTest() ==
+          server.sessionLockForTest()->focusedLockSurface());
+    CHECK(server.focusedKeyboardSurfaceForTest() != nullptr);
+}
+
 TEST_CASE("locking aborts a live titlebar-drag move grab") {
     setenv("WLR_BACKENDS", "headless", 1);
     setenv("WLR_RENDERER", "pixman", 1);

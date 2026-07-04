@@ -622,6 +622,14 @@ namespace bbai {
   }
 
   void Server::focusView(View *v, bool update_mru) {
+    // The lock owns the seat: no caller may focus a client while locked - not
+    // onViewMapped (focusNewWindows), not removeView's focus handoff. The
+    // locked onKey branch forwards keys to the seat's focused surface, so a
+    // steal here delivers the locker's keystrokes (the password) to an app;
+    // a steal before the lock surface maps blocks its null-focus keyboard
+    // grab entirely. Unlock restores focus via handleSessionUnlocked, which
+    // runs after locked_ drops.
+    if (session_lock_ && session_lock_->locked()) return;
     if (focused_view == v) return;   // already at the MRU front; nothing to re-order
     if (focused_view) {
       wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
