@@ -1,0 +1,5 @@
+! Boot fixture: the Results style with NO rc rootCommand, so the style's own
+! bsetroot line is the effective root command (classic fallback) and the modula
+! golden paints. The toolbar is off to keep the desktop golden byte-stable.
+session.styleFile:   data/styles/Results
+session.screen0.enableToolbar: False

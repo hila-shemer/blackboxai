@@ -299,13 +299,13 @@ namespace bbai {
   std::shared_ptr<const Style> Server::loadStyleWithFallback(const std::string &path,
                                                              bool *exact_ok) {
     if (exact_ok) *exact_ok = true;
-    if (auto s = Style::load(path)) return s;
+    if (auto s = Style::load(path, config_.rootCommand)) return s;
     if (exact_ok) *exact_ok = false;
     fprintf(stderr, "blackboxai: style '%s' unreadable, falling back\n", path.c_str());
 #ifdef BBAI_DEFAULT_STYLE
-    if (auto s = Style::load(BBAI_DEFAULT_STYLE)) return s;
+    if (auto s = Style::load(BBAI_DEFAULT_STYLE, config_.rootCommand)) return s;
 #endif
-    return Style::builtin();
+    return Style::builtin(config_.rootCommand);
   }
 
   void Server::runRootCommand() {
@@ -362,7 +362,7 @@ namespace bbai {
   }
 
   bool Server::applyStyleFile(const std::string &path) {
-    std::shared_ptr<const Style> s = Style::load(path);
+    std::shared_ptr<const Style> s = Style::load(path, config_.rootCommand);
     if (!s) return false;
     style_ = std::move(s);
     config_.styleFile = path;

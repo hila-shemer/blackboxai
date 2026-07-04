@@ -223,6 +223,51 @@ TEST_CASE("modula reproduces the classic 16x16 X bitmap tile") {
   CHECK(at(16, 1) == BG);
 }
 
+TEST_CASE("rc rootCommand precedence: the user's rc suppresses the theme's background") {
+  // Classic resolves ONE root command with rc priority (ScreenResource::loadStyle
+  // reads the rc key with the style's value only as the fallback). The style's
+  // grey20 must lose whenever the rc carries a rootCommand.
+  bt::Resource style;
+  style.loadFromString("rootCommand: bsetroot -solid grey20\n");
+
+  // 1. rc rootCommand is a bsetroot line (the common classic case): the rc's
+  //    color paints, not the style's.
+  auto s1 = Style::fromResource(style, {}, "bsetroot -solid red");
+  CHECK(s1->desktop().kind == DesktopBackground::Kind::TextureBg);
+  CHECK(s1->desktop().texture.color1() == bt::Color(255, 0, 0));
+
+  // 2. rc rootCommand is NOT bsetroot (a wallpaper command): the style's
+  //    bsetroot still never runs - flat black, exactly as classic where the
+  //    style's line was never bexec'd.
+  auto s2 = Style::fromResource(style, {}, "feh --bg-fill x.png");
+  CHECK(s2->desktop().kind == DesktopBackground::Kind::TextureBg);
+  CHECK(s2->desktop().texture.color1() == bt::Color(0, 0, 0));
+
+  // 3. no rc rootCommand: the style's own line is the fallback (unchanged).
+  auto s3 = Style::fromResource(style, {}, "");
+  CHECK(s3->desktop().texture.color1() == bt::Color::fromString("grey20"));
+
+  // 4. the user's rc bsetroot beats even explicit BlackboxAI.desktop keys -
+  //    the whole theme background loses to the user, keys included.
+  bt::Resource keyed;
+  keyed.loadFromString(
+    "BlackboxAI.desktop: flat solid\n"
+    "BlackboxAI.desktop.color: #112233\n"
+    "rootCommand: bsetroot -solid grey20\n");
+  auto s4 = Style::fromResource(keyed, {}, "bsetroot -solid green");
+  CHECK(s4->desktop().texture.color1() == bt::Color(0, 255, 0));
+
+  // 5. a non-bsetroot rc against a keyed style: we can't render the user's
+  //    command (no layer-shell yet), so the keys stay - but the style's
+  //    rootCommand is still suppressed.
+  auto s5 = Style::fromResource(keyed, {}, "feh --bg-fill x.png");
+  CHECK(s5->desktop().texture.color1() == bt::Color(0x11, 0x22, 0x33));
+
+  // 6. rc rootCommand reaches the builtin fallback rung too.
+  auto s6 = Style::builtin("bsetroot -solid red");
+  CHECK(s6->desktop().texture.color1() == bt::Color(255, 0, 0));
+}
+
 TEST_CASE("desktop background resolution: keys beat rootCommand beat flat black") {
   // 1. explicit BlackboxAI.desktop keys win
   bt::Resource r1;

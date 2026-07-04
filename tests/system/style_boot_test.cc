@@ -16,7 +16,9 @@ TEST_CASE("booting with -rc loads the named style; Results' modula paints the de
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
 
-  Server server(/*headless=*/true, "tests/fixtures/results.blackboxrc");
+  // No rc rootCommand in this fixture: the style's bsetroot line is the
+  // effective root command (classic fallback), so the modula paints.
+  Server server(/*headless=*/true, "tests/fixtures/results-nocmd.blackboxrc");
   REQUIRE(server.ok());
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
@@ -56,6 +58,16 @@ TEST_CASE("rootCommand policy: rc command runs via /bin/sh, style command never 
   CHECK(argv[2] == "xsetroot -solid gray");   // the RC line, verbatim
   // Results' own rootCommand (bsetroot ...) was interpreted, not spawned:
   // exactly one run happened.
+
+  // Classic precedence end-to-end: the rc rootCommand suppresses the style's
+  // bsetroot entirely, and since xsetroot can't paint us (non-bsetroot, no
+  // layer-shell), the desktop is flat black - NOT Results' modula.
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+  test::Frame f = test::captureFrame(server);
+  auto rgb = [&](int x, int y) { return f.pixels[static_cast<size_t>(y) * f.w + x] & 0xFFFFFFu; };
+  CHECK(rgb(0, 0) == 0x000000u);
+  CHECK(rgb(3, 1) == 0x000000u);   // would be fg 0x66665c if the modula won
 }
 
 TEST_CASE("headless with no rc: builtin style, no HOME leakage") {
