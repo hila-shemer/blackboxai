@@ -1,0 +1,95 @@
+// Wave-2 slit: chrome lifecycle, mock-item goldens, auto-hide, click routing.
+// Runs under dbus-run-session (private bus for the SNI cases) + text_env
+// (captured frames include toolbar text - gotcha #20).
+#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#include <doctest/doctest.h>
+#include "HeadlessFixture.hh"
+#include "Server.hh"
+#include "Output.hh"
+#include "Slit.hh"
+#include "SniHost.hh"
+#include "SniMockItem.hh"
+
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <functional>
+#include <string>
+#include <unistd.h>
+
+using namespace bbai;
+
+static void bootOutputs(Server &server) {
+  for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+    server.dispatch();
+}
+
+static bool pumpUntil(Server &server, std::function<bool()> done, int tries = 600) {
+  for (int i = 0; i < tries && !done(); ++i) { server.dispatch(); usleep(5000); }
+  return done();
+}
+
+// Write a throwaway rc; returns its path (leaks the tmpdir - fine for a test).
+static std::string writeRc(const std::string &body) {
+  char tmpl[] = "/tmp/bbai-slit-rc-XXXXXX";
+  REQUIRE(mkdtemp(tmpl) != nullptr);
+  std::string path = std::string(tmpl) + "/rc";
+  std::ofstream f(path);
+  f << body;
+  return path;
+}
+
+TEST_CASE("slit exists on the primary; empty = invisible, zero strut") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutputs(server);
+
+  Slit *sl = server.slitForTest();
+  REQUIRE(sl != nullptr);
+  CHECK(sl->itemCountForTest() == 0);
+  CHECK(sl->placementForTest() == SlitPlacement::CenterRight);   // classic default
+  CHECK(sl->directionForTest() == SlitDirection::Vertical);
+
+  // No items -> no strut: the work area is toolbar-only, and the frame is
+  // pixel-identical to the pre-slit world (zero golden churn, proven).
+  const wlr_box wa = server.activeOutputForTest()->workArea();
+  CHECK(wa.width == 1280);
+  CHECK(test::compareGolden(test::captureFrame(server),
+                            "tests/golden/m4-toolbar.png", 2, 80));
+}
+
+TEST_CASE("rc slit knobs reach the slit through applyConfig") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  const std::string rc = writeRc("session.screen0.slit.placement: TopLeft\n"
+                                 "session.screen0.slit.direction: Horizontal\n");
+  Server server(/*headless=*/true, rc);
+  REQUIRE(server.ok());
+  bootOutputs(server);
+  REQUIRE(server.slitForTest() != nullptr);
+  CHECK(server.slitForTest()->placementForTest() == SlitPlacement::TopLeft);
+  CHECK(server.slitForTest()->directionForTest() == SlitDirection::Horizontal);
+}
+
+TEST_CASE("primary dies: slit re-homes on the survivor") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutputs(server);
+  server.addHeadlessOutputForTest(1280, 720);
+  for (int i = 0; i < 50 && server.outputCountForTest() != 2; ++i) server.dispatch();
+  REQUIRE(server.outputCountForTest() == 2);
+  Output *second = server.outputForTest(1);
+
+  server.destroyOutputForTest(0);
+  for (int i = 0; i < 50 && server.outputCountForTest() != 1; ++i) server.dispatch();
+  REQUIRE(server.activeOutputForTest() == second);
+
+  Slit *sl = server.slitForTest();
+  REQUIRE(sl != nullptr);                          // re-homed, not dangling
+  CHECK(sl->itemCountForTest() == 0);
+  CHECK(second->workArea().width == second->fullBox().width);   // no ghost strut
+}

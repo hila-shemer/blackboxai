@@ -36,6 +36,7 @@ unit_sources = files(
   'unit/rootmenu_wire_test.cc',
   'unit/placement_geom_test.cc',
   'unit/slit_geom_test.cc',
+  'unit/slit_icon_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
@@ -502,3 +503,11 @@ sni_server_exe = executable('sni-server-test',
   include_directories : include_directories('harness'))
 test('sni_server', dbus_run_session, args : ['--', sni_server_exe], suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
+
+# wave-2 slit: chrome lifecycle, mock-item goldens, auto-hide, click routing.
+# dbus wrap (private bus) AND text_env (frames include toolbar text) compose.
+slit_exe = executable('slit-test',
+  files('system/slit_test.cc', 'harness/SniMockItem.cc'),
+  dependencies : [harness_dep, doctest_dep, libsystemd_dep])
+test('slit', dbus_run_session, args : ['--', slit_exe], suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)

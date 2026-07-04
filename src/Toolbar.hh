@@ -61,6 +61,10 @@ namespace bbai {
     // gate + menus' toolbar right-click gesture share this one rect.
     bool containsGlobal(int gx, int gy) const;
 
+    // What the bar occupies on its edge right now - the auto-hide sliver or
+    // the full bar. The slit's classic overlap shift consumes this.
+    int exposedHeight() const;
+
     void handlePointerMotion(double x, double y);
     void onPointerOverToolbar(bool over);          // edge-trigger from the compositor
     void setAutoHide(bool on);                 // hidden sliver still struts (2px)
