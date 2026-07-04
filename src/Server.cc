@@ -7,6 +7,7 @@
 #include "Menu.hh"
 #include "Rootmenu.hh"
 #include "Windowmenu.hh"
+#include "Barmenu.hh"
 #include "ConfigSpelling.hh"
 #include "BarSpelling.hh"
 #include "MenuParser.hh"
@@ -1216,8 +1217,17 @@ namespace bbai {
           if (button == BTN_LEFT)        host->activate(it, lx, ly);
           else if (button == BTN_MIDDLE) host->secondaryActivate(it, lx, ly);
           else if (button == BTN_RIGHT)  openSniContextMenu(it, lx, ly);
+        } else if (button == BTN_RIGHT) {
+          openSlitMenu(lx, ly);   // right-click on the frame (no icon) -> Slit menu
         }
         return;   // swallow frame-gap presses too - chrome, not desktop
+      }
+      // Right-click on the toolbar opens the Toolbar menu (classic gesture).
+      if (button == BTN_RIGHT && toolbar_ &&
+          toolbar_->containsGlobal(static_cast<int>(cursor->x),
+                                   static_cast<int>(cursor->y))) {
+        openToolbarMenu(static_cast<int>(cursor->x), static_cast<int>(cursor->y));
+        return;
       }
       // Right-click on the bare desktop opens the modal root menu.
       if (button == BTN_RIGHT && overDesktop(cursor->x, cursor->y)) {
@@ -1906,6 +1916,24 @@ namespace bbai {
                                           /*show_title=*/false);
     active_menu_->show(lx, ly);
     wlr_seat_pointer_notify_clear_focus(seat);   // modal while open
+  }
+
+  void Server::openToolbarMenu(int lx, int ly) {
+    if (active_menu_ || !toolbar_) return;
+    abortGrabsForMenu();
+    active_menu_ = std::make_unique<Menu>(*this, bt::decodeUtf8("Toolbar"),
+                                          barmenu::buildToolbar(config_.toolbar));
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);
+  }
+
+  void Server::openSlitMenu(int lx, int ly) {
+    if (active_menu_) return;
+    abortGrabsForMenu();
+    active_menu_ = std::make_unique<Menu>(*this, bt::decodeUtf8("Slit"),
+                                          barmenu::buildSlit(config_.slit));
+    active_menu_->show(lx, ly);
+    wlr_seat_pointer_notify_clear_focus(seat);
   }
 
   void Server::sendViewToWorkspace(View *v, unsigned ws) {
