@@ -9,6 +9,15 @@
 
 namespace bbai {
 
+  // Configuration-menu knobs (wave-2 seam contract). Radio values encode the
+  // target state; toggle values name the knob to flip. APPEND-ONLY at the
+  // tail - the menus slice adds its Toolbar*/Slit* values after ours, and
+  // Server::setConfigOption's switch grows in the same per-slice groups.
+  enum class ConfigOption {
+    FocusClickToFocus, FocusSloppy, AutoRaise, ClickRaise, FocusNewWindows,
+    PlacementRowSmart, PlacementColSmart, PlacementCenter, PlacementCascade
+  };
+
   struct MenuItem {
     enum class Kind { Command, Separator, Submenu };
     enum class Act {
@@ -19,7 +28,8 @@ namespace bbai {
       Reconfigure,     // classic [reconfig]; a documented {cmd} is dropped + noted
       RestartOther,    // argv = {"/bin/sh", "-c", "exec " + cmd}
       WorkspacesMenu,  // marker on the [workspaces] placeholder Submenu
-      ConfigMenu       // marker on the [config] placeholder Submenu (wave-2 mount)
+      ConfigMenu,      // marker on the [config] placeholder Submenu (wave-2 mount)
+      ConfigOption     // Configuration-submenu row -> Server::setConfigOption
     };
 
     std::u32string label;
@@ -28,6 +38,7 @@ namespace bbai {
     std::vector<std::string> argv;          // for Exec (argv[0] is the program)
     unsigned workspace = ~0u;               // target for WorkspaceSwitch
     void *target = nullptr;                 // Deiconify: handle to the View
+    ConfigOption option = ConfigOption::FocusClickToFocus;  // valid iff action == Act::ConfigOption
     bool enabled = true;
     bool checked = false;                   // e.g. the current workspace
     std::vector<MenuItem> submenu_items;    // non-empty for Kind::Submenu (cascade)

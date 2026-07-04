@@ -86,7 +86,7 @@ We develop in parallel from the wave-1 tip (`8a3fc49`) and land THIRD (window-mg
 - Consumes: `bbai::Config` fields `focusModel/autoRaise/clickRaise/focusNewWindows/windowPlacement` (`src/Config.hh:66-75`, read-only), `MenuItem` (`checked`/`enabled` already rendered by Menu.cc drawCheck/disabled - zero rendering work).
 - Produces: `enum class bbai::ConfigOption { FocusClickToFocus, FocusSloppy, AutoRaise, ClickRaise, FocusNewWindows, PlacementRowSmart, PlacementColSmart, PlacementCenter, PlacementCascade }` (namespace-level in MenuItem.hh, THIS order - menus appends after `PlacementCascade`); `MenuItem::Act::ConfigOption` (immediately after `ConfigMenu`); `MenuItem::option` field; `std::vector<MenuItem> rootmenu::buildConfigSubmenu(const Config &cfg)`. Tasks 2 and 4 consume all of these under these exact names.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/configmenu_test.cc`. Do NOT assert a default-constructed Config's focus model anywhere - window-mgmt flips the default to SloppyFocus (locked) and lands before us; explicit fields keep this file green on both sides of the merge.
 
@@ -182,7 +182,7 @@ Register it - in `tests/meson.build`, add to `unit_sources` after `'unit/rootmen
   'unit/configmenu_test.cc',
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -192,7 +192,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `buildConfigSubmenu` is not a member of `bbai::rootmenu`, `ConfigOption` not declared.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/MenuItem.hh` - append `ConfigOption` to `Act` (after `ConfigMenu`, line 22) and add the namespace-level enum + field:
 
@@ -301,7 +301,7 @@ Add `#include "Config.hh"` to `src/Rootmenu.hh` (below `#include "Workspace.hh"`
   }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -312,7 +312,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all suites pass (the new unit cases run inside the `unit` test).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/MenuItem.hh src/Rootmenu.hh src/Rootmenu.cc tests/unit/configmenu_test.cc tests/meson.build

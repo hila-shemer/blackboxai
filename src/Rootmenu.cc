@@ -22,6 +22,15 @@ namespace bbai::rootmenu {
       m.action = act;
       return m;
     }
+    MenuItem option(const char *label, ConfigOption opt, bool checked, bool enabled) {
+      MenuItem m;
+      m.label = bt::decodeUtf8(label);
+      m.action = MenuItem::Act::ConfigOption;
+      m.option = opt;
+      m.checked = checked;
+      m.enabled = enabled;
+      return m;
+    }
   } // namespace
 
   std::u32string title() { return bt::decodeUtf8("Blackbox"); }
@@ -38,6 +47,47 @@ namespace bbai::rootmenu {
     sub.push_back(simple("New Workspace", MenuItem::Act::NewWorkspace));
     sub.push_back(simple("Remove Last Workspace", MenuItem::Act::RemoveWorkspace));
     return sub;
+  }
+
+  std::vector<MenuItem> buildConfigSubmenu(const Config &cfg) {
+    std::vector<MenuItem> items;
+
+    // Classic ConfigFocusmenu: CTF/Sloppy are radios; AutoRaise/ClickRaise
+    // only mean anything under sloppy, so they are disabled otherwise.
+    MenuItem focus;
+    focus.kind = MenuItem::Kind::Submenu;
+    focus.label = bt::decodeUtf8("Focus Model");
+    const bool sloppy = (cfg.focusModel == FocusModel::SloppyFocus);
+    focus.submenu_items.push_back(
+        option("Click to Focus", ConfigOption::FocusClickToFocus, !sloppy, true));
+    focus.submenu_items.push_back(
+        option("Sloppy Focus", ConfigOption::FocusSloppy, sloppy, true));
+    focus.submenu_items.push_back(
+        option("Auto Raise", ConfigOption::AutoRaise, cfg.autoRaise, sloppy));
+    focus.submenu_items.push_back(
+        option("Click Raise", ConfigOption::ClickRaise, cfg.clickRaise, sloppy));
+    items.push_back(std::move(focus));
+
+    // Classic ConfigPlacementmenu, radios only - the direction rows need
+    // machinery we don't have (documented omission).
+    MenuItem place;
+    place.kind = MenuItem::Kind::Submenu;
+    place.label = bt::decodeUtf8("Window Placement");
+    const WindowPlacement wp = cfg.windowPlacement;
+    place.submenu_items.push_back(option("Smart Placement (Rows)",
+        ConfigOption::PlacementRowSmart, wp == WindowPlacement::RowSmart, true));
+    place.submenu_items.push_back(option("Smart Placement (Columns)",
+        ConfigOption::PlacementColSmart, wp == WindowPlacement::ColSmart, true));
+    place.submenu_items.push_back(option("Center Placement",
+        ConfigOption::PlacementCenter, wp == WindowPlacement::Center, true));
+    place.submenu_items.push_back(option("Cascade Placement",
+        ConfigOption::PlacementCascade, wp == WindowPlacement::Cascade, true));
+    items.push_back(std::move(place));
+
+    items.push_back(separator());
+    items.push_back(option("Focus New Windows", ConfigOption::FocusNewWindows,
+                           cfg.focusNewWindows, true));
+    return items;
   }
 
   std::vector<MenuItem> build(const WorkspaceModel &ws) {
