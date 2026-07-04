@@ -98,6 +98,10 @@ namespace bbai {
 
     // Modal root menu (compositor chrome on layer_overlay).
     void openRootMenu(double lx, double ly);
+    // SNI context-menu dispatch - PINNED wave-2 seam (this name, int coords).
+    // v1 body is the bus proxy; the menus slice swaps ONLY the body
+    // (menu_path items -> dbusmenu-rendered bt::Menu at (lx,ly), else proxy).
+    void openSniContextMenu(const sni::Item &item, int lx, int ly);
     void openIconMenu(double lx, double ly);
     void openIconMenuForTest();
     std::vector<MenuItem> buildIconMenu();
