@@ -116,6 +116,13 @@ styled_menu_exe = executable('styled-menu-test', files('system/styled_menu_test.
 test('styled_menu', styled_menu_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# rc-driven startup state: workspace count/names (focusNewWindows joins in
+# the next task).
+rc_boot_exe = executable('rc-boot-test', files('system/rc_boot_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('rc_boot', rc_boot_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 client_exe = executable('client-test', files('system/client_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('client', client_exe, suite : 'system',

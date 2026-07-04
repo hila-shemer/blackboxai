@@ -73,6 +73,15 @@ namespace bbai {
     config_ = bbai::Config::load(rc_path_);
     style_ = loadStyleWithFallback(config_.styleFile);
 
+    // Workspace count/names from the rc. Applied before any output exists so
+    // the toolbar's first render already shows the configured name.
+    while (workspaces_.count() < config_.workspaceCount)
+      workspaces_.addWorkspace();
+    while (workspaces_.count() > config_.workspaceCount && workspaces_.count() > 1)
+      workspaces_.removeLastWorkspace();
+    for (unsigned i = 0; i < config_.workspaceNames.size() && i < workspaces_.count(); ++i)
+      workspaces_.setName(i, config_.workspaceNames[i]);
+
     wlr_log_init(WLR_ERROR, nullptr);
 
     display = wl_display_create();
