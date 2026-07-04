@@ -64,6 +64,10 @@ namespace bbai::sni {
     // Drain sd_bus_process exactly like the production fd source does.
     void processForTest();
 
+    // True when sd-bus wants POLLOUT (a write blocked and got queued) - lets
+    // the click-starvation test detect the EAGAIN branch deterministically.
+    bool wantsWriteForTest() const;
+
   private:
     struct Cb;           // sd-bus / wl_event_loop C callbacks (SniHost.cc)
     friend struct Cb;

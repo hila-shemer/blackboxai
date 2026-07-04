@@ -362,6 +362,10 @@ namespace bbai::sni {
 
   void Host::processForTest() { drain(); }
 
+  bool Host::wantsWriteForTest() const {
+    return bus_ && (sd_bus_get_events(bus_) & POLLOUT);
+  }
+
   void Host::addRegistration(const std::string &service, const std::string &path,
                              const std::string &owner) {
     for (auto &r : regs_)
@@ -421,6 +425,14 @@ namespace bbai::sni {
     if (!bus_) return;
     sd_bus_call_method_async(bus_, nullptr, it.service.c_str(), it.path.c_str(),
                              kItemIface, method, nullptr, nullptr, "ii", x, y);
+    // Flush + rearm NOW. This enqueue is the one bus write that happens
+    // outside the fd/timer drain cycle; if the socket write blocks (EAGAIN),
+    // sd-bus parks the message and wants POLLOUT - but the fd mask was last
+    // set by a previous drain (POLLIN-only when idle) and these calls are
+    // NO_REPLY_EXPECTED, so no timeout would rescue it either. Without this,
+    // a queued click waits for unrelated inbound traffic - forever on an
+    // idle bus.
+    drain();
   }
 
   void Host::activate(const Item &it, int x, int y) {
