@@ -534,3 +534,10 @@ slit_exe = executable('slit-test',
   dependencies : [harness_dep, doctest_dep, libsystemd_dep])
 test('slit', dbus_run_session, args : ['--', slit_exe], suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
+
+# wave-2 menus: multi-head Menu::show clamp (the parked defect).
+menu_multihead_exe = executable('menu-multihead-test',
+  files('system/menu_multihead_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('menu_multihead', menu_multihead_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
