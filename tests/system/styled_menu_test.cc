@@ -15,7 +15,9 @@ using namespace bbai;
 TEST_CASE("root menu under Results: styled textures + fonts") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
-  Server server(/*headless=*/true, "tests/fixtures/results.blackboxrc");
+  // The no-rootCommand fixture: an rc rootCommand would (correctly) suppress
+  // Results' modula and change the desktop baked into the golden.
+  Server server(/*headless=*/true, "tests/fixtures/results-nocmd.blackboxrc");
   REQUIRE(server.ok());
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
