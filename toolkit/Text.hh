@@ -26,6 +26,11 @@ namespace bt {
     // FONTCONFIG_FILE); `pixelsize` is an exact pixel size (DPI-independent, so
     // the raster is deterministic). ok() is false if the font failed to load.
     TextRenderer(const std::string &family, int pixelsize);
+    // Load from a raw fontconfig pattern as found in style files
+    // ("Lucida Sans:size=10:bold", "Sans Serif-9"). dpi is pinned to 96 in the
+    // attrs so a point size rasterizes identically on every host - classic got
+    // its dpi from the X server; we don't have one to ask.
+    explicit TextRenderer(const std::string &fontconfig_pattern);
     ~TextRenderer();
     TextRenderer(const TextRenderer &) = delete;
     TextRenderer &operator=(const TextRenderer &) = delete;

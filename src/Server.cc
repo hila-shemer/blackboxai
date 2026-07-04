@@ -61,7 +61,26 @@ namespace {
 
 namespace bbai {
 
-  Server::Server(bool hl) : headless(hl), title_font("monospace", 16) {
+  Server::Server(bool hl, std::string rc_path)
+    : headless(hl), rc_path_(std::move(rc_path)) {
+    // Config + style come first - everything below (outputs, toolbar, views)
+    // renders through style_. Headless never discovers ~/.blackboxrc on its
+    // own: tests must opt into an rc explicitly or a dev box's real config
+    // would leak into the golden suite.
+    if (rc_path_.empty() && !headless)
+      if (const char *home = getenv("HOME"))
+        rc_path_ = std::string(home) + "/.blackboxrc";
+    config_ = bbai::Config::load(rc_path_);
+    style_ = loadStyleWithFallback(config_.styleFile);
+
+    // Workspace count/names from the rc. Applied before any output exists so
+    // the toolbar's first render already shows the configured name. The shrink
+    // loop stays boot-only: no views exist yet, so dropping workspaces is safe
+    // here and only here (applyConfig grows but never shrinks).
+    while (workspaces_.count() > config_.workspaceCount && workspaces_.count() > 1)
+      workspaces_.removeLastWorkspace();
+    applyConfig();
+
     wlr_log_init(WLR_ERROR, nullptr);
 
     display = wl_display_create();
@@ -108,11 +127,6 @@ namespace bbai {
     layer_top        = wlr_scene_tree_create(&scene->tree);
     layer_overlay    = wlr_scene_tree_create(&scene->tree);
     layer_lock       = wlr_scene_tree_create(&scene->tree);
-
-    // Default desktop style (overridable later by a real .blackboxrc).
-    style.loadFromString("BlackboxAI.desktop: flat gradient diagonal\n"
-                         "BlackboxAI.desktop.color:   #204060\n"
-                         "BlackboxAI.desktop.colorTo: #6080a0\n");
 
     xdg_shell = wlr_xdg_shell_create(display, 6);
     new_xdg_toplevel.connect(&xdg_shell->events.new_toplevel, [this](void *data) {
@@ -231,10 +245,14 @@ namespace bbai {
       outputs_.push_back(o);
       if (!active_output) {
         active_output = o;
-        // The toolbar spans the primary output; create it now that the mode is
-        // set. (Also the re-plug path: if every head died, active_output is
-        // null again and the next head becomes the new primary.)
-        toolbar_ = std::make_unique<Toolbar>(*this, *o);
+        // The toolbar spans the primary output - created only if the rc says
+        // so, then the config knobs apply through the contract setters. (Also
+        // the re-plug path: if every head died, active_output is null again
+        // and the next head becomes the new primary.)
+        if (config_.toolbar.enabled) {
+          toolbar_ = std::make_unique<Toolbar>(*this, *o);
+          applyConfig();
+        }
         // Give the pointer an image from frame one - otherwise it's invisible
         // over our own chrome until the Super+F7 flow happens to latch one.
         // Real-output only: headless asserts byte-exact goldens and has no
@@ -268,6 +286,87 @@ namespace bbai {
     // runAutostartForTest with a FakeCommandRunner instead.
     if (!headless)
       runAutostart();
+
+    // rc rootCommand on a real login only (headless/CI must not spawn shells;
+    // the wiring is covered by runRootCommandForTest + FakeCommandRunner).
+    if (!headless)
+      runRootCommand();
+  }
+
+  std::shared_ptr<const Style> Server::loadStyleWithFallback(const std::string &path,
+                                                             bool *exact_ok) {
+    if (exact_ok) *exact_ok = true;
+    if (auto s = Style::load(path)) return s;
+    if (exact_ok) *exact_ok = false;
+    fprintf(stderr, "blackboxai: style '%s' unreadable, falling back\n", path.c_str());
+#ifdef BBAI_DEFAULT_STYLE
+    if (auto s = Style::load(BBAI_DEFAULT_STYLE)) return s;
+#endif
+    return Style::builtin();
+  }
+
+  void Server::runRootCommand() {
+    // The RC file's rootCommand is user-authored - it gets /bin/sh (classic
+    // bexec). The STYLE file's rootCommand never reaches here: it was
+    // interpreted into the desktop background by Style (locked policy).
+    if (config_.rootCommand.empty()) return;
+    commandRunner().run({"/bin/sh", "-c", config_.rootCommand});
+  }
+
+  void Server::applyConfig() {
+    // Workspaces: names always; count grows only. Shrinking with occupied
+    // workspaces means re-homing views - wave-2 configmenu's problem, and
+    // classic didn't shrink on reconfigure either.
+    while (workspaces_.count() < config_.workspaceCount)
+      workspaces_.addWorkspace();
+    for (unsigned i = 0; i < config_.workspaceNames.size() && i < workspaces_.count(); ++i)
+      workspaces_.setName(i, config_.workspaceNames[i]);
+
+    if (!config_.toolbar.enabled) {
+      toolbar_.reset();
+    } else if (!toolbar_ && active_output) {
+      // work-area's ctor: the Toolbar owns its Output (and its Strut through it).
+      toolbar_ = std::make_unique<Toolbar>(*this, *active_output);
+    }
+    if (toolbar_) {
+      toolbar_->setPlacement(config_.toolbar.placement);
+      toolbar_->setAutoHide(config_.toolbar.autoHide);
+    }
+  }
+
+  void Server::restyle() {
+    closeMenus();   // open menus hold old-style buffers; null-safe
+    for (Output *o : outputs_) o->renderBackground();
+    for (auto &v : views) v->restyle();
+    if (toolbar_) toolbar_->restyle();
+  }
+
+  bool Server::reconfigure(const std::string &rc_override) {
+    if (!rc_override.empty()) rc_path_ = rc_override;
+    config_ = bbai::Config::load(rc_path_);
+    bool style_ok = true;
+    style_ = loadStyleWithFallback(config_.styleFile, &style_ok);
+    applyConfig();
+    restyle();
+    // rc rootCommand re-runs (classic runs it on every style load). No
+    // headless gate here - by reconfigure time a test owns the runner; the
+    // ctor keeps its gate because fixtures with rootCommand exist for the
+    // parse tests.
+    runRootCommand();
+    return style_ok;
+  }
+
+  bool Server::applyStyleFile(const std::string &path) {
+    std::shared_ptr<const Style> s = Style::load(path);
+    if (!s) return false;
+    style_ = std::move(s);
+    config_.styleFile = path;
+    restyle();
+    // Classic saveStyleFilename: the pick survives a restart. Failure to
+    // write is loud-but-nonfatal - the live re-theme already happened.
+    if (!rc_path_.empty() && !bbai::updateRcKey(rc_path_, "session.styleFile", path))
+      fprintf(stderr, "blackboxai: could not persist styleFile to %s\n", rc_path_.c_str());
+    return true;
   }
 
   Server::~Server() {
@@ -330,6 +429,10 @@ namespace bbai {
       if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
       else clearFocus();
     }
+  }
+
+  void Server::onViewMapped(View *view) {
+    if (config_.focusNewWindows) focusView(view);
   }
 
   void Server::raiseView(View *view) {
@@ -454,7 +557,8 @@ namespace bbai {
   }
 
   const std::string &Server::toolbarWindowTitleForTest() const {
-    return toolbar_->windowTitleForTest();
+    static const std::string empty;
+    return toolbar_ ? toolbar_->windowTitleForTest() : empty;
   }
 
   // --- input: hit-test, focus, grab state machine -------------------------------
@@ -469,6 +573,7 @@ namespace bbai {
 
   Part Server::partAt(View *v, double lx, double ly) {
     using namespace frame;
+    const FrameMetrics &m = style_->frameMetrics();
     const int fx = static_cast<int>(lx) - v->x();
     const int fy = static_cast<int>(ly) - v->y();
     const int W = v->contentWidth(), H = v->contentHeight();
@@ -477,14 +582,14 @@ namespace bbai {
       return (fx >= 0 && fy >= 0 && fx < W && fy < H) ? Part::Client : Part::None;
     }
     auto in = [&](Rect r) { return fx >= r.x && fy >= r.y && fx < r.x + r.w && fy < r.y + r.h; };
-    if (fx >= clientX() && fy >= clientY() && fx < clientX() + W && fy < clientY() + H)
+    if (fx >= clientX(m) && fy >= clientY(m) && fx < clientX(m) + W && fy < clientY(m) + H)
       return Part::Client;
-    if (in(leftGrip(W, H)))  return Part::LeftGrip;
-    if (in(rightGrip(W, H))) return Part::RightGrip;
-    if (in(iconifyButton(W, H)))  return Part::IconifyButton;
-    if (in(maximizeButton(W, H))) return Part::MaximizeButton;
-    if (in(closeButton(W, H)))    return Part::CloseButton;
-    if (in(title(W, H)))     return Part::Titlebar;  // incl. the label (drag = move)
+    if (in(leftGrip(W, H, m)))  return Part::LeftGrip;
+    if (in(rightGrip(W, H, m))) return Part::RightGrip;
+    if (in(iconifyButton(W, H, m)))  return Part::IconifyButton;
+    if (in(maximizeButton(W, H, m))) return Part::MaximizeButton;
+    if (in(closeButton(W, H, m)))    return Part::CloseButton;
+    if (in(title(W, H, m)))     return Part::Titlebar;  // incl. the label (drag = move)
     return Part::None;
   }
 

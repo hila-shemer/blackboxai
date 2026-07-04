@@ -32,6 +32,7 @@ unit_sources = files(
   'unit/menu_parser_test.cc',
   'unit/sni_model_test.cc',
   'unit/work_area_geom_test.cc',
+  'unit/util_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
@@ -57,12 +58,14 @@ test('text', text_test_exe, suite : 'unit',
   workdir : meson.project_source_root(),
   env : ['FONTCONFIG_FILE=' + fontconfig_conf])
 
-# Pure palette selector: focused/unfocused Look + color helpers, no wlroots.
-decoration_palette_exe = executable('decoration_palette',
-  files('unit/decoration_palette_test.cc'),
-  dependencies : [doctest_dep, bt_dep],
-  include_directories : include_directories('../src'))
-test('decoration_palette', decoration_palette_exe, suite : 'unit')
+# Style loader policy + metric formulas - own executable so it runs under the
+# isolated fontconfig (Style constructs TextRenderers) with workdir = source
+# root (it loads data/styles/* by relative path).
+style_test_exe = executable('style-test', files('unit/style_test.cc'),
+  dependencies : [doctest_dep, bt_dep, bbai_dep, text_dep])
+test('style', style_test_exe, suite : 'unit',
+  workdir : meson.project_source_root(),
+  env : ['FONTCONFIG_FILE=' + fontconfig_conf])
 
 # Reusable headless capture + golden harness, plus the in-process test client.
 # HeadlessFixture.cc is server-side (bbai_dep) and TestClient.cc is client-side
@@ -88,6 +91,44 @@ system_exe = executable('system-tests', files('system/background_test.cc'),
 # text_env, not test_env: since M4 the toolbar (clock + workspace label) is in every
 # captured frame, so this golden renders glyphs too - it just predates the rule.
 test('background', system_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# rc/style boot path: -rc -> Config -> style ladder -> styled desktop.
+style_boot_exe = executable('style-boot-test', files('system/style_boot_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('style_boot', style_boot_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Gray style end-to-end: wildcard keys + parentrelative label pixel-copy.
+gray_window_exe = executable('gray-window-test', files('system/gray_window_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('gray_window', gray_window_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Toolbar knobs from the rc (placement/width/autoHide/enable) - config-driven,
+# not ForTest-driven.
+toolbar_config_exe = executable('toolbar-config-test', files('system/toolbar_config_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('toolbar_config', toolbar_config_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Root menu rendered under the Results style (bordered textures, two fonts).
+styled_menu_exe = executable('styled-menu-test', files('system/styled_menu_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('styled_menu', styled_menu_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# rc-driven startup state: workspace count/names (focusNewWindows joins in
+# the next task).
+rc_boot_exe = executable('rc-boot-test', files('system/rc_boot_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('rc_boot', rc_boot_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Live re-theme: reconfigure()/applyStyleFile() - the wave-2 configmenu seams.
+retheme_exe = executable('retheme-test', files('system/retheme_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('retheme', retheme_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
 client_exe = executable('client-test', files('system/client_test.cc'),

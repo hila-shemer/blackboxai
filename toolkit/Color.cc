@@ -16,17 +16,45 @@ namespace {
     return -1;
   }
 
-  // Minimal named-color table covering the colors used by the bundled styles.
-  // Extend toward full rgb.txt parsing in a later refinement.
+  // X11 rgb.txt gray0..gray100, copied verbatim. The upstream ramp is
+  // hand-authored - gray30 is 77 (76.5 up) but gray50 is 127 (127.5 down) -
+  // so a formula can't reproduce it; the table can.
+  constexpr unsigned char kGrayRamp[101] = {
+      0,   3,   5,   8,  10,  13,  15,  18,  20,  23,  26,  28,  31,  33,  36,
+     38,  41,  43,  46,  48,  51,  54,  56,  59,  61,  64,  66,  69,  71,  74,
+     77,  79,  82,  84,  87,  89,  92,  94,  97,  99, 102, 105, 107, 110, 112,
+    115, 117, 120, 122, 125, 127, 130, 133, 135, 138, 140, 143, 145, 148, 150,
+    153, 156, 158, 161, 163, 166, 168, 171, 173, 176, 179, 181, 184, 186, 189,
+    191, 194, 196, 199, 201, 204, 207, 209, 212, 214, 217, 219, 222, 224, 227,
+    229, 232, 235, 237, 240, 242, 245, 247, 250, 252, 255 };
+
+  // "greyN"/"grayN" -> kGrayRamp[N]; input is already lowercased.
+  bool grayRamp(const std::string &lower, bt::Color &out) {
+    if (lower.size() < 5) return false;
+    if (lower.compare(0, 4, "grey") != 0 && lower.compare(0, 4, "gray") != 0)
+      return false;
+    int n = 0;
+    for (size_t i = 4; i < lower.size(); ++i) {
+      if (!std::isdigit(static_cast<unsigned char>(lower[i]))) return false;
+      n = n * 10 + (lower[i] - '0');
+      if (n > 100) return false;
+    }
+    out = bt::Color(kGrayRamp[n], kGrayRamp[n], kGrayRamp[n]);
+    return true;
+  }
+
+  // Named colors used by the 19 shipped styles + their rootCommands. The greyN
+  // family goes through grayRamp(); this table is only the non-ramp names.
   const std::unordered_map<std::string, bt::Color> &namedColors() {
     static const std::unordered_map<std::string, bt::Color> t = {
-      {"black", bt::Color(0,0,0)}, {"white", bt::Color(255,255,255)},
-      {"red", bt::Color(255,0,0)}, {"green", bt::Color(0,255,0)},
+      {"black", bt::Color(0,0,0)},        {"white", bt::Color(255,255,255)},
+      {"red", bt::Color(255,0,0)},        {"green", bt::Color(0,255,0)},
       {"blue", bt::Color(0,0,255)},
-      {"grey", bt::Color(190,190,190)}, {"gray", bt::Color(190,190,190)},
-      {"grey20", bt::Color(51,51,51)}, {"grey40", bt::Color(102,102,102)},
-      {"grey60", bt::Color(153,153,153)}, {"grey80", bt::Color(204,204,204)},
-      {"darkgrey", bt::Color(169,169,169)},
+      {"grey", bt::Color(190,190,190)},   {"gray", bt::Color(190,190,190)},
+      {"darkgrey", bt::Color(169,169,169)}, {"darkgray", bt::Color(169,169,169)},
+      {"midnightblue", bt::Color(25,25,112)},
+      {"steelblue", bt::Color(70,130,180)},
+      {"slategrey", bt::Color(112,128,144)}, {"slategray", bt::Color(112,128,144)},
     };
     return t;
   }
@@ -72,7 +100,10 @@ namespace bt {
     std::string lower;
     for (char c : spec) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     auto it = namedColors().find(lower);
-    return it == namedColors().end() ? Color() : it->second;
+    if (it != namedColors().end()) return it->second;
+    Color ramp;
+    if (grayRamp(lower, ramp)) return ramp;
+    return Color();
   }
 
 } // namespace bt

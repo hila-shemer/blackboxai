@@ -24,10 +24,9 @@
 //
 // Ported to BlackboxAI (Wayland) from blackboxwm lib/Texture.hh:
 // the Texture class (Type enum, setDescription() parser, setColor1() light/
-// shadow derivation, accessors, operators) is kept verbatim. The X drawing
-// free functions drawTexture() and textureResource() are dropped — drawing is
-// done by Image::renderBuffer(), and resource-driven construction returns in a
-// later milestone.
+// shadow derivation, accessors, operators) is kept verbatim. drawTexture()
+// stays dropped (drawing is Image::renderBuffer()); textureResource() is
+// ported below, Display-free.
 
 #ifndef BLACKBOXAI_TEXTURE_HH
 #define BLACKBOXAI_TEXTURE_HH
@@ -118,6 +117,22 @@ namespace bt {
     unsigned long t;
     unsigned int bw;
   };
+
+  class Resource;
+
+  // Resource-driven texture construction, ported from lib/Texture.cc:132-213
+  // minus the X Display (colors go through Color::fromString; anything it can't
+  // parse becomes black so the renderer never sees the invalid sentinel).
+  // Chain: name.appearance -> ClassName.Appearance -> name -> ClassName; empty
+  // description = flat solid defaultColor (or the defaultTexture overload).
+  Texture textureResource(const Resource &resource,
+                          const std::string &name,
+                          const std::string &className,
+                          const std::string &defaultColor = "black");
+  Texture textureResource(const Resource &resource,
+                          const std::string &name,
+                          const std::string &className,
+                          const Texture &defaultTexture);
 
 } // namespace bt
 

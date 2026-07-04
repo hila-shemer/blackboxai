@@ -39,9 +39,11 @@ namespace bbai {
     void removeStrut(const Strut *s);
     void strutsChanged();   // registrant mutated its Strut - remaximize followers
 
-  private:
+    // (Re)paint the desktop from the server's current Style. Idempotent -
+    // drops the previous buffer first - so reconfigure() can call it live.
     void renderBackground();
 
+  private:
     Server &server;
     wlr_output *output;
     wlr_scene_output *scene_output = nullptr;

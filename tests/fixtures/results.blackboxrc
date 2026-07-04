@@ -1,0 +1,5 @@
+! Boot fixture: the Results style + a user rootCommand. The toolbar is off so
+! the desktop golden stays byte-stable when Task 12 restyles the toolbar.
+session.styleFile:   data/styles/Results
+session.screen0.enableToolbar: False
+rootCommand:         xsetroot -solid gray

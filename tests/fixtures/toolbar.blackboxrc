@@ -1,0 +1,3 @@
+session.screen0.toolbar.placement:    TopCenter
+session.screen0.toolbar.widthPercent: 80
+session.screen0.toolbar.autoHide:     True

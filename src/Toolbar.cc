@@ -3,6 +3,8 @@
 #include "Output.hh"
 #include "Workspace.hh"
 #include "DataBuffer.hh"
+#include "Style.hh"
+#include "Render.hh"
 
 #include "Texture.hh"
 #include "Image.hh"
@@ -10,32 +12,11 @@
 #include "Clock.hh"
 
 #include <algorithm>
+#include <memory>
 
 namespace bbai {
 
   namespace {
-    using toolbar::kLabelHeight;
-    using toolbar::kButtonWidth;
-
-    struct Look { const char *desc; const char *c1; const char *c2; };
-    // Grey palette matching the M3 decoration family (self-contained M4 default).
-    constexpr Look kBarLook   {"raised gradient diagonal", "#c0c0c0", "#808080"};
-    constexpr Look kLabelLook {"sunken gradient diagonal", "#b8b8b8", "#888888"};
-    constexpr Look kButtonLook{"raised gradient diagonal", "#e0e0e0", "#a8a8a8"};
-
-    bt::Color textColor() { return bt::Color(0, 0, 0); }
-    bt::Color picColor()  { return bt::Color(32, 32, 32); }
-
-    bt::Texture makeTexture(const Look &l) {
-      bt::Texture t;
-      t.setDescription(l.desc);
-      t.setColor1(bt::Color::fromString(l.c1));
-      if (l.c2 && *l.c2) t.setColor2(bt::Color::fromString(l.c2));
-      return t;
-    }
-    std::vector<uint32_t> render(int w, int h, const Look &l) {
-      return bt::Image(w, h).renderBuffer(makeTexture(l));
-    }
     void setPx(std::vector<uint32_t> &px, int w, int h, int x, int y, const bt::Color &c) {
       if (x < 0 || y < 0 || x >= w || y >= h) return;
       px[size_t(y) * w + x] = 0xFF000000u | (uint32_t(c.red()) << 16)
@@ -101,42 +82,60 @@ namespace bbai {
     rebuild();
   }
 
+  toolbar::Rect Toolbar::currentBarRect() const {
+    return toolbar::barRect(ow_, oh_, placement_,
+                            server_.currentStyle()->toolbarMetrics(),
+                            server_.config().toolbar.widthPercent);
+  }
+
   void Toolbar::rebuild(void) {
     clearNodes();
-    const toolbar::Rect bar = toolbar::barRect(ow_, oh_, placement_);
+    std::shared_ptr<const Style> st = server_.currentStyle();
+    const ToolbarLook &look = st->toolbarLook();
+    const toolbar::ToolbarMetrics m = st->toolbarMetrics();
+    const toolbar::Rect bar = currentBarRect();
+    bar_rect_ = bar;
 
-    bt::TextRenderer *font = server_.titleFont();
+    bt::TextRenderer *font = st->toolbarFont();
     const std::string ws_name = server_.workspaces().name(server_.workspaces().current());
     const std::u32string ws_u32 = bt::decodeUtf8(ws_name.c_str());
     const std::u32string clk_u32 = bt::decodeUtf8(clockText().c_str());
 
     // Workspace-label and clock widths are equalized to the wider text.
     const int max_text = std::max(font->textWidth(ws_u32), font->textWidth(clk_u32));
-    label_w_ = clock_w_ = toolbar::labelWidth(max_text);
-    sections_ = toolbar::sectionRects(bar.w, label_w_, clock_w_);
+    label_w_ = clock_w_ = toolbar::labelWidth(max_text, m);
+    sections_ = toolbar::sectionRects(bar.w, label_w_, clock_w_, m);
 
     const int baseline =
-      std::max(0, (kLabelHeight - font->height()) / 2) + font->ascent();
+      std::max(0, (m.labelHeight - font->height()) / 2) + font->ascent();
 
-    // Bar base (lowest), then the sections over it (z-order like Decoration).
-    emit({0, 0, bar.w, bar.h}, render(bar.w, bar.h, kBarLook));
+    // Bar base (lowest); keep its pixels for parentrelative sections.
+    bar_px_ = bt::Image(bar.w, bar.h).renderBuffer(look.bar);
+    emit({0, 0, bar.w, bar.h}, std::vector<uint32_t>(bar_px_));
 
-    auto label = [&](toolbar::Rect r, const std::u32string &text) {
-      std::vector<uint32_t> px = render(r.w, r.h, kLabelLook);
+    auto sectionPx = [&](const bt::Texture &tex, toolbar::Rect r) {
+      if (tex.texture() == bt::Texture::Parent_Relative)
+        return render::cropOrBlack(bar_px_, bar.w, bar.h, r.x, r.y, r.w, r.h);
+      return bt::Image(r.w, r.h).renderBuffer(tex);
+    };
+    auto label = [&](toolbar::Rect r, const bt::Texture &tex, const bt::Color &tc,
+                     const std::u32string &text) {
+      std::vector<uint32_t> px = sectionPx(tex, r);
       if (font->ok() && !text.empty())
-        font->drawText(px, r.w, r.h, /*penX=*/1, baseline, text, textColor());
+        font->drawText(px, r.w, r.h, /*penX=*/1, baseline, text, tc);
       emit(r, std::move(px));
     };
     auto button = [&](toolbar::Rect r, bool right) {
-      std::vector<uint32_t> px = render(r.w, r.h, kButtonLook);
-      drawArrow(px, kButtonWidth, right, picColor());
+      std::vector<uint32_t> px = sectionPx(look.button, r);
+      drawArrow(px, m.buttonWidth, right, look.foreground);
       emit(r, std::move(px));
     };
 
-    label(sections_.workspace_label, ws_u32);
+    label(sections_.workspace_label, look.slabel, look.slabelText, ws_u32);
     button(sections_.prev_ws, /*right=*/false);
     button(sections_.next_ws, /*right=*/true);
-    label(sections_.window_label, bt::decodeUtf8(window_title_.c_str()));
+    label(sections_.window_label, look.wlabel, look.wlabelText,
+          bt::decodeUtf8(window_title_.c_str()));
     button(sections_.prev_win, /*right=*/false);
     button(sections_.next_win, /*right=*/true);
     redrawClock();
@@ -145,20 +144,30 @@ namespace bbai {
 
   void Toolbar::redrawClock(void) {
     if (clock_node_) { wlr_scene_node_destroy(&clock_node_->node); clock_node_ = nullptr; }
-    bt::TextRenderer *font = server_.titleFont();
-    std::vector<uint32_t> px = render(clock_w_, kLabelHeight, kLabelLook);
+    std::shared_ptr<const Style> st = server_.currentStyle();
+    const ToolbarLook &look = st->toolbarLook();
+    const toolbar::ToolbarMetrics m = st->toolbarMetrics();
+    bt::TextRenderer *font = st->toolbarFont();
+    std::vector<uint32_t> px =
+      (look.clock.texture() == bt::Texture::Parent_Relative)
+        ? render::cropOrBlack(bar_px_, bar_rect_.w, bar_rect_.h,
+                              sections_.clock.x, sections_.clock.y,
+                              sections_.clock.w, sections_.clock.h)
+        : bt::Image(clock_w_, m.labelHeight).renderBuffer(look.clock);
     if (font->ok()) {
       const int baseline =
-        std::max(0, (kLabelHeight - font->height()) / 2) + font->ascent();
-      font->drawText(px, clock_w_, kLabelHeight, /*penX=*/1, baseline,
-                     bt::decodeUtf8(clockText().c_str()), textColor());
+        std::max(0, (m.labelHeight - font->height()) / 2) + font->ascent();
+      font->drawText(px, clock_w_, m.labelHeight, /*penX=*/1, baseline,
+                     bt::decodeUtf8(clockText().c_str()), look.clockText);
     }
     emit(sections_.clock, std::move(px), /*is_clock=*/true);
   }
 
   void Toolbar::applyPosition(void) {
-    const toolbar::Rect shown = toolbar::barRect(ow_, oh_, placement_);
-    const toolbar::Rect r = hidden_ ? toolbar::hiddenBarRect(shown, placement_) : shown;
+    const toolbar::Rect shown = currentBarRect();
+    const toolbar::Rect r = hidden_
+      ? toolbar::hiddenBarRect(shown, placement_, server_.currentStyle()->toolbarMetrics())
+      : shown;
     wlr_scene_node_set_position(&tree_->node, r.x, r.y);
   }
 
@@ -168,7 +177,7 @@ namespace bbai {
   }
 
   void Toolbar::handlePointerMotion(double x, double y) {
-    const toolbar::Rect b = toolbar::barRect(ow_, oh_, placement_);   // shown footprint = hot zone
+    const toolbar::Rect b = currentBarRect();   // shown footprint = hot zone
     const bool over = (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h);
     onPointerOverToolbar(over);   // no-op when auto_hide_ is off
   }
