@@ -109,7 +109,13 @@ namespace bbai {
     // dynamic lookup, no stored membership, can't go stale.
     Output *outputAt(double lx, double ly);
     Output *outputForView(const View *v);
+    Output *outputForWlr(wlr_output *wo);   // tracked Output for a wlr_output, or null
     void remaximizeViewsOn(Output *o);
+    // xdg client state requests (protocol obligation: apply + configure). Called
+    // by the View's request listeners; the set_* we already make is the ack.
+    void requestFullscreen(View *v);   // client set_fullscreen -> apply + configure
+    void requestMaximize(View *v);     // client set_maximized  -> apply + configure
+    void requestMinimize(View *v);     // client set_minimized  -> iconify + configure
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
@@ -142,6 +148,16 @@ namespace bbai {
     // cursor events use) ---
     void injectPointerMotionForTest(double lx, double ly);
     void injectPointerButtonForTest(uint32_t button, bool pressed);
+    // Mirrors the real onPointerAxis funnel (modal gates + implicit-grab lock);
+    // defaults source=WHEEL, rel=IDENTICAL, time=nowMsec (gotcha #17/#29: tests
+    // must exercise the SAME funnel, not a shortcut).
+    void injectPointerAxisForTest(wl_pointer_axis orientation, double delta,
+                                  int32_t delta_discrete);
+    // Drive the session into the locked state without a real locker client, then
+    // run the same focus-parking hook a real lock does (mirrors the gate that
+    // lock_interactions_test drives through a LockTestClient).
+    void lockForTest();
+    int idleActivityCountForTest() const { return idle_activity_count_; }
     View *viewAtForTest(double lx, double ly);
     Part partAtForTest(double lx, double ly);
     wlr_surface *focusedPointerSurfaceForTest() const;
@@ -168,6 +184,14 @@ namespace bbai {
     int lastActionForTest() const { return last_action_.kind; }
     unsigned currentWorkspaceForTest() const { return workspaces_.current(); }
     View *focusedViewForTest() const { return focused_view; }
+    void focusViewForTest(View *v) { focusView(v); }
+    void toggleFullscreenForTest();   // defined in Server.cc (View is incomplete here)
+    void snapFocusedForTest(uint32_t edge) { snapFocused(edge); }
+    void moveFocusedToOutputForTest(int dir) {
+      moveFocusedToOutput(static_cast<wlr_direction>(dir));
+    }
+    int frameWidthForTest(View *v) const;    // frame::frameWidth(content, metrics)
+    int frameHeightForTest(View *v) const;   // frame::frameHeight(content, metrics)
 
     // Alt-tab cycle seams: drive the same session state machine the CycleNext/
     // CyclePrev bindings and the onModifiers commit / Escape cancel funnels use.
@@ -193,6 +217,8 @@ namespace bbai {
     const char *seatSelectionMimeForTest() const;
     wlr_data_source *seatSelectionSourceForTest() const { return seat->selection_source; }
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
+    bool viewLayerIsFullscreenForTest(View *v) const;   // frame_tree parents into layer_fullscreen?
+    bool isTopmostForTest(View *v);                     // v == topmost real view on its workspace
 
     wl_display *display = nullptr;
     wlr_backend *backend = nullptr;
@@ -216,6 +242,14 @@ namespace bbai {
     wlr_scene_tree *layer_bottom = nullptr;
     wlr_scene_tree *layer_window = nullptr;
     wlr_scene_tree *layer_top = nullptr;
+    // Between top and overlay: a focused fullscreen view is promoted here so it
+    // covers the toolbar (layer_top) but stays under menus/screenshot overlays
+    // and the lock. KNOWN divergence: raiseView/lowerView restack flat within a
+    // node's parent tree and ignore StackingList's 5 model layers - this slice
+    // papers over it for THIS one layer via focus-keyed reparenting; a general
+    // layer-aware scene restack is a separate feature (the next Above/Below work
+    // owns it), NOT this slice.
+    wlr_scene_tree *layer_fullscreen = nullptr;
     wlr_scene_tree *layer_overlay = nullptr;
     // 6th, topmost: session-lock blanks + lock surfaces. Nothing renders above
     // a locked session - screenshot/menu overlays stay on layer_overlay below.
@@ -229,6 +263,9 @@ namespace bbai {
     // Pointer handlers shared by real cursor events and test injection.
     void onPointerMotion(uint32_t time);
     void onPointerButton(uint32_t time, uint32_t button, wl_pointer_button_state state);
+    void onPointerAxis(uint32_t time, wl_pointer_axis orientation, double delta,
+                       int32_t delta_discrete, wl_pointer_axis_source source,
+                       wl_pointer_axis_relative_direction rel);
     // Keyboard handlers (called by the per-device Keyboard).
     void onKey(wlr_keyboard *kb, uint32_t time, uint32_t keycode, wl_keyboard_key_state state);
     void onModifiers(wlr_keyboard *kb);
@@ -255,6 +292,10 @@ namespace bbai {
     void processResize();
     void focusView(View *v, bool update_mru = true);
     void clearFocus();                              // deactivate + clear keyboard focus
+    // Keep the fullscreen scene layer keyed to focus: the focused view (if
+    // fullscreen) promotes to layer_fullscreen, every other fullscreen view
+    // demotes to layer_window. Run at the tail of focusView/clearFocus.
+    void syncFullscreenLayers(View *newly_focused);
     // Session-lock hooks (called by the friend SessionLock). takeover = a new
     // locker replacing a crashed one while locked_ never dropped: everything
     // re-runs except the focus_before_lock_ capture (focused_view is already
@@ -277,6 +318,12 @@ namespace bbai {
     std::shared_ptr<const Style> loadStyleWithFallback(const std::string &path,
                                                        bool *exact_ok = nullptr);
     void runRootCommand();   // rc-file rootCommand via /bin/sh (user-authored)
+    // Fullscreen orchestration: geometry via the target Output's fullBox, plus
+    // (Task 6) the layer_fullscreen hop. on_output pins a specific head (a
+    // client's requested fullscreen_output); null resolves by frame centre.
+    void setViewFullscreen(View *v, bool on, Output *on_output = nullptr);
+    void snapFocused(uint32_t edge);   // WLR_EDGE_LEFT/RIGHT -> half the work area
+    void moveFocusedToOutput(wlr_direction dir);   // adjacent head; NULL past edge = no-op
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
@@ -293,7 +340,7 @@ namespace bbai {
     bt::Listener new_xdg_toplevel;
     bt::Listener new_toplevel_decoration;
     bt::Listener new_input;
-    bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame;
+    bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame, cursor_axis;
     Output *active_output = nullptr;            // the primary (first) head: toolbar + work-area
     std::vector<Output *> outputs_;             // every lit head (M7); each self-deletes on its output's destroy
     std::vector<std::unique_ptr<View>> views;   // mapped client windows
@@ -314,6 +361,21 @@ namespace bbai {
     std::unique_ptr<SessionLock> session_lock_;   // ext-session-lock-v1 (lock-idle)
     wlr_idle_notifier_v1 *idle_notifier_ = nullptr;  // ext-idle-notify-v1
     Keybindings keybindings_;                   // M4 built-in keybinding table
+
+    // AutoRaise: a one-shot timer armed when sloppy focus settles on a window;
+    // on fire, raise it if it's still the focused one. Injectable Timer -> the
+    // VirtualClock drives it deterministically in tests.
+    struct AutoRaiseTick : TimeoutHandler {
+      explicit AutoRaiseTick(Server *s) : srv(s) {}
+      Server *srv;
+      void timeout() override { srv->onAutoRaiseTimeout(); }
+    };
+    AutoRaiseTick autoraise_handler_{ this };
+    std::unique_ptr<Timer> autoraise_timer_;
+    View *autoraise_pending_ = nullptr;
+    void armAutoRaise(View *v);       // (re)start the one-shot for v, or cancel
+    void onAutoRaiseTimeout();
+    int placement_cascade_ = 0;       // Cascade step cursor (WindowPlacement)
     std::unique_ptr<CommandRunner> default_runner_;  // owns the production runner
     CommandRunner *command_runner_ = nullptr;        // -> default or a test fake
     std::vector<std::unique_ptr<Keyboard>> keyboards_;
@@ -346,6 +408,7 @@ namespace bbai {
     int grab_geo_w = 0, grab_geo_h = 0;         // content size at grab start
     uint32_t resize_edges = 0;                  // wlr_edges bitmask
     uint32_t next_time = 1;                      // monotonic event time seam
+    int idle_activity_count_ = 0;                // test: every input-funnel entry bumps this
 
     // ScreenshotSelect drag state + GNOME-dim overlay (under layer_overlay).
     bool screenshot_dragging_ = false;

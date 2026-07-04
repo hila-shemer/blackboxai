@@ -17,10 +17,11 @@ namespace bbai {
     enum Kind {
       None, WorkspaceNext, WorkspacePrev, WorkspaceTo,
       OpenMenu, CloseWindow, CycleNext, CyclePrev,
-      IconMenu, Screenshot, Quit
+      IconMenu, Screenshot, Quit,
+      ToggleFullscreen, SnapLeft, SnapRight, MoveToOutput
     };
     Kind kind = None;
-    int arg = 0;     // workspace index for WorkspaceTo
+    int arg = 0;     // workspace index for WorkspaceTo; wlr_direction for MoveToOutput
   };
 
   class Keybindings {

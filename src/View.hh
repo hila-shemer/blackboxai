@@ -61,6 +61,14 @@ namespace bbai {
     void remaximize(wlr_box work);
     bool isMaximized() const { return maximized_; }
 
+    // Fullscreen: fill `full` (LAYOUT coords, always the output's fullBox -
+    // never the work area) with chrome hidden. Shares ONE saved rect with
+    // maximize (classic): save iff neither maximized nor already fullscreen.
+    // Exit restores premax only when NOT maximized; the Server re-maximizes
+    // otherwise (it owns the work area). `full` is unused on exit.
+    void setFullscreen(bool on, wlr_box full);
+    bool isFullscreen() const { return fullscreen_; }
+
     // xdg-decoration: a decoration object for this toplevel appeared. Decide and
     // schedule its mode (request SSD / honor CSD holdout).
     void attachDecoration(wlr_xdg_toplevel_decoration_v1 *deco);
@@ -94,6 +102,7 @@ namespace bbai {
     bool on_workspace_ = true;  // last value passed to setOnWorkspace
     bool iconified_ = false;    // minimised state; hides frame regardless of workspace
     bool maximized_ = false;    // frame fills the work area
+    bool fullscreen_ = false;   // fills fullBox, chrome hidden; shares premax with maximize
     int premax_x = 0, premax_y = 0, premax_w = 0, premax_h = 0;
     int pos_x = 160, pos_y = 120;
     int cw = 200, ch = 150;   // requested content size
@@ -104,6 +113,11 @@ namespace bbai {
     bool focused_ = false;
     bt::Listener map_, unmap_, commit_, destroy_;
     bt::Listener deco_request_mode_, deco_destroy_;
+    bt::Listener req_maximize_, req_fullscreen_, req_minimize_, req_move_, req_resize_;
+    // The xdg_toplevel role can be destroyed before the wl_surface (a client
+    // that destroys just the toplevel proxy); wlroots asserts the request_*
+    // signals have no listeners at that point, so drop them here.
+    bt::Listener toplevel_destroy_;
   };
 
 } // namespace bbai

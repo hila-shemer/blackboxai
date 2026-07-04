@@ -34,6 +34,7 @@ unit_sources = files(
   'unit/work_area_geom_test.cc',
   'unit/util_test.cc',
   'unit/rootmenu_wire_test.cc',
+  'unit/placement_geom_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
@@ -385,6 +386,74 @@ idle_notify_exe = executable('idle-notify-test', files('system/idle_notify_test.
   dependencies : [harness_dep, doctest_dep])
 test('idle_notify', idle_notify_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
+
+# ---- wave-2 window-mgmt (suite: 'system') -----------------------------------
+# Scroll wheel forwarding + the locked-discard + the mid-drag implicit-grab case.
+axis_forward_exe = executable('axis-forward-test', files('system/axis_forward_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('axis_forward', axis_forward_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# Classic wheel gestures: scroll over the desktop / toolbar cycles workspaces.
+wheel_workspace_exe = executable('wheel-workspace-test', files('system/wheel_workspace_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('wheel_workspace', wheel_workspace_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Fullscreen geometry + one-shared-premax-rect semantics (numbers, not pixels).
+fullscreen_exe = executable('fullscreen-test', files('system/fullscreen_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('fullscreen', fullscreen_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# Fullscreen covers the toolbar (golden); unfocused fullscreen demotes.
+fullscreen_golden_exe = executable('fullscreen-golden-test',
+  files('system/fullscreen_golden_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('fullscreen_golden', fullscreen_golden_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# xdg protocol fix: honor client set_fullscreen/set_maximized/set_minimized.
+xdg_request_exe = executable('xdg-request-test', files('system/xdg_request_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('xdg_request', xdg_request_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# Half-screen snap to the work area (keybinding-only, new behavior).
+snap_exe = executable('snap-test', files('system/snap_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('snap', snap_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# Move-to-output: adjacent head in a direction, NULL past the edge (no-op).
+move_to_output_exe = executable('move-to-output-test', files('system/move_to_output_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('move_to_output', move_to_output_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# The locked keys reach fullscreen/snap/move-to-output via onKey/executeAction.
+window_ops_key_exe = executable('window-ops-key-test', files('system/window_ops_key_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('window_ops_key', window_ops_key_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# Focus-follows-mouse (default-on) + the three modal-interaction guards.
+sloppy_focus_exe = executable('sloppy-focus-test', files('system/sloppy_focus_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('sloppy_focus', sloppy_focus_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# AutoRaise (VirtualClock-driven) + ClickRaise (sloppy sub-flags).
+auto_raise_exe = executable('auto-raise-test', files('system/auto_raise_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('auto_raise', auto_raise_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
+# Window placement at map (Cascade/Center/RowSmart) - kills the fixed (160,120).
+placement_exe = executable('placement-test', files('system/placement_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('placement', placement_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
 
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when

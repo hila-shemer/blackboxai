@@ -88,7 +88,7 @@ Resolves the two asserted-but-unverified critiques against this slice as a repro
 - Consumes: nothing (host headers under `/usr/include/wlroots-0.20`).
 - Produces: a documented conclusion baked into Task 5/7's comments — *no `wlr_xdg_toplevel_set_wm_capabilities` call is needed*; the axis event struct + `wlr_seat_pointer_notify_axis` arg order + `wlr_output_layout_adjacent_output` edge behavior are confirmed.
 
-- [ ] **Step 1: Write the probe**
+- [x] **Step 1: Write the probe**
 
 Create `api_probe.cc` in the scratchpad dir:
 
@@ -133,7 +133,7 @@ int main() {
 }
 ```
 
-- [ ] **Step 2: Compile + run in the container**
+- [x] **Step 2: Compile + run in the container** (compiled as C to sidestep gotcha #25's `[static N]` C++ parse issue; confirmed caps field bit=2, fullscreen cap bit=4, symbols link, LEFT=4 RIGHT=8 — conclusion: no `set_wm_capabilities` call needed)
 
 ```bash
 docker run --rm -v /tmp/claude-1000:/tmp/claude-1000 blackboxai-ci:f44 bash -c '
@@ -144,7 +144,7 @@ docker run --rm -v /tmp/claude-1000:/tmp/claude-1000 blackboxai-ci:f44 bash -c '
 
 Expected: it prints the four lines with non-null function pointers, `RIGHT=8 LEFT=4`, and a positive fullscreen cap bit. Conclusion recorded: **no `set_wm_capabilities` call is added anywhere in this slice** — the xdg-shell default (all caps advertised by omission) already matches our now-complete support. If the compile fails, the container image is wrong; stop and re-pull `blackboxai-ci:f44`.
 
-- [ ] **Step 3: No commit** (scratchpad-only). Proceed to Task 2.
+- [x] **Step 3: No commit** (scratchpad-only). Proceed to Task 2.
 
 ---
 
@@ -159,7 +159,7 @@ Expected: it prints the four lines with non-null function pointers, `RIGHT=8 LEF
 - Consumes: `bt::Resource::read` (existing), the `screenName`/`screenClass` helpers (`Config.cc:45-50`).
 - Produces: `bool Config::changeWorkspaceWithMouseWheel` (default `true`), `bool Config::toolbarActionsWithMouseWheel` (default `true`). Task 4's `onPointerAxis` reads both via `config()`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/config_test.cc`:
 
@@ -179,12 +179,12 @@ TEST_CASE("mouse-wheel bools: classic keys, classic default True") {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `unit`.
 Expected: BUILD FAILURE — `no member named 'changeWorkspaceWithMouseWheel' in 'bbai::Config'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Config.hh`, in `struct Config` after `int doubleClickInterval = 250;` (line 72):
 
@@ -209,11 +209,11 @@ Expected: BUILD FAILURE — `no member named 'changeWorkspaceWithMouseWheel' in 
                "Session.toolbarActionsWithMouseWheel", true);
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `unit`. Expected: `unit` OK.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Config.hh src/Config.cc tests/unit/config_test.cc
@@ -246,7 +246,7 @@ The parked defect: `Server.cc:205-221` wires motion/motion_absolute/button/frame
 - Consumes: `wlr_seat_pointer_notify_axis` (7-arg, `wlr_seat.h`), `notifyIdleActivity` (`Server.cc:883`), the modal state (`session_lock_`, `active_menu_`, `cursor_mode`, `cycling_`), `seat->pointer_state`.
 - Produces: `void Server::onPointerAxis(uint32_t time, wl_pointer_axis orientation, double delta, int32_t delta_discrete, wl_pointer_axis_source source, wl_pointer_axis_relative_direction rel)`; `void Server::injectPointerAxisForTest(wl_pointer_axis orientation, double delta, int32_t delta_discrete)` (PINNED SEAM); `TestClient::pointerAxisEvents()`. Task 4 extends `onPointerAxis` with the wheel-region gate.
 
-- [ ] **Step 1: Extend TestClient with an axis counter**
+- [x] **Step 1: Extend TestClient with an axis counter**
 
 `tests/harness/TestClient.cc`, in `struct Impl` after `int pointer_buttons = 0;` (line 35):
 
@@ -274,7 +274,7 @@ After `int TestClient::pointerButtonEvents() const { ... }` (line 196):
     int pointerAxisEvents() const;    // count of wl_pointer.axis events received
 ```
 
-- [ ] **Step 2: Write the failing system test**
+- [x] **Step 2: Write the failing system test**
 
 Create `tests/system/axis_forward_test.cc`:
 
@@ -400,12 +400,12 @@ test('axis_forward', axis_forward_exe, suite : 'system',
 
 Note on introspection hooks used above: `lockForTest`, `idleActivityCountForTest`, `currentWorkspaceForTest` — check `Server.hh` first; if any is missing, add the trivial accessor in this task (`lockForTest` should route through the existing `SessionLock` friend path used by `lock_interactions_test.cc`; `idleActivityCountForTest` bumps a counter in `notifyIdleActivity`; `currentWorkspaceForTest` returns `workspaces_.current()`). Do NOT invent a new lock mechanism — reuse whatever `lock_interactions_test.cc` already drives.
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Container gate, `<tests>` = `axis_forward`.
 Expected: BUILD FAILURE — `no member named 'injectPointerAxisForTest'`.
 
-- [ ] **Step 4: Implement the funnel**
+- [x] **Step 4: Implement the funnel**
 
 `src/Server.hh`: add the axis listener beside the others (line 296):
 
@@ -490,11 +490,11 @@ Add the injector after `injectPointerButtonForTest` (after line 1057):
   }
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Container gate, `<tests>` = `axis_forward`. Expected: 3 cases pass. Then the FULL gate (empty `<tests>`) — nothing else regresses. Confirm `git status tests/golden/` is empty.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/harness/TestClient.hh tests/harness/TestClient.cc \
@@ -525,7 +525,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: `Toolbar::currentBarRect()` (`Toolbar.hh:49`), `config().changeWorkspaceWithMouseWheel`/`toolbarActionsWithMouseWheel` (Task 2), `overDesktop` (`Server.cc`, private), `cycleWorkspace` (`Server.cc:1186`).
 - Produces: `bool Toolbar::containsGlobal(int gx, int gy) const` (PINNED SEAM — menus reuses it). The wheel gate in `onPointerAxis`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/wheel_workspace_test.cc`:
 
@@ -617,12 +617,12 @@ test('wheel_workspace', wheel_workspace_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `wheel_workspace`.
 Expected: BUILD FAILURE — `no member named 'containsGlobal'` (once the gate is added), or CHECK failures on workspace count (before the gate). Either red is fine.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Toolbar.hh`, after `toolbar::Rect currentBarRect() const;` (line 49):
 
@@ -665,11 +665,11 @@ Expected: BUILD FAILURE — `no member named 'containsGlobal'` (once the gate is
     }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `wheel_workspace`. Expected: 3 cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Toolbar.hh src/Toolbar.cc src/Server.cc \
@@ -703,7 +703,7 @@ Fullscreen geometry and the one-shared-premax-rect semantics. Layering (covering
 - Consumes: `Output::fullBox()`, `Output::workArea()`, `outputForView`, `View::remaximize` / `premax_*`, `resizeTo` (`View.cc:127`), `wlr_xdg_toplevel_set_fullscreen`.
 - Produces: `void View::setFullscreen(bool on, wlr_box full)` + `bool View::isFullscreen() const` (PINNED SEAM); `void Server::setViewFullscreen(View *v, bool on, Output *on_output = nullptr)`; `void Server::toggleFullscreenForTest()`. Task 6 makes `setViewFullscreen` layer-aware; Task 7's request path calls it; Task 8's key wires it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/fullscreen_test.cc`:
 
@@ -820,12 +820,12 @@ test('fullscreen', fullscreen_exe, suite : 'system',
 
 If `Server::Part` is not already reachable from tests (it is a nested type used by `partAtForTest`, `Server.hh`), the existing `hittest_test.cc` shows the accessible spelling — match it. `focusViewForTest` may need adding as a public wrapper around `focusView` (check `Server.hh`; `view_focus_test.cc` likely already exposes one — reuse it).
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `fullscreen`.
 Expected: BUILD FAILURE — `no member named 'setFullscreen'` / `toggleFullscreenForTest`.
 
-- [ ] **Step 3: Implement View**
+- [x] **Step 3: Implement View**
 
 `src/View.hh`, after `bool isMaximized() const { return maximized_; }` (line 62):
 
@@ -893,7 +893,7 @@ Change `relayout` (line 63) to drop chrome when fullscreen even for SSD windows:
 
 (Note `laid_frame` now tracks effective chrome; the commit-handler re-layout guard at `View.cc:38` compares `draw_frame != laid_frame` — leave that as-is; `setFullscreen` forces a `relayout()` directly, so a fullscreen toggle never depends on the commit-guard, and a genuine CSD-mode flip still triggers it correctly.)
 
-- [ ] **Step 4: Implement Server orchestration**
+- [x] **Step 4: Implement Server orchestration**
 
 `src/Server.hh`, after `void applyConfig();` (line 280):
 
@@ -938,11 +938,11 @@ Add the fullscreen branch at the TOP of `partAt` (line 600), so a fullscreen vie
     }
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Container gate, `<tests>` = `fullscreen`. Expected: both cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/View.hh src/View.cc src/Server.hh src/Server.cc \
@@ -975,7 +975,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: `wlr_scene_node_reparent` (`wlr_scene.h`), `raiseView`, the layer trees.
 - Produces: `wlr_scene_tree *layer_fullscreen` (public, beside the other layers). Documents the KNOWN scene-vs-model layer divergence.
 
-- [ ] **Step 1: Write the failing golden + alt-tab test**
+- [x] **Step 1: Write the failing golden + alt-tab test**
 
 Create `tests/system/fullscreen_golden_test.cc`:
 
@@ -1076,12 +1076,12 @@ test('fullscreen_golden', fullscreen_golden_exe, suite : 'system',
 
 `viewLayerIsFullscreenForTest(View*)` is a new introspection helper (Step 4). It returns whether the view's `frame_tree` currently parents into `layer_fullscreen`.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `fullscreen_golden`.
 Expected: BUILD FAILURE — `no member named 'layer_fullscreen'` / `viewLayerIsFullscreenForTest`.
 
-- [ ] **Step 3: Create the scene layer**
+- [x] **Step 3: Create the scene layer**
 
 `src/Server.hh`, add the member with the other layers (after `layer_overlay`, line 219 — declare it BEFORE overlay in z-order terms, but as a field its declaration order doesn't set z; the CREATION order does):
 
@@ -1105,7 +1105,7 @@ Expected: BUILD FAILURE — `no member named 'layer_fullscreen'` / `viewLayerIsF
     layer_lock       = wlr_scene_tree_create(&scene->tree);
 ```
 
-- [ ] **Step 4: Reparent on focus change**
+- [x] **Step 4: Reparent on focus change**
 
 In `setViewFullscreen`, replace the `// [Task 6 inserts the layer_fullscreen reparent here.]` marker:
 
@@ -1152,7 +1152,7 @@ Add the introspection helper (public, near `viewsForTest`):
     }
 ```
 
-- [ ] **Step 5: Bless the ONE new golden, then run**
+- [x] **Step 5: Bless the ONE new golden, then run**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1164,7 +1164,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: full gate green. Then `git status tests/golden/` must show EXACTLY one line — `tests/golden/v1-fullscreen.png` as an **untracked add** (`??`), never a modify of an existing file. If any existing golden shows modified, STOP: the layer creation shifted a pixel it shouldn't have — investigate, do not bless.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/fullscreen_golden_test.cc \
@@ -1200,7 +1200,7 @@ Today `src/` has ZERO listeners for `request_maximize`/`request_fullscreen`/`req
 - Consumes: `xdg_toplevel->requested` (`{maximized, minimized, fullscreen, fullscreen_output}`), `xdg_toplevel->base->initialized`, `setViewFullscreen` (Task 5/6), `setMaximized`, `iconifyView`, `outputForView`.
 - Produces: `void Server::requestFullscreen(View *v)`, `void Server::requestMaximize(View *v)`, `void Server::requestMinimize(View *v)`; `TestClient::setFullscreen(bool)` / `setMaximized(bool)`.
 
-- [ ] **Step 1: Extend TestClient to send the requests**
+- [x] **Step 1: Extend TestClient to send the requests**
 
 `tests/harness/TestClient.hh`, after `destroyDecorationForTest();` (line 38):
 
@@ -1224,7 +1224,7 @@ Today `src/` has ZERO listeners for `request_maximize`/`request_fullscreen`/`req
   }
 ```
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `tests/system/xdg_request_test.cc`:
 
@@ -1325,12 +1325,12 @@ test('xdg_request', xdg_request_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Container gate, `<tests>` = `xdg_request`.
 Expected: BUILD FAILURE — `no member named 'setFullscreen'` (TestClient), then behavior failures once that compiles.
 
-- [ ] **Step 4: Implement the listeners**
+- [x] **Step 4: Implement the listeners**
 
 `src/View.hh`, add members after `deco_request_mode_, deco_destroy_;` (line 106):
 
@@ -1411,15 +1411,15 @@ In the `commit_` handler's `initial_commit` block (after `wlr_xdg_toplevel_set_s
     setViewFullscreen(v, want, target);
 ```
 
-- [ ] **Step 5: Disconnect in the dtor**
+- [x] **Step 5: Disconnect in the dtor**
 
 `src/View.cc` `~View()` — the `bt::Listener` members auto-disconnect on destruction (RAII, same as the existing `map_`/`commit_`), so no explicit teardown is needed. Confirm by matching how `deco_request_mode_` is handled (it disconnects explicitly only because the decoration outlives differently); the toplevel-owned request listeners follow `map_`/`commit_`/`destroy_` and need nothing.
 
-- [ ] **Step 6: Run to verify it passes**
+- [x] **Step 6: Run to verify it passes**
 
 Container gate, `<tests>` = `xdg_request`. Expected: 3 cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/View.hh src/View.cc src/Server.hh src/Server.cc \
@@ -1453,7 +1453,7 @@ Classic has no half-snap (only move-time edge thresholds), so this is deliberate
 - Consumes: `outputForView`, `Output::workArea()`, `currentStyle()->frameMetrics()` (for the border/title insets), `View::setMaximized`/`setFullscreen`/`resizeTo`, `wlr_xdg_toplevel_set_tiled`, `WLR_EDGE_LEFT`/`WLR_EDGE_RIGHT`.
 - Produces: `void Server::snapFocused(uint32_t edge)` (edge = `WLR_EDGE_LEFT`/`WLR_EDGE_RIGHT`); `void Server::snapFocusedForTest(uint32_t edge)`. Task 10 wires it to keys.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/snap_test.cc`:
 
@@ -1546,12 +1546,12 @@ test('snap', snap_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `snap`.
 Expected: BUILD FAILURE — `no member named 'snapFocusedForTest'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh`, after the fullscreen decls:
 
@@ -1592,11 +1592,11 @@ Public test wrapper (near the other `*ForTest`):
   }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `snap`. Expected: both cases pass. Full gate green; goldens clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/snap_test.cc tests/meson.build
@@ -1624,7 +1624,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: `wlr_output_layout_adjacent_output(layout, wlr_direction, ref_output, ref_lx, ref_ly)` (POC-proven: RIGHT/LEFT resolve, past-edge → NULL), `outputForView`, `outputForWlr` (Task 7), `Output::fullBox()`/`workArea()`, `View::remaximize`/`setFullscreen`/`setPosition`.
 - Produces: `void Server::moveFocusedToOutput(wlr_direction dir)`; `void Server::moveFocusedToOutputForTest(int dir)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/move_to_output_test.cc`:
 
@@ -1725,12 +1725,12 @@ test('move_to_output', move_to_output_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `move_to_output`.
 Expected: BUILD FAILURE — `no member named 'moveFocusedToOutputForTest'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh`:
 
@@ -1784,11 +1784,11 @@ Public wrapper:
   }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `move_to_output`. Expected: both cases pass. Full gate green; goldens clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/move_to_output_test.cc tests/meson.build
@@ -1821,7 +1821,7 @@ Now that the behavior methods exist, add the `Action::Kind` values, default bind
 - Consumes: `setViewFullscreen`/`snapFocused`/`moveFocusedToOutput` (Tasks 5/8/9), `WLR_DIRECTION_*`, `WLR_EDGE_LEFT`/`RIGHT`.
 - Produces: `Action::Kind::{ToggleFullscreen, SnapLeft, SnapRight, MoveToOutput}` (PINNED SEAM). `MoveToOutput` carries the direction in `Action::arg`.
 
-- [ ] **Step 1: Write the failing unit test**
+- [x] **Step 1: Write the failing unit test**
 
 Append to `tests/unit/keybinding_test.cc`:
 
@@ -1845,12 +1845,12 @@ TEST_CASE("wave-2 window-mgmt bindings") {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `unit`.
 Expected: BUILD FAILURE — `'ToggleFullscreen' is not a member of 'bbai::Action'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Keybindings.hh`, extend the enum (line 17-21):
 
@@ -1886,7 +1886,7 @@ Expected: BUILD FAILURE — `'ToggleFullscreen' is not a member of 'bbai::Action
     case Action::MoveToOutput: moveFocusedToOutput(static_cast<wlr_direction>(a.arg)); break;
 ```
 
-- [ ] **Step 4: Write the failing system test (keys drive the behavior)**
+- [x] **Step 4: Write the failing system test (keys drive the behavior)**
 
 Create `tests/system/window_ops_key_test.cc`:
 
@@ -1952,11 +1952,11 @@ test('window_ops_key', window_ops_key_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Container gate, `<tests>` = `unit window_ops_key`. Expected: both green. Full gate green; goldens clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Keybindings.hh src/Keybindings.cc src/Server.cc \
@@ -1989,7 +1989,7 @@ The user-locked behavior and the most trap-dense change in the slice. `onPointer
 - Consumes: `config().focusModel`, `focusView` (already lock-guarded, returns early while locked), `cycling_`, the existing `viewFromNode`/`partAt` hit-test in `onPointerMotion`.
 - Produces: focus-follows-mouse behind the four gates. Task 12 adds AutoRaise/ClickRaise on top.
 
-- [ ] **Step 1: Flip the Config default + fix the pinned tests**
+- [x] **Step 1: Flip the Config default + fix the pinned tests**
 
 `src/Config.hh` line 67:
 
@@ -2014,7 +2014,7 @@ The user-locked behavior and the most trap-dense change in the slice. `onPointer
 
 (Leave the explicit-`ClickToFocus` cases at lines 38/50/73-78/157 alone — they set the key, so they still hold. Only the default-constructed/empty-parse assertions flip.)
 
-- [ ] **Step 2: Write the failing system test (behavior + the three guards)**
+- [x] **Step 2: Write the failing system test (behavior + the three guards)**
 
 Create `tests/system/sloppy_focus_test.cc`:
 
@@ -2146,12 +2146,12 @@ test('sloppy_focus', sloppy_focus_exe, suite : 'system',
 
 `cyclingForTest()` / `menuOpenForTest()` — reuse if present (`alttab_test.cc` / `menu_action_test.cc` drive these), else add trivial accessors returning `cycling_` / `active_menu_ != nullptr`.
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Container gate, `<tests>` = `sloppy_focus unit`.
 Expected: the first case fails (hover doesn't refocus — no sloppy code yet); `unit` `config_test` now passes with the flipped defaults.
 
-- [ ] **Step 4: Implement the refocus**
+- [x] **Step 4: Implement the refocus**
 
 `src/Server.cc`, in `onPointerMotion`, at the client hit-test tail (lines 928-937), refocus BEFORE forwarding the pointer. Every disqualifying state already returned above (locked :890, menu :891, screenshot :908, implicit-grab :920); the one new guard is `!cycling_`:
 
@@ -2176,11 +2176,11 @@ Expected: the first case fails (hover doesn't refocus — no sloppy code yet); `
     }
 ```
 
-- [ ] **Step 5: Run to verify it passes AND prove zero golden churn**
+- [x] **Step 5: Run to verify it passes AND prove zero golden churn**
 
 Container gate, `<tests>` = `sloppy_focus`. Expected: 4 cases pass. Then the FULL gate. This is the moment sloppy-default-on could churn a wave-1 golden: `git status tests/golden/` MUST be empty and every wave-1 focus/golden test MUST stay green. If a golden or a focus assertion flips, the cause is a test whose cursor genuinely rests over a *different* window's client than its intended focus — such a test's premise was click-to-focus. Fix it by prepending an explicit `session.focusModel: ClickToFocus\n` rc to THAT test (a test-mechanism change, not a behavior regression, and not a re-bless). Do NOT `BLESS=1` anything. (Expected: `focus_swap_test` and friends stay green untouched — their cursor ends over the window they focus, or over a titlebar which is not Part::Client, so sloppy is a no-op there.)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Config.hh src/Config.cc src/Server.cc \
@@ -2215,7 +2215,7 @@ The two sloppy sub-flags (parsed already; inert under ClickToFocus). AutoRaise r
 - Consumes: `config().autoRaise`/`clickRaise`/`autoRaiseDelay`, `raiseView`, `Timer`/`TimeoutHandler` (`Timer.hh`), `advanceClockForTest` (`Server.cc:1571`).
 - Produces: AutoRaise/ClickRaise behavior. No new seam.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/auto_raise_test.cc`:
 
@@ -2321,12 +2321,12 @@ test('auto_raise', auto_raise_exe, suite : 'system',
 
 `isTopmostForTest(View*)` returns whether the view is `stacking_.front()` (the topmost real entity) — add it (public) using `topmostViewOnWorkspace(v->workspace()) == v` or a direct `stacking_.front()` cast.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `auto_raise`.
 Expected: BUILD FAILURE (`isTopmostForTest`) or the AutoRaise CHECK fails (no timer wired).
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh`, add near the Toolbar's timer pattern (private, after `keybindings_` ~line 316):
 
@@ -2393,11 +2393,11 @@ ClickRaise in `onPointerButton`, at the client-hit PRESSED branch (right after `
         if (config_.clickRaise) raiseView(v);   // sloppy sub-flag; inert under CTF
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `auto_raise`. Expected: both cases pass. Full gate green; `git status tests/golden/` empty.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/auto_raise_test.cc tests/meson.build
@@ -2433,7 +2433,7 @@ The wave-2 decision pairs sloppy focus with "Cascade/Center/RowSmart placement r
 - Consumes: `config().windowPlacement`, `Output::workArea()`, the frame width/height helpers (`Frame.hh`), the set of already-mapped views on the target workspace.
 - Produces: `bbai::place::Point place(WindowPlacement policy, wlr_box work, int fw, int fh, const std::vector<wlr_box> &taken, int &cascade_cursor)` — pure, unit-tested; `onViewMapped` calls it and `setPosition`s the result.
 
-- [ ] **Step 1: Write the failing unit test**
+- [x] **Step 1: Write the failing unit test**
 
 Create `tests/unit/placement_geom_test.cc`:
 
@@ -2477,12 +2477,12 @@ TEST_CASE("RowSmart avoids an occupied origin, falls back when full") {
 
 Register in `unit_sources` (after the last entry).
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `unit`.
 Expected: BUILD FAILURE — `Placement.geom.hh: No such file`.
 
-- [ ] **Step 3: Implement the pure header + the map hook**
+- [x] **Step 3: Implement the pure header + the map hook**
 
 Create `src/Placement.geom.hh` with `struct Point{int x,y;}` and the `place(...)` function implementing Center (centre in work), Cascade (step `kCascadeStep` = titleHeight-ish diagonal from the work origin, wrap when `x+fw>work.right` or `y+fh>work.bottom` back to origin), and RowSmart (scan left-to-right, top-to-bottom in `fw`/`fh` strides for the first slot not intersecting any `taken` box; fall back to `{work.x, work.y}`). Keep it pure and header-only (the slit/toolbar geom headers are the pattern).
 
@@ -2510,15 +2510,15 @@ In `Server.cc` `onViewMapped` (line 447), before/replacing the fixed-position de
 
 Add `int placement_cascade_ = 0;` to `Server.hh` (the cascade cursor). Guard the whole block so a maximized/fullscreen-on-map client (rare) isn't repositioned under its own state — only place plain views.
 
-- [ ] **Step 4: Write + register the system test**
+- [x] **Step 4: Write + register the system test**
 
 Create `tests/system/placement_test.cc`: boot with each `session.windowPlacement` rc, map two clients, assert the second lands per policy (Center → centred; Cascade → offset from the first; RowSmart → not overlapping the first). Derive all expected coordinates from `workArea()` + the frame helpers, never baked. `text_env` (SSD frames carry font-derived titlebars).
 
-- [ ] **Step 5: Run + prove golden discipline**
+- [x] **Step 5: Run + prove golden discipline**
 
 Container gate, `<tests>` = `unit placement`. Then the FULL gate. Placement moves where windows open, so wave-1 tests that asserted the fixed `(160,120)` (e.g. `focus_swap_test` checks `va->x()==160`) will now see the placed position. Those are THIS slice's tests to update: either the test explicitly `setPosition`s after map (many already do), or it asserts the placed coordinate. `git status tests/golden/` MUST stay empty — the goldens that pin a window at a specific spot either `setPosition` explicitly before capture (unaffected) or are this slice's to keep green by explicit positioning, NEVER by re-bless. If a golden's window would move, add an explicit `setPosition` to restore its captured geometry (mechanism change, not a re-bless).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Placement.geom.hh src/Server.hh src/Server.cc \

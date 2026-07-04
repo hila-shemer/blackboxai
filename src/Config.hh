@@ -64,12 +64,21 @@ namespace bbai {
     std::string rootCommand;
 
     // --- focus model (session.focusModel and its sub-flags) ---
-    FocusModel focusModel = FocusModel::ClickToFocus;
+    // Sloppy focus is the product default (user-locked: focus-follows-mouse
+    // default-on). An rc session.focusModel key always wins.
+    FocusModel focusModel = FocusModel::SloppyFocus;
     bool autoRaise = false;
     bool clickRaise = false;
     bool focusNewWindows = true;   // session.focusNewWindows (reference: True)
     int autoRaiseDelay = 400;
     int doubleClickInterval = 250;
+
+    // Mouse-wheel gestures (classic session.*WithMouseWheel). Both default
+    // True to match classic (BlackboxResource.cc:197-208) - an absent rc keeps
+    // desktop/toolbar scroll switching workspaces the way it always did.
+    // shadeWindowWithMouseWheel is out of scope: no shade state exists.
+    bool changeWorkspaceWithMouseWheel = true;
+    bool toolbarActionsWithMouseWheel = true;
 
     // --- window placement (session.windowPlacement) ---
     WindowPlacement windowPlacement = WindowPlacement::RowSmart;

@@ -36,6 +36,7 @@ TEST_CASE("a Gray-styled SSD window: wildcards + PR label pixel-copy") {
     client.flush(); server.dispatch(); client.pump();
   }
   REQUIRE(mapped());
+  server.viewsForTest()[0]->setPosition(160, 120);
   for (int i = 0; i < 10; ++i) { client.flush(); server.dispatch(); client.pump(); }
 
   const View *v = server.viewsForTest()[0].get();

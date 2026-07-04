@@ -7,6 +7,7 @@
 #include "Rootmenu.hh"
 #include "MenuParser.hh"
 #include "Frame.hh"
+#include "Placement.geom.hh"
 #include "Screenshot.hh"
 #include "ClipboardImage.hh"
 #include "Autostart.hh"
@@ -128,6 +129,7 @@ namespace bbai {
     layer_bottom     = wlr_scene_tree_create(&scene->tree);
     layer_window     = wlr_scene_tree_create(&scene->tree);
     layer_top        = wlr_scene_tree_create(&scene->tree);
+    layer_fullscreen = wlr_scene_tree_create(&scene->tree);   // above top, below overlay
     layer_overlay    = wlr_scene_tree_create(&scene->tree);
     layer_lock       = wlr_scene_tree_create(&scene->tree);
 
@@ -219,6 +221,11 @@ namespace bbai {
     cursor_frame.connect(&cursor->events.frame, [this](void *) {
       wlr_seat_pointer_notify_frame(seat);
     });
+    cursor_axis.connect(&cursor->events.axis, [this](void *data) {
+      auto *e = static_cast<wlr_pointer_axis_event *>(data);
+      onPointerAxis(e->time_msec, e->orientation, e->delta, e->delta_discrete,
+                    e->source, e->relative_direction);
+    });
 
     // Clock + timer registry. Headless tests use a VirtualClock at a fixed UTC
     // epoch (14:05:00 -> "02:05 PM") and drive timers by hand via
@@ -229,6 +236,7 @@ namespace bbai {
     else
       clock_ = std::make_unique<bt::SystemClock>();
     timer_registry_ = std::make_unique<TimerRegistry>(*clock_, headless ? nullptr : loop);
+    autoraise_timer_ = std::make_unique<Timer>(*timer_registry_, autoraise_handler_);
 
     // SNI tray host. Real backends only: under headless the developer's
     // session bus must stay untouched (claiming org.kde.StatusNotifierWatcher
@@ -397,11 +405,13 @@ namespace bbai {
     cursor_motion_absolute.disconnect();
     cursor_button.disconnect();
     cursor_frame.disconnect();
+    cursor_axis.disconnect();
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish
     active_menu_.reset();     // destroys its overlay scene tree
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
+    autoraise_timer_.reset(); // deregisters before the TimerRegistry dies
     session_lock_.reset();    // its Timer deregisters + listeners drop before the registry/display die
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
     sni_host_.reset();        // removes its wl_event_sources before the loop dies
@@ -450,6 +460,28 @@ namespace bbai {
     // the key path). The new window is already in mru_/stacking from creation
     // and is focusable once the cycle ends.
     if (cycling_) return;
+    // Place the window per policy instead of the fixed (160,120) ctor default.
+    // Only plain views: a client that mapped straight into fullscreen/maximize
+    // (mpv --fs, applied from initial_commit) already owns its geometry.
+    if (!view->isFullscreen() && !view->isMaximized()) {
+      if (Output *o = outputForView(view)) {
+        const frame::FrameMetrics &fm = currentStyle()->frameMetrics();
+        std::vector<wlr_box> taken;
+        for (auto &up : views) {
+          View *o2 = up.get();
+          if (o2 == view || !o2->isMapped() || o2->workspace() != view->workspace())
+            continue;
+          taken.push_back({o2->x(), o2->y(),
+                           frame::frameWidth(o2->contentWidth(), fm),
+                           frame::frameHeight(o2->contentHeight(), fm)});
+        }
+        place::Point p = place::place(config_.windowPlacement, o->workArea(),
+                                      frame::frameWidth(view->contentWidth(), fm),
+                                      frame::frameHeight(view->contentHeight(), fm),
+                                      taken, placement_cascade_);
+        view->setPosition(p.x, p.y);
+      }
+    }
     if (config_.focusNewWindows) focusView(view);
   }
 
@@ -509,6 +541,13 @@ namespace bbai {
     const int fh = v->drawsFrame() ? frame::frameHeight(v->contentHeight())
                                    : v->contentHeight();
     return outputAt(v->x() + fw / 2.0, v->y() + fh / 2.0);
+  }
+
+  Output *Server::outputForWlr(wlr_output *wo) {
+    if (!wo) return nullptr;
+    for (Output *o : outputs_)
+      if (o->wlrOutput() == wo) return o;
+    return nullptr;
   }
 
   void Server::remaximizeViewsOn(Output *o) {
@@ -598,6 +637,12 @@ namespace bbai {
   }
 
   Part Server::partAt(View *v, double lx, double ly) {
+    if (v->isFullscreen()) {   // borderless: the whole frame is the client
+      const int fx = static_cast<int>(lx) - v->x();
+      const int fy = static_cast<int>(ly) - v->y();
+      return (fx >= 0 && fy >= 0 && fx < v->contentWidth() && fy < v->contentHeight())
+                 ? Part::Client : Part::None;
+    }
     using namespace frame;
     const FrameMetrics &m = style_->frameMetrics();
     const int fx = static_cast<int>(lx) - v->x();
@@ -643,6 +688,7 @@ namespace bbai {
       wlr_seat_keyboard_notify_enter(seat, v->toplevel()->base->surface,
                                      kb->keycodes, kb->num_keycodes, &kb->modifiers);
     if (toolbar_) toolbar_->redrawWindowLabel(v->toplevel()->title);
+    syncFullscreenLayers(v);   // promote v if fullscreen, demote any other fullscreen
   }
 
   // The alt-tab candidate set: every mapped, non-iconified window across all
@@ -881,6 +927,7 @@ namespace bbai {
   // input surfaces (an axis handler when someone adds one, touch, tablet) must
   // call this too.
   void Server::notifyIdleActivity() {
+    ++idle_activity_count_;   // test: proves an input funnel ran even when it discards
     if (idle_notifier_)
       wlr_idle_notifier_v1_notify_activity(idle_notifier_, seat);
   }
@@ -929,6 +976,16 @@ namespace bbai {
     wlr_scene_node *n = wlr_scene_node_at(&scene->tree.node, cursor->x, cursor->y, &sx, &sy);
     View *v = viewFromNode(n);
     if (v && partAt(v, cursor->x, cursor->y) == Part::Client) {
+      // Focus-follows-mouse (default-on): the pointer entered a client's own
+      // surface. Gated to Part::Client (same condition as the pointer-enter
+      // below) so hovering our chrome doesn't thrash focus, and to !cycling_ so
+      // a stray motion mid-alt-tab can't scramble the frozen ring. Lock / open
+      // menu / screenshot / implicit-grab already returned above. focusView is
+      // itself lock-guarded, so this is belt-and-suspenders on the lock path.
+      if (config_.focusModel == FocusModel::SloppyFocus && !cycling_ && v != focused_view) {
+        focusView(v);
+        armAutoRaise(v);   // AutoRaise off -> a no-op that just cancels any pending
+      }
       wlr_surface *surf = v->toplevel()->base->surface;
       wlr_seat_pointer_notify_enter(seat, surf, sx, sy);
       wlr_seat_pointer_notify_motion(seat, time, sx, sy);
@@ -1002,6 +1059,7 @@ namespace bbai {
       if (View *v = viewFromNode(n)) {
         const Part part = partAt(v, cursor->x, cursor->y);
         focusView(v);
+        if (config_.clickRaise) raiseView(v);   // sloppy sub-flag; inert under CTF
         if (button == BTN_LEFT) {
           if (part == Part::Titlebar) { beginInteractive(v, CursorMode::Move, 0); return; }
           if (part == Part::LeftGrip)  { beginInteractive(v, CursorMode::Resize, WLR_EDGE_BOTTOM | WLR_EDGE_LEFT);  return; }
@@ -1016,6 +1074,50 @@ namespace bbai {
       }
     }
     wlr_seat_pointer_notify_button(seat, time, button, state);
+  }
+
+  void Server::onPointerAxis(uint32_t time, wl_pointer_axis orientation, double delta,
+                             int32_t delta_discrete, wl_pointer_axis_source source,
+                             wl_pointer_axis_relative_direction rel) {
+    notifyIdleActivity();                                    // above the lock gate, always
+    if (session_lock_ && session_lock_->locked()) return;   // lock owns the seat
+    if (active_menu_) return;                                // modal: menus don't scroll
+    if (cursor_mode == CursorMode::ScreenshotSelect) return;
+    if (cycling_) return;                                    // alt-tab owns input
+
+    // Implicit grab: a button held over the focused client keeps ALL pointer
+    // delivery on it (motion does the same at :920-926). Checked BEFORE the
+    // wheel-region gate so a mid-drag scroll can't be stolen by the desktop/
+    // toolbar gesture - it goes to the grabbed surface, full stop.
+    if (seat->pointer_state.button_count > 0 && focused_view &&
+        seat->pointer_state.focused_surface == focused_view->toplevel()->base->surface) {
+      wlr_seat_pointer_notify_axis(seat, time, orientation, delta, delta_discrete,
+                                   source, rel);
+      return;
+    }
+
+    // Classic wheel gestures (buttons 4/5). Vertical scroll up = delta < 0 =
+    // next workspace (classic button4, Screen.cc:2058-2063). Toolbar footprint
+    // first (its own key), then the bare desktop; each swallows the event so it
+    // never doubles as a client scroll.
+    if (orientation == WL_POINTER_AXIS_VERTICAL_SCROLL && delta != 0.0) {
+      const int cx = static_cast<int>(cursor->x), cy = static_cast<int>(cursor->y);
+      const int dir = (delta < 0.0) ? +1 : -1;
+      if (toolbar_ && config_.toolbarActionsWithMouseWheel &&
+          toolbar_->containsGlobal(cx, cy)) {
+        cycleWorkspace(dir);
+        return;
+      }
+      if (config_.changeWorkspaceWithMouseWheel && overDesktop(cursor->x, cursor->y)) {
+        cycleWorkspace(dir);
+        return;
+      }
+    }
+
+    // Default: forward to whatever surface currently holds pointer focus
+    // (focused-surface-only delivery, so this is a safe no-op with no focus).
+    wlr_seat_pointer_notify_axis(seat, time, orientation, delta, delta_discrete,
+                                 source, rel);
   }
 
   // --- title-bar button dispatch (F4.3+) ----------------------------------------
@@ -1043,6 +1145,153 @@ namespace bbai {
     }
   }
 
+  void Server::toggleFullscreenForTest() {
+    if (focused_view) setViewFullscreen(focused_view, !focused_view->isFullscreen());
+  }
+
+  void Server::setViewFullscreen(View *v, bool on, Output *on_output) {
+    if (!v) return;
+    Output *o = on_output ? on_output : outputForView(v);
+    if (!o) return;                                  // zero outputs - nowhere to fill
+    v->setFullscreen(on, o->fullBox());
+    // Exit while the view was maximized: re-apply maximized geometry onto the
+    // (possibly different) target's work area - View left that to us.
+    if (!on && v->isMaximized()) v->remaximize(o->workArea());
+    // A fullscreen view is promoted only while focused (classic: unfocused
+    // fullscreen demotes so an alt-tab preview underneath is visible). Enter
+    // while focused -> promote now; exit -> back to the window layer. The
+    // focus-change hooks (syncFullscreenLayers) keep it in sync afterwards.
+    if (on && focused_view == v) {
+      wlr_scene_node_reparent(&v->sceneTree()->node, layer_fullscreen);
+      raiseView(v);
+    } else if (!on) {
+      wlr_scene_node_reparent(&v->sceneTree()->node, layer_window);
+    }
+  }
+
+  void Server::syncFullscreenLayers(View *newly_focused) {
+    // Promote the focused view if it's fullscreen; demote every OTHER fullscreen
+    // view back to the window layer. Keeps the "only the focused fullscreen sits
+    // above the toolbar" invariant across focus swaps, workspace switches and
+    // alt-tab previews.
+    for (auto &up : views) {
+      View *v = up.get();
+      if (!v->isFullscreen()) continue;
+      wlr_scene_tree *want = (v == newly_focused) ? layer_fullscreen : layer_window;
+      if (v->sceneTree()->node.parent != want) {
+        wlr_scene_node_reparent(&v->sceneTree()->node, want);
+        if (v == newly_focused) raiseView(v);
+      }
+    }
+  }
+
+  bool Server::viewLayerIsFullscreenForTest(View *v) const {
+    return v && v->sceneTree()->node.parent == layer_fullscreen;
+  }
+
+  void Server::requestFullscreen(View *v) {
+    const bool want = v->toplevel()->requested.fullscreen;
+    // fullscreen_output can name a specific head; read it at handler time (never
+    // cache it - wlroots clears it via a private destroy listener on unplug).
+    Output *target = nullptr;
+    if (wlr_output *wo = v->toplevel()->requested.fullscreen_output)
+      target = outputForWlr(wo);
+    setViewFullscreen(v, want, target);
+  }
+
+  void Server::requestMaximize(View *v) {
+    Output *o = outputForView(v);
+    if (o) v->setMaximized(v->toplevel()->requested.maximized, o->workArea());
+  }
+
+  void Server::requestMinimize(View *v) {
+    if (v->toplevel()->requested.minimized && !v->isIconified()) iconifyView(v);
+  }
+
+  void Server::snapFocused(uint32_t edge) {
+    View *v = focused_view;
+    if (!v) return;
+    Output *o = outputForView(v);
+    if (!o) return;
+    // Leave fullscreen/maximize first - snap is a plain geometry state, and its
+    // restore rects are those modes' concern, not ours (un-maximize restores
+    // premax, THEN snap overwrites the live geometry).
+    if (v->isFullscreen()) setViewFullscreen(v, false);
+    if (v->isMaximized()) v->setMaximized(false, o->workArea());
+
+    const wlr_box work = o->workArea();
+    const frame::FrameMetrics &fm = currentStyle()->frameMetrics();
+    const int halfW = work.width / 2;
+    const int contentW = halfW - 2 * fm.border;
+    const int contentH = work.height - fm.titleHeight - fm.handleHeight;
+    const int x = (edge == WLR_EDGE_LEFT) ? work.x : work.x + (work.width - halfW);
+    v->resizeTo(x, work.y, contentW, contentH);
+    // Advertise the tiled edges so a cooperating client drops its rounded
+    // corners / drop shadow on the snapped side (best-effort; ignored otherwise).
+    wlr_xdg_toplevel_set_tiled(v->toplevel(), edge | WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
+  }
+
+  void Server::moveFocusedToOutput(wlr_direction dir) {
+    View *v = focused_view;
+    if (!v) return;
+    Output *src = outputForView(v);
+    if (!src) return;
+    const wlr_box sb = src->fullBox();
+    wlr_output *dst_wo = wlr_output_layout_adjacent_output(
+        output_layout, dir, src->wlrOutput(),
+        sb.x + sb.width / 2.0, sb.y + sb.height / 2.0);
+    if (!dst_wo) return;                     // no head that way (POC-proven NULL)
+    Output *dst = outputForWlr(dst_wo);
+    if (!dst || dst == src) return;
+
+    if (v->isFullscreen()) {
+      setViewFullscreen(v, false);           // re-apply on the new head's fullBox
+      setViewFullscreen(v, true, dst);
+      return;
+    }
+    if (v->isMaximized()) {
+      v->remaximize(dst->workArea());
+      return;
+    }
+    // Plain view: preserve the offset within the source head, clamp onto the
+    // target so it can't land off-screen on a smaller monitor.
+    const wlr_box db = dst->fullBox();
+    int nx = db.x + (v->x() - sb.x);
+    int ny = db.y + (v->y() - sb.y);
+    if (nx > db.x + db.width  - 1) nx = db.x + db.width  - 1;
+    if (ny > db.y + db.height - 1) ny = db.y + db.height - 1;
+    if (nx < db.x) nx = db.x;
+    if (ny < db.y) ny = db.y;
+    v->setPosition(nx, ny);
+  }
+
+  int Server::frameWidthForTest(View *v) const {
+    return frame::frameWidth(v->contentWidth(), style_->frameMetrics());
+  }
+  int Server::frameHeightForTest(View *v) const {
+    return frame::frameHeight(v->contentHeight(), style_->frameMetrics());
+  }
+
+  bool Server::isTopmostForTest(View *v) {
+    return v && topmostViewOnWorkspace(v->workspace()) == v;
+  }
+
+  void Server::armAutoRaise(View *v) {
+    autoraise_pending_ = v;
+    if (!autoraise_timer_) return;
+    autoraise_timer_->stop();
+    if (v && config_.autoRaise)
+      autoraise_timer_->start(config_.autoRaiseDelay, /*recurring=*/false);
+  }
+
+  void Server::onAutoRaiseTimeout() {
+    // Only raise if the pending window is still the one under focus - the mouse
+    // may have moved on before the delay elapsed.
+    if (autoraise_pending_ && autoraise_pending_ == focused_view)
+      raiseView(autoraise_pending_);
+    autoraise_pending_ = nullptr;
+  }
+
   // --- test-only injection + introspection --------------------------------------
 
   void Server::injectPointerMotionForTest(double lx, double ly) {
@@ -1054,6 +1303,19 @@ namespace bbai {
     onPointerButton(nowMsec(), button,
                     pressed ? WL_POINTER_BUTTON_STATE_PRESSED
                             : WL_POINTER_BUTTON_STATE_RELEASED);
+  }
+
+  void Server::injectPointerAxisForTest(wl_pointer_axis orientation, double delta,
+                                        int32_t delta_discrete) {
+    onPointerAxis(nowMsec(), orientation, delta, delta_discrete,
+                  WL_POINTER_AXIS_SOURCE_WHEEL,
+                  WL_POINTER_AXIS_RELATIVE_DIRECTION_IDENTICAL);
+  }
+
+  void Server::lockForTest() {
+    if (!session_lock_) return;
+    session_lock_->forceLockedForTest();
+    handleSessionLocked(/*takeover=*/false);   // park focus + abort modal modes
   }
 
   View *Server::viewAtForTest(double lx, double ly) {
@@ -1179,6 +1441,12 @@ namespace bbai {
     case Action::Quit:      terminate(); break;
     case Action::CycleNext: cycleStep(+1); break;
     case Action::CyclePrev: cycleStep(-1); break;
+    case Action::ToggleFullscreen:
+      if (focused_view) setViewFullscreen(focused_view, !focused_view->isFullscreen());
+      break;
+    case Action::SnapLeft:     snapFocused(WLR_EDGE_LEFT);  break;
+    case Action::SnapRight:    snapFocused(WLR_EDGE_RIGHT); break;
+    case Action::MoveToOutput: moveFocusedToOutput(static_cast<wlr_direction>(a.arg)); break;
     case Action::None:      break;
     }
   }
@@ -1198,6 +1466,7 @@ namespace bbai {
     focused_view = nullptr;
     wlr_seat_keyboard_notify_clear_focus(seat);
     if (toolbar_) toolbar_->redrawWindowLabel(nullptr);
+    syncFullscreenLayers(nullptr);   // nothing focused -> demote every fullscreen view
   }
 
   void Server::handleSessionLocked(bool takeover) {

@@ -89,7 +89,7 @@ namespace bbai {
       res.read("session.focusModel", "Session.FocusModel",
                res.read(screenName(screen, "focusModel"),
                         screenClass(screen, "FocusModel"),
-                        "ClickToFocus"));
+                        "SloppyFocus"));   // user-locked default-on; an rc key wins
     if (fm.find("ClickToFocus") != std::string::npos) {
       cfg.focusModel = FocusModel::ClickToFocus;
       cfg.autoRaise = false;
@@ -124,6 +124,14 @@ namespace bbai {
       cfg.windowPlacement = WindowPlacement::Cascade;
     else
       cfg.windowPlacement = WindowPlacement::RowSmart;
+
+    // --- mouse-wheel gestures (global session keys, classic spellings) ---
+    cfg.changeWorkspaceWithMouseWheel =
+      res.read("session.changeWorkspaceWithMouseWheel",
+               "Session.changeWorkspaceWithMouseWheel", true);
+    cfg.toolbarActionsWithMouseWheel =
+      res.read("session.toolbarActionsWithMouseWheel",
+               "Session.toolbarActionsWithMouseWheel", true);
 
     // --- per-screen workspaces ---
     cfg.workspaceCount =

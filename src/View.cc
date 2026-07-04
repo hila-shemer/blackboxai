@@ -27,6 +27,11 @@ namespace bbai {
       if (xdg_toplevel->base->initial_commit) {
         chooseDecorationMode();
         wlr_xdg_toplevel_set_size(xdg_toplevel, cw, ch);
+        // A client can request state before the first commit (mpv --fs); the
+        // request handlers deferred, so apply from here now that the surface is
+        // initialized and set_* can schedule a configure.
+        if (xdg_toplevel->requested.fullscreen) server.requestFullscreen(this);
+        else if (xdg_toplevel->requested.maximized) server.requestMaximize(this);
         return;
       }
       // A later commit at a new size (interactive resize) re-lays-out the frame.
@@ -50,6 +55,33 @@ namespace bbai {
     destroy_.connect(&surface->events.destroy, [this](void *) {
       server.removeView(this);  // erases the owning unique_ptr -> deletes *this
     });
+
+    // xdg state requests: the protocol REQUIRES a configure in response even if
+    // nothing changed (wlr_xdg_shell.h). We route the three we implement through
+    // the Server (it resolves the output); request_move/resize are ack-only v1.
+    req_fullscreen_.connect(&xdg_toplevel->events.request_fullscreen, [this](void *) {
+      if (xdg_toplevel->base->initialized) server.requestFullscreen(this);
+      // else: applied from the initial_commit block below (gotcha #13).
+    });
+    req_maximize_.connect(&xdg_toplevel->events.request_maximize, [this](void *) {
+      if (xdg_toplevel->base->initialized) server.requestMaximize(this);
+    });
+    req_minimize_.connect(&xdg_toplevel->events.request_minimize, [this](void *) {
+      if (xdg_toplevel->base->initialized) server.requestMinimize(this);
+    });
+    req_move_.connect(&xdg_toplevel->events.request_move, [this](void *) {});    // ack-only v1
+    req_resize_.connect(&xdg_toplevel->events.request_resize, [this](void *) {}); // ack-only v1
+    // Emitted at the top of destroy_xdg_toplevel, before it asserts every
+    // request_* signal has no listeners - disconnect ours here so a client that
+    // tears down the toplevel role (proxy) ahead of the wl_surface can't abort.
+    toplevel_destroy_.connect(&xdg_toplevel->events.destroy, [this](void *) {
+      req_maximize_.disconnect();
+      req_fullscreen_.disconnect();
+      req_minimize_.disconnect();
+      req_move_.disconnect();
+      req_resize_.disconnect();
+      toplevel_destroy_.disconnect();
+    });
   }
 
   // wlroots auto-destroys surface_tree when the xdg surface dies; we own
@@ -61,19 +93,22 @@ namespace bbai {
   }
 
   void View::relayout() {
-    if (draw_frame) {
+    // Fullscreen hides chrome regardless of the decoration mode (an SSD window
+    // goes borderless while fullscreen, like a CSD holdout).
+    const bool chrome = draw_frame && !fullscreen_;
+    if (chrome) {
       const frame::FrameMetrics &m = server.currentStyle()->frameMetrics();
       wlr_scene_node_set_position(&surface_tree->node, frame::clientX(m), frame::clientY(m));
       deco->rebuild(*server.currentStyle(), cw, ch, xdg_toplevel->title, focused_);
     } else {
-      // CSD holdout: no chrome, client surface at the View origin; we still own
-      // the scene tree and manage geometry.
+      // CSD holdout / fullscreen: no chrome, client surface at the View origin;
+      // we still own the scene tree and manage geometry.
       wlr_scene_node_set_position(&surface_tree->node, 0, 0);
       deco->clear();
     }
     laid_w = cw;
     laid_h = ch;
-    laid_frame = draw_frame;
+    laid_frame = chrome;   // track the EFFECTIVE chrome state, not raw draw_frame
   }
 
   void View::setPosition(int x, int y) {
@@ -116,6 +151,27 @@ namespace bbai {
   void View::remaximize(wlr_box work) {
     if (!maximized_) return;
     applyMaximizedGeometry(work);
+  }
+
+  void View::setFullscreen(bool on, wlr_box full) {
+    if (fullscreen_ == on) return;
+    if (on) {
+      // One shared saved rect: don't clobber a maximize's premax, and don't
+      // re-save our own on a redundant enter.
+      if (!maximized_ && !fullscreen_) {
+        premax_x = pos_x; premax_y = pos_y; premax_w = cw; premax_h = ch;
+      }
+      fullscreen_ = true;
+      wlr_xdg_toplevel_set_fullscreen(xdg_toplevel, true);   // the mandated ack
+      resizeTo(full.x, full.y, full.width, full.height);     // content == fullBox
+    } else {
+      fullscreen_ = false;
+      wlr_xdg_toplevel_set_fullscreen(xdg_toplevel, false);
+      // Maximized-underneath restore is the Server's job (work area); here we
+      // only restore premax for the plain case.
+      if (!maximized_) resizeTo(premax_x, premax_y, premax_w, premax_h);
+    }
+    relayout();   // re-run the frame/chrome branch for the new fullscreen_ state
   }
 
   void View::applyVisibility() {

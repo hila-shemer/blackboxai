@@ -33,6 +33,7 @@ TEST_CASE("cursor position classifies the View and frame part under it") {
   };
   for (int i = 0; i < 500 && !mapped(); ++i) { client.flush(); server.dispatch(); client.pump(); }
   REQUIRE(mapped());
+  server.viewsForTest()[0]->setPosition(160, 120);
   for (int i = 0; i < 30; ++i) { client.flush(); server.dispatch(); client.pump(); }
 
   View *v = server.viewsForTest()[0].get();
@@ -80,6 +81,7 @@ TEST_CASE("a button-down drag from the client keeps focus across the chrome boun
   };
   for (int i = 0; i < 500 && !mapped(); ++i) { client.flush(); server.dispatch(); client.pump(); }
   REQUIRE(mapped());
+  server.viewsForTest()[0]->setPosition(160, 120);
   for (int i = 0; i < 30; ++i) { client.flush(); server.dispatch(); client.pump(); }
   View *v = server.viewsForTest()[0].get();
   wlr_surface *surf = v->toplevel()->base->surface;

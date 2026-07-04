@@ -30,9 +30,11 @@ namespace bbai::test {
     int w = 0, h = 0;
     int pending_w = 0, pending_h = 0;  // size from the latest toplevel.configure
     TestClient::Deco deco = TestClient::Deco::None;
+    bool fs_before_map = false;   // request fullscreen before the first commit
     bool created = false;
     bool got_close = false;       // compositor requested xdg_toplevel.close
     int pointer_buttons = 0;      // count of wl_pointer.button events received
+    int pointer_axis = 0;         // count of wl_pointer.axis events received
   };
 
   static wl_buffer *makeShmBuffer(TestClient::Impl *c) {
@@ -107,6 +109,11 @@ namespace bbai::test {
                          ? ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
                          : ZXDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE);
     }
+    // The mpv --fs case: request fullscreen while the surface is still
+    // uninitialized (before any buffer commit). The compositor must defer the
+    // configure to initial_commit rather than assert (gotcha #13).
+    if (c->fs_before_map)
+      xdg_toplevel_set_fullscreen(c->toplevel, nullptr);
     wl_surface_commit(c->surface);  // no buffer yet -> drives the initial configure
   }
 
@@ -120,7 +127,9 @@ namespace bbai::test {
   static void ptr_button(void *data, wl_pointer *, uint32_t, uint32_t, uint32_t, uint32_t) {
     static_cast<TestClient::Impl *>(data)->pointer_buttons++;
   }
-  static void ptr_axis(void *, wl_pointer *, uint32_t, uint32_t, wl_fixed_t) {}
+  static void ptr_axis(void *data, wl_pointer *, uint32_t, uint32_t, wl_fixed_t) {
+    static_cast<TestClient::Impl *>(data)->pointer_axis++;
+  }
   static const wl_pointer_listener s_pointer_listener = {
     .enter = ptr_enter, .leave = ptr_leave, .motion = ptr_motion,
     .button = ptr_button, .axis = ptr_axis };
@@ -161,12 +170,13 @@ namespace bbai::test {
   static const wl_registry_listener s_registry_listener = { reg_global, reg_global_remove };
 
   TestClient::TestClient(const std::string &socket, uint32_t argb, int w, int h,
-                         Deco deco) {
+                         Deco deco, bool fullscreen_before_map) {
     impl = new Impl();
     impl->argb = argb;
     impl->w = w;
     impl->h = h;
     impl->deco = deco;
+    impl->fs_before_map = fullscreen_before_map;
     impl->display = connectWithRetry(socket.c_str());
     if (!impl->display) return;
     impl->registry = wl_display_get_registry(impl->display);
@@ -195,6 +205,8 @@ namespace bbai::test {
 
   int TestClient::pointerButtonEvents() const { return impl ? impl->pointer_buttons : 0; }
 
+  int TestClient::pointerAxisEvents() const { return impl ? impl->pointer_axis : 0; }
+
   void TestClient::flush() {
     if (impl->display) wl_display_flush(impl->display);
   }
@@ -207,6 +219,17 @@ namespace bbai::test {
     if (impl->surface)  { wl_surface_destroy(impl->surface);    impl->surface = nullptr; }
     if (impl->buffer)   { wl_buffer_destroy(impl->buffer);      impl->buffer = nullptr; }
     wl_display_flush(impl->display);
+  }
+
+  void TestClient::setFullscreen(bool on) {
+    if (!impl || !impl->toplevel) return;
+    if (on) xdg_toplevel_set_fullscreen(impl->toplevel, nullptr);
+    else    xdg_toplevel_unset_fullscreen(impl->toplevel);
+  }
+  void TestClient::setMaximized(bool on) {
+    if (!impl || !impl->toplevel) return;
+    if (on) xdg_toplevel_set_maximized(impl->toplevel);
+    else    xdg_toplevel_unset_maximized(impl->toplevel);
   }
 
   void TestClient::destroyDecorationForTest() {

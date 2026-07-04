@@ -68,6 +68,7 @@ TEST_CASE("the menu is modal: a press that would start a move is consumed") {
   auto mapped = [&] { const auto &v = server.viewsForTest(); return !v.empty() && v[0]->isMapped(); };
   for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); server.dispatch(); c.pump(); }
   REQUIRE(mapped());
+  server.viewsForTest()[0]->setPosition(160, 120);
   for (int i = 0; i < 30; ++i) { c.flush(); server.dispatch(); c.pump(); }
 
   // Open the menu over the desktop, then press on the window's titlebar: while
@@ -132,6 +133,7 @@ TEST_CASE("dismissing the menu over a client delivers no orphan button release")
   auto mapped = [&] { const auto &v = server.viewsForTest(); return !v.empty() && v[0]->isMapped(); };
   for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); server.dispatch(); c.pump(); }
   REQUIRE(mapped());
+  server.viewsForTest()[0]->setPosition(160, 120);
   for (int i = 0; i < 40; ++i) { c.flush(); server.dispatch(); c.pump(); }  // settle + bind wl_pointer
 
   // Baseline: a matched press+release over the client content delivers exactly 2
@@ -196,6 +198,7 @@ TEST_CASE("Mod4+space opens the menu mid-move and aborts the grab (window stops 
   auto mapped = [&] { const auto &v = server.viewsForTest(); return !v.empty() && v[0]->isMapped(); };
   for (int i = 0; i < 500 && !mapped(); ++i) { c.flush(); server.dispatch(); c.pump(); }
   REQUIRE(mapped());
+  server.viewsForTest()[0]->setPosition(160, 120);
   for (int i = 0; i < 30; ++i) { c.flush(); server.dispatch(); c.pump(); }
 
   View *v = server.viewsForTest()[0].get();

@@ -38,6 +38,8 @@ TEST_CASE("two-window focus-swap: focused titlebar differs from unfocused") {
         ca.flush(); server.dispatch(); ca.pump();
     }
     REQUIRE(vaMapped());
+    // Wave-2 placement moved the map default off (160,120); restore it (wave-1 geometry).
+    server.viewsForTest()[0]->setPosition(160, 120);
     for (int i = 0; i < 30; ++i) { ca.flush(); server.dispatch(); ca.pump(); }
 
     View *va = server.viewsForTest()[0].get();
