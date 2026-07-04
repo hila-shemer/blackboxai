@@ -27,12 +27,15 @@ namespace bbai::rootmenu {
   std::vector<MenuItem> buildConfigSubmenu(const Config &cfg);
 
   // Live fixup of a parsed menu-file tree: [workspaces] placeholders get the
-  // real workspace submenu (rebuilt per open, so the current-mark stays
-  // honest), [config] placeholders go disabled until wave-2 configmenu mounts
-  // there, and an empty parse falls back to the in-code menu - a broken first
-  // boot still gets a terminal + workspaces, not classic's bare xterm stub.
+  // real workspace submenu and [config] placeholders the Configuration
+  // submenu (both rebuilt per open, so current-marks and checkmarks stay
+  // honest), and an empty parse falls back to the in-code menu - a broken
+  // first boot still gets a terminal + workspaces, not classic's bare xterm
+  // stub. The fallback deliberately has no [config] row: adding one would
+  // churn the m4 menu goldens + pinned item indexes for a lifeboat menu.
   std::vector<MenuItem> buildFromParsed(const std::vector<MenuItem> &parsed,
-                                        const WorkspaceModel &ws);
+                                        const WorkspaceModel &ws,
+                                        const Config &cfg);
 
 } // namespace bbai::rootmenu
 

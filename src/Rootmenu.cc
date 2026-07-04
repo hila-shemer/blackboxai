@@ -107,26 +107,28 @@ namespace bbai::rootmenu {
   }
 
   namespace {
-    void fixupDynamic(std::vector<MenuItem> &items, const WorkspaceModel &ws) {
+    void fixupDynamic(std::vector<MenuItem> &items, const WorkspaceModel &ws,
+                      const Config &cfg) {
       for (MenuItem &m : items) {
         if (m.kind != MenuItem::Kind::Submenu) continue;
         if (m.action == MenuItem::Act::WorkspacesMenu) {
           m.submenu_items = buildWorkspacesSubmenu(ws);
         } else if (m.action == MenuItem::Act::ConfigMenu) {
-          m.enabled = false;                 // wave-2 configmenu mounts here
-          m.submenu_items.clear();
+          m.enabled = true;                        // wave-2 mount: live rows
+          m.submenu_items = buildConfigSubmenu(cfg);
         } else {
-          fixupDynamic(m.submenu_items, ws);
+          fixupDynamic(m.submenu_items, ws, cfg);
         }
       }
     }
   } // namespace
 
   std::vector<MenuItem> buildFromParsed(const std::vector<MenuItem> &parsed,
-                                        const WorkspaceModel &ws) {
+                                        const WorkspaceModel &ws,
+                                        const Config &cfg) {
     if (parsed.empty()) return build(ws);   // locked: fall back to the RICHER in-code menu
     std::vector<MenuItem> items = parsed;
-    fixupDynamic(items, ws);
+    fixupDynamic(items, ws, cfg);
     return items;
   }
 

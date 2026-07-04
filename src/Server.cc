@@ -1724,7 +1724,7 @@ namespace bbai {
       loadMenuFile();
     std::vector<MenuItem> items = menu_file_.empty()
         ? rootmenu::build(workspaces_)
-        : rootmenu::buildFromParsed(menu_items_, workspaces_);
+        : rootmenu::buildFromParsed(menu_items_, workspaces_, config_);
     const std::u32string title =
         (!menu_file_.empty() && !menu_title_.empty()) ? menu_title_
                                                       : rootmenu::title();
