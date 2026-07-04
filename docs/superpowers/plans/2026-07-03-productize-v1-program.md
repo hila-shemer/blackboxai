@@ -76,6 +76,25 @@ the 0.19→0.20 staleness in RESUME.md + project memory in passing.
 - Implementation happens in the `blackboxai-ci:f44` container (this box has no wlroots);
   plans' "host header re-cite" tasks re-cite from the container's /usr/include.
 
+## TTY checkpoint hand-check list (accumulating)
+
+From lock-idle (headless can't reach these): real swaylock locks/unlocks (proves key
+delivery to a lock surface); real swayidle timeout fires; VT-switch while locked comes
+back locked; locked-frame-presented-before-`locked` ordering against real vblank. From
+sni-core: nm-applet-class items are activate-only until wave-2 dbusmenu (expected).
+
+## Train log
+
+- Stop 1 `sni-core` (see git log): clean merge, gate 39/39, 90%.
+- Stop 2 `lock-idle` (`d9672ec`): 2 Server.cc conflicts, git-mediate resolved; gate
+  42/42, 90%; wl_output global landed with ZERO golden churn as promised.
+- Stop 3 `work-area` (`c1f3cca`): 1 tests/meson.build conflict; gate 44/44, 90%;
+  goldens byte-identical - the slice's guarantee, provable only at this slot.
+- Watch item: `lock_interactions` failed ONCE on a cold-cache first parallel run
+  (`REQUIRE(lc.ok())` - client connect under load); 10x single + 3x full suite clean
+  after. Two implementers reported the same one-shot load flake. If it recurs, harden
+  the test clients' connect with a bounded retry - do not loosen assertions.
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
