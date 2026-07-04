@@ -81,7 +81,9 @@ TEST_CASE("switching to a populated workspace with no remembered focus picks the
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
 
-  Server server(/*headless=*/true);
+  // The subject needs "views present but NO remembered focus", so mapping must
+  // not auto-focus - opt out of the classic focusNewWindows default.
+  Server server(/*headless=*/true, "tests/fixtures/nofocusnew.blackboxrc");
   REQUIRE(server.ok());
   for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
     server.dispatch();
@@ -99,7 +101,7 @@ TEST_CASE("switching to a populated workspace with no remembered focus picks the
   for (int i = 0; i < 40; ++i) { a.flush(); b.flush(); server.dispatch(); a.pump(); b.pump(); }
   REQUIRE(server.viewsForTest().size() == 2);
   View *vb = server.viewsForTest()[1].get();      // topmost (later-mapped) on ws1
-  REQUIRE(server.focusedViewForTest() == nullptr); // mapping does not auto-focus
+  REQUIRE(server.focusedViewForTest() == nullptr); // focusNewWindows off in this fixture
 
   // Leave and return: ws1 has views but no remembered focus -> focus the topmost.
   server.setCurrentWorkspace(0);

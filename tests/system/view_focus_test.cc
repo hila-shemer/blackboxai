@@ -15,7 +15,9 @@ TEST_CASE("View focus state: get/set + idempotent + relayout guard") {
     setenv("WLR_BACKENDS", "headless", 1);
     setenv("WLR_RENDERER", "pixman", 1);
 
-    Server server(/*headless=*/true);
+    // The subject is the raw get/set state machine, so the window must START
+    // unfocused - opt out of the classic focusNewWindows default.
+    Server server(/*headless=*/true, "tests/fixtures/nofocusnew.blackboxrc");
     REQUIRE(server.ok());
     for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
         server.dispatch();
@@ -37,7 +39,7 @@ TEST_CASE("View focus state: get/set + idempotent + relayout guard") {
 
     View *v = server.viewsForTest()[0].get();
 
-    // Unfocused by default.
+    // Unfocused start (focusNewWindows is off in this fixture).
     CHECK(v->isFocused() == false);
 
     // setFocused(true) stores the state.
@@ -57,7 +59,8 @@ TEST_CASE("View focus state: setFocused on a CSD window is a safe no-op (no cras
     setenv("WLR_BACKENDS", "headless", 1);
     setenv("WLR_RENDERER", "pixman", 1);
 
-    Server server(/*headless=*/true);
+    // Unfocused start again (see above) - the no-op toggle is the subject.
+    Server server(/*headless=*/true, "tests/fixtures/nofocusnew.blackboxrc");
     REQUIRE(server.ok());
     for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
         server.dispatch();

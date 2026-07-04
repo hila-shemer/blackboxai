@@ -51,6 +51,8 @@ namespace bbai {
 
     const std::string &socketName() const { return socket_name; }
     void removeView(View *view);
+    // A View's surface mapped: apply focus policy (classic focusNewWindows).
+    void onViewMapped(View *view);
 
     // An Output's wlr_output fired destroy (hot-unplug / backend teardown).
     // Called by the Output's own destroy handler BEFORE it deletes itself, so
