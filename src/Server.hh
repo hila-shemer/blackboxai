@@ -72,6 +72,15 @@ namespace bbai {
     const bbai::Config &config() const { return config_; }
     std::shared_ptr<const Style> currentStyle() const { return style_; }
     void runRootCommandForTest() { runRootCommand(); }
+    // Re-read the rc (ctor-remembered path unless overridden), rebuild Config,
+    // reload the style through the ladder, re-apply live knobs, restyle.
+    // False if the requested style file was unreadable (fallback applied).
+    // The wave-2 configmenu / menu-wire [reconfig] entrypoint.
+    bool reconfigure(const std::string &rc_override = {});
+    // Load one style file, restyle live, persist session.styleFile into the
+    // rc (classic saveStyleFilename). False (and no change) if unreadable.
+    // menu-wire's Act::SetStyle entrypoint.
+    bool applyStyleFile(const std::string &path);
     WorkspaceModel &workspaces() { return workspaces_; }
 
     // Switch to workspace i (model + toolbar label in B3; view show/hide + focus
@@ -249,6 +258,8 @@ namespace bbai {
     std::shared_ptr<const Style> loadStyleWithFallback(const std::string &path,
                                                        bool *exact_ok = nullptr);
     void runRootCommand();   // rc-file rootCommand via /bin/sh (user-authored)
+    void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
+    void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
     bbai::Config config_;
     std::shared_ptr<const Style> style_;

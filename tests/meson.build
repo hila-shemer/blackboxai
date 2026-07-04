@@ -123,6 +123,12 @@ rc_boot_exe = executable('rc-boot-test', files('system/rc_boot_test.cc'),
 test('rc_boot', rc_boot_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Live re-theme: reconfigure()/applyStyleFile() - the wave-2 configmenu seams.
+retheme_exe = executable('retheme-test', files('system/retheme_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('retheme', retheme_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 client_exe = executable('client-test', files('system/client_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('client', client_exe, suite : 'system',

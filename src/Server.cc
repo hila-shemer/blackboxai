@@ -74,13 +74,12 @@ namespace bbai {
     style_ = loadStyleWithFallback(config_.styleFile);
 
     // Workspace count/names from the rc. Applied before any output exists so
-    // the toolbar's first render already shows the configured name.
-    while (workspaces_.count() < config_.workspaceCount)
-      workspaces_.addWorkspace();
+    // the toolbar's first render already shows the configured name. The shrink
+    // loop stays boot-only: no views exist yet, so dropping workspaces is safe
+    // here and only here (applyConfig grows but never shrinks).
     while (workspaces_.count() > config_.workspaceCount && workspaces_.count() > 1)
       workspaces_.removeLastWorkspace();
-    for (unsigned i = 0; i < config_.workspaceNames.size() && i < workspaces_.count(); ++i)
-      workspaces_.setName(i, config_.workspaceNames[i]);
+    applyConfig();
 
     wlr_log_init(WLR_ERROR, nullptr);
 
@@ -251,8 +250,7 @@ namespace bbai {
         // null again and the next head becomes the new primary.)
         if (config_.toolbar.enabled) {
           toolbar_ = std::make_unique<Toolbar>(*this, *o);
-          toolbar_->setPlacement(config_.toolbar.placement);
-          toolbar_->setAutoHide(config_.toolbar.autoHide);
+          applyConfig();
         }
         // Give the pointer an image from frame one - otherwise it's invisible
         // over our own chrome until the Super+F7 flow happens to latch one.
@@ -312,6 +310,62 @@ namespace bbai {
     // interpreted into the desktop background by Style (locked policy).
     if (config_.rootCommand.empty()) return;
     commandRunner().run({"/bin/sh", "-c", config_.rootCommand});
+  }
+
+  void Server::applyConfig() {
+    // Workspaces: names always; count grows only. Shrinking with occupied
+    // workspaces means re-homing views - wave-2 configmenu's problem, and
+    // classic didn't shrink on reconfigure either.
+    while (workspaces_.count() < config_.workspaceCount)
+      workspaces_.addWorkspace();
+    for (unsigned i = 0; i < config_.workspaceNames.size() && i < workspaces_.count(); ++i)
+      workspaces_.setName(i, config_.workspaceNames[i]);
+
+    if (!config_.toolbar.enabled) {
+      toolbar_.reset();
+    } else if (!toolbar_ && active_output) {
+      wlr_output *out = active_output->wlrOutput();
+      toolbar_ = std::make_unique<Toolbar>(*this, out->width, out->height);
+    }
+    if (toolbar_) {
+      toolbar_->setPlacement(config_.toolbar.placement);
+      toolbar_->setAutoHide(config_.toolbar.autoHide);
+    }
+  }
+
+  void Server::restyle() {
+    closeMenus();   // open menus hold old-style buffers; null-safe
+    for (Output *o : outputs_) o->renderBackground();
+    for (auto &v : views) v->restyle();
+    if (toolbar_) toolbar_->restyle();
+  }
+
+  bool Server::reconfigure(const std::string &rc_override) {
+    if (!rc_override.empty()) rc_path_ = rc_override;
+    config_ = bbai::Config::load(rc_path_);
+    bool style_ok = true;
+    style_ = loadStyleWithFallback(config_.styleFile, &style_ok);
+    applyConfig();
+    restyle();
+    // rc rootCommand re-runs (classic runs it on every style load). No
+    // headless gate here - by reconfigure time a test owns the runner; the
+    // ctor keeps its gate because fixtures with rootCommand exist for the
+    // parse tests.
+    runRootCommand();
+    return style_ok;
+  }
+
+  bool Server::applyStyleFile(const std::string &path) {
+    std::shared_ptr<const Style> s = Style::load(path);
+    if (!s) return false;
+    style_ = std::move(s);
+    config_.styleFile = path;
+    restyle();
+    // Classic saveStyleFilename: the pick survives a restart. Failure to
+    // write is loud-but-nonfatal - the live re-theme already happened.
+    if (!rc_path_.empty() && !bbai::updateRcKey(rc_path_, "session.styleFile", path))
+      fprintf(stderr, "blackboxai: could not persist styleFile to %s\n", rc_path_.c_str());
+    return true;
   }
 
   Server::~Server() {
