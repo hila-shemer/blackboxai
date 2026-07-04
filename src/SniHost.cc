@@ -26,7 +26,13 @@ namespace bbai::sni {
     constexpr const char *kItemIface    = "org.kde.StatusNotifierItem";
 
     // a(iiay) -> IconFrame list. Degenerate/mis-sized frames are dropped here,
-    // once, instead of being every renderer's problem.
+    // once, instead of being every renderer's problem. The size check is
+    // 64-bit: any peer can register an item, and dims like 1073741825x4 make
+    // 4*w*h wrap at 32 bits to the byte count actually shipped. The dim cap
+    // bounds what a frame can make us store (D-Bus caps the message anyway;
+    // real tray icons top out around 256).
+    constexpr int32_t kMaxIconDim = 1024;
+
     void readFrames(sd_bus_message *m, std::vector<IconFrame> &out) {
       if (sd_bus_message_enter_container(m, 'a', "(iiay)") < 0) return;
       while (sd_bus_message_at_end(m, 0) == 0) {
@@ -37,7 +43,8 @@ namespace bbai::sni {
         if (sd_bus_message_read(m, "ii", &w, &h) >= 0 &&
             sd_bus_message_read_array(m, 'y', &bytes, &len) >= 0 &&
             w > 0 && h > 0 && bytes &&
-            len == 4u * unsigned(w) * unsigned(h)) {
+            w <= kMaxIconDim && h <= kMaxIconDim &&
+            uint64_t(len) == 4 * uint64_t(w) * uint64_t(h)) {
           IconFrame f;
           f.width = w;
           f.height = h;
@@ -160,13 +167,16 @@ namespace bbai::sni {
     auto *reg = static_cast<Host::Reg *>(userdata);
     Host *host = reg->host;
     if (sd_bus_message_is_method_error(reply, nullptr)) {
-      // The item never answered its properties: drop the registration so
-      // items_ only ever holds materialized entries. Copy the keys out first -
-      // dropRegistration destroys reg, and passing reg's own strings by
-      // reference would leave them dangling mid-call. (Unref-from-own-callback
-      // is safe: sd-bus holds a ref on the slot during dispatch.)
-      const std::string service = reg->service, path = reg->path;
-      host->dropRegistration(service, path);
+      // The item didn't answer its properties - object not exported yet
+      // (UnknownObject) or a stalled main loop (NoReply after ~25s). KEEP the
+      // registration: dropping here was unrecoverable, since neither
+      // libappindicator nor KStatusNotifierItem watches
+      // StatusNotifierItemUnregistered for its own item, so one slow start
+      // lost the tray icon until app restart. The surviving reg is exactly
+      // what lets the item's next NewIcon/NewStatus re-fetch (onItemSignal),
+      // and the sd_bus_track still reaps it when the connection really dies.
+      // items_ still only holds materialized entries - same rule as the
+      // parse-fail return below.
       return 0;
     }
 
@@ -301,6 +311,14 @@ namespace bbai::sni {
       fd_source_ = wl_event_loop_add_fd(loop_, sd_bus_get_fd(bus_),
                                         WL_EVENT_READABLE, Cb::onFd, this);
       timer_source_ = wl_event_loop_add_timer(loop_, Cb::onTimer, this);
+      if (!fd_source_ || !timer_source_) {
+        // Source allocation failed (OOM, or timerfd_create under fd
+        // exhaustion). A half-armed host either null-derefs in rearmSources
+        // or silently never pumps - inert-never-fatal instead.
+        fprintf(stderr, "blackboxai: SNI event sources unavailable - tray disabled\n");
+        teardownBus();
+        return;
+      }
       drain();   // flush the ctor-time emissions + arm both sources
     }
   }
@@ -329,7 +347,11 @@ namespace bbai::sni {
   }
 
   void Host::rearmSources() {
-    if (!loop_ || !bus_ || !fd_source_) return;
+    // timer_source_ in the guard: wl_event_source_timer_update(NULL,..)
+    // segfaults (no internal check - probed against the installed
+    // libwayland-server). The ctor tears down on a failed add, so both
+    // sources are non-null together - this is belt and braces.
+    if (!loop_ || !bus_ || !fd_source_ || !timer_source_) return;
     wl_event_source_fd_update(fd_source_, wlMaskFromPoll(sd_bus_get_events(bus_)));
 
     uint64_t usec = 0;
@@ -352,6 +374,10 @@ namespace bbai::sni {
 
   void Host::processForTest() { drain(); }
 
+  bool Host::wantsWriteForTest() const {
+    return bus_ && (sd_bus_get_events(bus_) & POLLOUT);
+  }
+
   void Host::addRegistration(const std::string &service, const std::string &path,
                              const std::string &owner) {
     for (auto &r : regs_)
@@ -364,27 +390,36 @@ namespace bbai::sni {
     reg->service = service;
     reg->path = path;
     reg->owner = owner;
-    regs_.push_back(std::move(reg));
+    // Arm the death-watch + the GetAll BEFORE committing. A name sd-bus's own
+    // validator rejects ("" or "a b", -EINVAL from track_add_name and from the
+    // async call) must not be announced at all: the only thing that saved the
+    // old order from a permanent zombie was an sd-bus quirk - an EMPTY track
+    // dispatches its handler on every process pass (verified on 259), so the
+    // failed reg self-dropped through onTrack, spraying a garbage
+    // Registered/Unregistered signal pair on the way. Reject-before-commit
+    // needs neither the quirk nor a name-syntax reimplementation.
+    if (sd_bus_track_new(bus_, &reg->track, Cb::onTrack, reg.get()) < 0 ||
+        sd_bus_track_add_name(reg->track, service.c_str()) < 0)
+      return;                           // reg dies here, nothing was announced
+    if (fetchAll(*reg) < 0)
+      return;
+    regs_.push_back(std::move(reg));    // Reg* stays stable - unique_ptr
     sd_bus_emit_signal(bus_, kWatcherPath, kWatcherIface,
                        "StatusNotifierItemRegistered", "s",
                        (service + path).c_str());
     sd_bus_emit_properties_changed(bus_, kWatcherPath, kWatcherIface,
                                    "RegisteredStatusNotifierItems", nullptr);
-    Reg *r = regs_.back().get();
-    if (sd_bus_track_new(bus_, &r->track, Cb::onTrack, r) >= 0)
-      sd_bus_track_add_name(r->track, service.c_str());
-    fetchAll(*regs_.back());
   }
 
-  void Host::fetchAll(Reg &reg) {
+  int Host::fetchAll(Reg &reg) {
     if (reg.getall_slot) {
       sd_bus_slot_unref(reg.getall_slot);   // supersede an in-flight fetch
       reg.getall_slot = nullptr;
     }
-    sd_bus_call_method_async(bus_, &reg.getall_slot, reg.service.c_str(),
-                             reg.path.c_str(),
-                             "org.freedesktop.DBus.Properties", "GetAll",
-                             Cb::onGetAll, &reg, "s", kItemIface);
+    return sd_bus_call_method_async(bus_, &reg.getall_slot, reg.service.c_str(),
+                                    reg.path.c_str(),
+                                    "org.freedesktop.DBus.Properties", "GetAll",
+                                    Cb::onGetAll, &reg, "s", kItemIface);
   }
 
   void Host::storeItem(Item item) {
@@ -402,6 +437,14 @@ namespace bbai::sni {
     if (!bus_) return;
     sd_bus_call_method_async(bus_, nullptr, it.service.c_str(), it.path.c_str(),
                              kItemIface, method, nullptr, nullptr, "ii", x, y);
+    // Flush + rearm NOW. This enqueue is the one bus write that happens
+    // outside the fd/timer drain cycle; if the socket write blocks (EAGAIN),
+    // sd-bus parks the message and wants POLLOUT - but the fd mask was last
+    // set by a previous drain (POLLIN-only when idle) and these calls are
+    // NO_REPLY_EXPECTED, so no timeout would rescue it either. Without this,
+    // a queued click waits for unrelated inbound traffic - forever on an
+    // idle bus.
+    drain();
   }
 
   void Host::activate(const Item &it, int x, int y) {

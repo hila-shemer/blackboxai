@@ -9,6 +9,7 @@
 
 #include <systemd/sd-bus.h>
 
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
@@ -39,7 +40,8 @@ namespace {
 
   struct SigWatch {
     bool fired = false;
-    std::string arg;
+    int count = 0;
+    std::string arg;    // the LAST emission's argument
   };
 
   int onSig(sd_bus_message *m, void *userdata, sd_bus_error *) {
@@ -47,6 +49,7 @@ namespace {
     const char *s = nullptr;
     if (sd_bus_message_read(m, "s", &s) >= 0 && s) w->arg = s;
     w->fired = true;
+    ++w->count;
     return 0;
   }
 
@@ -113,15 +116,87 @@ namespace {
   }
 
   // A bare item object so the Host's post-registration GetAll succeeds with an
-  // empty dict (sd-bus serves org.freedesktop.DBus.Properties for any vtable).
-  // Without it sd-bus auto-replies UnknownObject and the Host - correctly, per
-  // its materialize-or-drop rule - unregisters the item before we can assert.
+  // empty dict (sd-bus serves org.freedesktop.DBus.Properties for any vtable)
+  // and the item materializes. Without it the GetAll draws UnknownObject and
+  // the item stays registered-but-unmaterialized (the late-materialization
+  // test below pins that survival).
   const sd_bus_vtable kEmptyItemVtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_VTABLE_END
   };
 
+  // Hostile IconPixmap property: two frames whose 4*w*h wraps at 32 bits to
+  // exactly the byte count shipped (16 and 0), plus one honest 2x2. A watcher
+  // doing the size check in 32-bit math stores the poison frames.
+  int getHostileIconPixmap(sd_bus *, const char *, const char *, const char *,
+                           sd_bus_message *reply, void *, sd_bus_error *) {
+    static const unsigned char sixteen[16] = {0};
+    auto frame = [&](int32_t w, int32_t h, const void *data, size_t len) {
+      int r = sd_bus_message_open_container(reply, 'r', "iiay");
+      if (r < 0) return r;
+      r = sd_bus_message_append(reply, "ii", w, h);
+      if (r < 0) return r;
+      r = sd_bus_message_append_array(reply, 'y', data, len);
+      if (r < 0) return r;
+      return sd_bus_message_close_container(reply);
+    };
+    int r = sd_bus_message_open_container(reply, 'a', "(iiay)");
+    if (r < 0) return r;
+    r = frame(1073741825, 4, sixteen, 16);   // 4*w*h mod 2^32 == 16
+    if (r < 0) return r;
+    r = frame(65536, 65536, sixteen, 0);     // 4*w*h mod 2^32 == 0
+    if (r < 0) return r;
+    r = frame(2, 2, sixteen, 16);            // the one honest frame
+    if (r < 0) return r;
+    return sd_bus_message_close_container(reply);
+  }
+
+  const sd_bus_vtable kHostileIconVtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_PROPERTY("IconPixmap", "a(iiay)", getHostileIconPixmap, 0, 0),
+    SD_BUS_VTABLE_END
+  };
+
+  // For the late-materialization test: an item whose object shows up only
+  // AFTER it registered (the libappindicator slow-start shape).
+  int getLateId(sd_bus *, const char *, const char *, const char *,
+                sd_bus_message *reply, void *, sd_bus_error *) {
+    return sd_bus_message_append(reply, "s", "late-bloomer");
+  }
+
+  const sd_bus_vtable kLateItemVtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_PROPERTY("Id", "s", getLateId, 0, 0),
+    SD_BUS_VTABLE_END
+  };
+
 } // namespace
+
+TEST_CASE("wrap-around IconPixmap dims are dropped, the honest frame survives") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+
+  sd_bus *item_conn = nullptr;
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kHostileIconVtable, nullptr) >= 0);
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "/StatusNotifierItem") >= 0);
+
+  REQUIRE(pumpUntil(host, {item_conn}, [&] { return !host.items().empty(); }));
+  const Item &it = host.items()[0];
+  REQUIRE(it.icon_pixmaps.size() == 1);      // both wrap frames dropped
+  CHECK(it.icon_pixmaps[0].width == 2);
+  CHECK(it.icon_pixmaps[0].height == 2);
+  CHECK(it.icon_pixmaps[0].data.size() == 16);
+
+  sd_bus_flush_close_unref(item_conn);
+}
 
 TEST_CASE("Host claims the watcher name on the private bus") {
   Host host(nullptr);
@@ -207,6 +282,51 @@ TEST_CASE("path-variant registration: signal fires, property lists service+path"
   sd_bus_flush_close_unref(observer);
 }
 
+TEST_CASE("invalid registration args leave no zombie in the registry") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch reg_sig;
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierItemRegistered", onSig, &reg_sig) >= 0);
+
+  sd_bus *item_conn = nullptr;
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kEmptyItemVtable, nullptr) >= 0);
+  // Names sd-bus's own validator rejects: neither the death-watch nor the
+  // GetAll can ever arm for them, so accepting one = a Reg nothing can remove.
+  for (const char *bad : { "", "a b", "not.a valid.name" })
+    REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                     "org.kde.StatusNotifierWatcher",
+                                     "/StatusNotifierWatcher",
+                                     "org.kde.StatusNotifierWatcher",
+                                     "RegisterStatusNotifierItem", nullptr,
+                                     nullptr, "s", bad) >= 0);
+  // A valid registration afterwards: the watcher serves in order, so once
+  // this one's signal fires the bad three were already judged.
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "/StatusNotifierItem") >= 0);
+
+  CHECK(pumpUntil(host, {observer, item_conn}, [&] { return reg_sig.fired; }));
+  CHECK(reg_sig.count == 1);                   // no signal for any bad name
+  std::vector<std::string> items = registeredItems(host, observer);
+  REQUIRE(items.size() == 1);                  // no "/StatusNotifierItem" ghost
+  CHECK(items[0][0] == ':');
+  CHECK(items[0] == reg_sig.arg);
+
+  sd_bus_flush_close_unref(item_conn);
+  sd_bus_flush_close_unref(observer);
+}
+
 TEST_CASE("name-variant registration resolves to the well-known name") {
   Host host(nullptr);
   REQUIRE(host.ok());
@@ -238,6 +358,59 @@ TEST_CASE("name-variant registration resolves to the well-known name") {
 
   sd_bus_flush_close_unref(observer);
   sd_bus_flush_close_unref(item_conn);
+}
+
+TEST_CASE("GetAll failure keeps the registration - the item materializes late") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  bool added = false;
+  HostEvents ev;
+  ev.itemAdded = [&](const Item &) { added = true; };
+  host.setEvents(std::move(ev));
+
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch unreg_sig;
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierItemUnregistered", onSig,
+                              &unreg_sig) >= 0);
+
+  // Register with NO object exported at the path: the Host's GetAll draws
+  // sd-bus's UnknownObject auto-reply - the slow-starting-app shape.
+  sd_bus *item_conn = nullptr;
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "/StatusNotifierItem") >= 0);
+
+  // Bounded pump: enough round trips for the GetAll error to land either way.
+  for (int i = 0; i < 100; ++i) {
+    host.processForTest();
+    while (sd_bus_process(item_conn, nullptr) > 0) {}
+    while (sd_bus_process(observer, nullptr) > 0) {}
+    usleep(2000);
+  }
+  CHECK(!unreg_sig.fired);                     // the failed fetch is not a death
+  CHECK(host.items().empty());                 // ...but nothing materialized yet
+  REQUIRE(registeredItems(host, observer).size() == 1);
+
+  // The app finishes starting: object appears, change signal fires -> the
+  // surviving registration re-fetches and the item materializes.
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kLateItemVtable, nullptr) >= 0);
+  REQUIRE(sd_bus_emit_signal(item_conn, "/StatusNotifierItem",
+                             "org.kde.StatusNotifierItem", "NewIcon", "") >= 0);
+  REQUIRE(pumpUntil(host, {item_conn, observer}, [&] { return added; }));
+  REQUIRE(host.items().size() == 1);
+  CHECK(host.items()[0].id == "late-bloomer");
+
+  sd_bus_flush_close_unref(item_conn);
+  sd_bus_flush_close_unref(observer);
 }
 
 TEST_CASE("mock publisher registers with the watcher and serves its icon") {
@@ -431,6 +604,84 @@ TEST_CASE("host announces itself: name + property + signal") {
 
   CHECK(watcherProp(host, observer, "IsStatusNotifierHostRegistered").boolean == 1);
   sd_bus_flush_close_unref(observer);
+}
+
+namespace {
+
+  // The private bus daemon's pid (dbus-run-session starts one per test exe) -
+  // the daemon will answer for its own name. Blocking is fine: the target is
+  // the daemon, not the in-process watcher.
+  pid_t busDaemonPid(sd_bus *conn) {
+    sd_bus_error err = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = nullptr;
+    uint32_t pid = 0;
+    if (sd_bus_call_method(conn, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                           "org.freedesktop.DBus", "GetConnectionUnixProcessID",
+                           &err, &reply, "s", "org.freedesktop.DBus") >= 0) {
+      sd_bus_message_read(reply, "u", &pid);
+      sd_bus_message_unref(reply);
+    }
+    sd_bus_error_free(&err);
+    return pid_t(pid);
+  }
+
+  // SIGCONT-on-scope-exit: a REQUIRE failure mid-test must not leave the
+  // whole suite's bus daemon frozen.
+  struct StopDaemon {
+    pid_t pid;
+    explicit StopDaemon(pid_t p) : pid(p) { kill(pid, SIGSTOP); }
+    ~StopDaemon() { kill(pid, SIGCONT); }
+  };
+
+} // namespace
+
+TEST_CASE("a click queued on a blocked socket flushes from the event loop alone") {
+  wl_event_loop *loop = wl_event_loop_create();
+  REQUIRE(loop != nullptr);
+  {
+    Host host(loop);
+    REQUIRE(host.ok());
+    bool added = false;
+    HostEvents ev;
+    ev.itemAdded = [&](const Item &) { added = true; };
+    host.setEvents(std::move(ev));
+
+    bbai::test::SniMockChild mock;
+    REQUIRE(mock.ok());
+    for (int i = 0; i < 600 && !added; ++i)
+      wl_event_loop_dispatch(loop, 10);
+    REQUIRE(added);
+    const Item it = host.items()[0];
+
+    sd_bus *probe = nullptr;
+    REQUIRE(sd_bus_open_user(&probe) >= 0);
+    pid_t daemon = busDaemonPid(probe);
+    REQUIRE(daemon > 0);
+    {
+      // Freeze the daemon so the socket fills: sd-bus hits EAGAIN and parks
+      // the message in its write queue - the state only POLLOUT can clear.
+      StopDaemon frozen(daemon);
+      int bursts = 0;
+      while (!host.wantsWriteForTest() && bursts < 50000) {
+        host.activate(it, 1, 1);
+        ++bursts;
+      }
+      REQUIRE(host.wantsWriteForTest());
+      host.contextMenu(it, 31337, 7);          // the sentinel rides the queue
+    }                                          // daemon resumes here
+    // From here on ONLY the loop pumps the host. Unfixed, the fd mask is
+    // still POLLIN-only and nothing inbound ever arrives - the queue starves.
+    auto pump = [&] { wl_event_loop_dispatch(loop, 10); };
+    std::string line;
+    do {
+      line = mock.waitReport(10000, pump);
+    } while (!line.empty() && line != "ContextMenu 31337 7");
+    CHECK(line == "ContextMenu 31337 7");
+
+    sd_bus_flush_close_unref(probe);
+    mock.quit();
+  }
+  wl_event_loop_destroy(loop);
 }
 
 TEST_CASE("Host pumps itself from a wl_event_loop - no manual processForTest") {
