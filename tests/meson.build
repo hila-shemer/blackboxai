@@ -34,6 +34,7 @@ unit_sources = files(
   'unit/work_area_geom_test.cc',
   'unit/util_test.cc',
   'unit/rootmenu_wire_test.cc',
+  'unit/windowmenu_test.cc',
   'unit/placement_geom_test.cc',
   'unit/slit_geom_test.cc',
   'unit/slit_icon_test.cc',

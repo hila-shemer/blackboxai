@@ -34,8 +34,10 @@ namespace bbai {
     }
   } // namespace
 
-  Menu::Menu(Server &server, std::u32string title, std::vector<MenuItem> items)
-    : server_(server), title_(std::move(title)), items_(std::move(items)) {
+  Menu::Menu(Server &server, std::u32string title, std::vector<MenuItem> items,
+             bool show_title)
+    : server_(server), title_(std::move(title)), show_title_(show_title),
+      items_(std::move(items)) {
     tree_ = wlr_scene_tree_create(server_.layer_overlay);
     std::shared_ptr<const Style> st = server_.currentStyle();
     const MenuLook &look = st->menuLook();
@@ -44,7 +46,7 @@ namespace bbai {
     metrics_.reserve(items_.size());
     for (const MenuItem &it : items_)
       metrics_.push_back({ it.separator() ? 0 : frame_font->textWidth(it.label), it.separator() });
-    layout_ = menu::computeLayout(metrics_, frame_font->height(), /*show_title=*/true,
+    layout_ = menu::computeLayout(metrics_, frame_font->height(), show_title_,
                                   title_font->textWidth(title_), title_font->height(),
                                   look.frameMargin, look.titleMargin);
     item_nodes_.assign(items_.size(), nullptr);
@@ -84,8 +86,8 @@ namespace bbai {
       wlr_scene_node_set_position(&sb->node, 0, 0);
       frame_node_ = &sb->node;
     }
-    // Title bar.
-    {
+    // Title bar (skipped for titleless menus - Windowmenu / dbusmenu).
+    if (layout_.title_h > 0) {
       std::vector<uint32_t> px = render(layout_.width, layout_.title_h, look.title);
       if (title_font->ok())
         title_font->drawText(px, layout_.width, layout_.title_h, look.titleMargin + 1, baseline,
