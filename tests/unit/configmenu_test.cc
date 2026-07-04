@@ -6,7 +6,10 @@
 #include <doctest/doctest.h>
 #include "Rootmenu.hh"
 #include "Config.hh"
+#include "ConfigSpelling.hh"
 #include "Text.hh"
+
+#include <cstdio>
 
 using namespace bbai;
 
@@ -80,4 +83,48 @@ TEST_CASE("Focus New Windows mirrors cfg both ways") {
   CHECK_FALSE(rootmenu::buildConfigSubmenu(cfg)[3].checked);
   cfg.focusNewWindows = true;
   CHECK(rootmenu::buildConfigSubmenu(cfg)[3].checked);
+}
+
+TEST_CASE("persist spellings: composite focusModel round-trips through the parser") {
+  Config cfg;
+  cfg.focusModel = FocusModel::SloppyFocus;
+  cfg.autoRaise = true;
+  cfg.clickRaise = true;
+  CHECK(configmenu::focusModelValue(cfg) == "SloppyFocus AutoRaise ClickRaise");
+
+  cfg.clickRaise = false;
+  CHECK(configmenu::focusModelValue(cfg) == "SloppyFocus AutoRaise");
+
+  const char *p = "/tmp/bbai-configmenu-spelling.rc";
+  std::remove(p);
+  cfg.clickRaise = true;
+  REQUIRE(bbai::updateRcKey(p, "session.focusModel", configmenu::focusModelValue(cfg)));
+  Config re = Config::load(p);
+  CHECK(re.focusModel == FocusModel::SloppyFocus);
+  CHECK(re.autoRaise);
+  CHECK(re.clickRaise);
+
+  cfg.focusModel = FocusModel::ClickToFocus;
+  CHECK(configmenu::focusModelValue(cfg) == "ClickToFocus");
+  REQUIRE(bbai::updateRcKey(p, "session.focusModel", configmenu::focusModelValue(cfg)));
+  re = Config::load(p);
+  CHECK(re.focusModel == FocusModel::ClickToFocus);
+  CHECK_FALSE(re.autoRaise);   // the parser forces both raise flags off under CTF
+  CHECK_FALSE(re.clickRaise);
+  std::remove(p);
+}
+
+TEST_CASE("persist spellings: windowPlacement strings round-trip") {
+  using WP = WindowPlacement;
+  CHECK(std::string(configmenu::windowPlacementValue(WP::RowSmart)) == "RowSmartPlacement");
+  CHECK(std::string(configmenu::windowPlacementValue(WP::ColSmart)) == "ColSmartPlacement");
+  CHECK(std::string(configmenu::windowPlacementValue(WP::Center)) == "CenterPlacement");
+  CHECK(std::string(configmenu::windowPlacementValue(WP::Cascade)) == "CascadePlacement");
+
+  const char *p = "/tmp/bbai-configmenu-spelling.rc";
+  std::remove(p);
+  REQUIRE(bbai::updateRcKey(p, "session.windowPlacement",
+                            configmenu::windowPlacementValue(WP::Cascade)));
+  CHECK(Config::load(p).windowPlacement == WP::Cascade);
+  std::remove(p);
 }
