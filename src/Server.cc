@@ -1467,18 +1467,20 @@ namespace bbai {
     Output *dst = outputForWlr(dst_wo);
     if (!dst || dst == src) return;
 
+    const wlr_box db = dst->fullBox();
     if (v->isFullscreen()) {
       setViewFullscreen(v, false);           // re-apply on the new head's fullBox
       setViewFullscreen(v, true, dst);
+      v->offsetPremax(db.x - sb.x, db.y - sb.y);   // un-fullscreen lands on dst
       return;
     }
     if (v->isMaximized()) {
+      v->offsetPremax(db.x - sb.x, db.y - sb.y);   // un-maximize lands on dst
       v->remaximize(dst->workArea());
       return;
     }
     // Plain view: preserve the offset within the source head, clamp onto the
     // target so it can't land off-screen on a smaller monitor.
-    const wlr_box db = dst->fullBox();
     int nx = db.x + (v->x() - sb.x);
     int ny = db.y + (v->y() - sb.y);
     if (nx > db.x + db.width  - 1) nx = db.x + db.width  - 1;
