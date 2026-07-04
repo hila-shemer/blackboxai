@@ -285,6 +285,7 @@ namespace bbai {
                                                        bool *exact_ok = nullptr);
     void runRootCommand();   // rc-file rootCommand via /bin/sh (user-authored)
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
+    void installSniHostEvents();   // Server OWNS the Host's single event slot
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
     bbai::Config config_;

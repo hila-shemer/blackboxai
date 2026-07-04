@@ -234,8 +234,10 @@ namespace bbai {
     // SNI tray host. Real backends only: under headless the developer's
     // session bus must stay untouched (claiming org.kde.StatusNotifierWatcher
     // there would fight the real tray).
-    if (!headless)
+    if (!headless) {
       sni_host_ = std::make_unique<sni::Host>(loop);
+      installSniHostEvents();
+    }
 
     session_lock_ = std::make_unique<SessionLock>(*this, layer_lock);
 
@@ -489,6 +491,18 @@ namespace bbai {
 
   void Server::createSniHostForTest() {
     sni_host_ = std::make_unique<sni::Host>(wl_display_get_event_loop(display));
+    installSniHostEvents();
+  }
+
+  // HostEvents is a single-slot std::function - last setEvents wins, silently.
+  // So the SERVER owns the slot at every creation site and fans out; a second
+  // consumer joins here, never via its own setEvents call. Forwarding is
+  // null-safe both ways: the ctor site runs before slit_ exists, and headless
+  // servers have no host until the test lever runs.
+  void Server::installSniHostEvents() {
+    if (!sni_host_) return;
+    auto fwd = [this](const sni::Item &) { if (slit_) slit_->refresh(); };
+    sni_host_->setEvents(sni::HostEvents{fwd, fwd, fwd});
   }
 
   wlr_scene_output *Server::activeSceneOutput() const {

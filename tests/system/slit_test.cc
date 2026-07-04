@@ -93,3 +93,51 @@ TEST_CASE("primary dies: slit re-homes on the survivor") {
   CHECK(sl->itemCountForTest() == 0);
   CHECK(second->workArea().width == second->fullBox().width);   // no ghost strut
 }
+
+TEST_CASE("slit renders a mock item: golden, strut, icon update, empty again") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutputs(server);
+  REQUIRE(server.slitForTest() != nullptr);
+
+  const test::Frame before = test::captureFrame(server);
+  const wlr_box wa_before = server.activeOutputForTest()->workArea();
+
+  server.createSniHostForTest();
+  REQUIRE(server.sniHostForTest()->ok());
+  test::SniMockChild mock;
+  REQUIRE(mock.ok());
+  REQUIRE(pumpUntil(server, [&] { return server.slitForTest()->itemCountForTest() == 1; }));
+
+  // One item, CenterRight vertical: a square frame; its width left the work area.
+  const slit::Rect r = server.slitForTest()->currentRect();
+  CHECK(r.w == r.h);
+  const wlr_box wa = server.activeOutputForTest()->workArea();
+  CHECK(wa.width == wa_before.width - r.w);
+
+  // The mock's 2x2 icon nearest-scaled to the slot: four flat quadrants incl.
+  // the 0x80-alpha pixel composited over the slit texture - premultiply is
+  // visibly wrong in this golden if the seam ever skips it.
+  CHECK(test::compareGolden(test::captureFrame(server),
+                            "tests/golden/v1-slit-one-item.png", 2, 80));
+
+  // itemChanged repaints: switch to the second known icon.
+  mock.updateIcon();
+  REQUIRE(pumpUntil(server, [&] {
+    const auto &items = server.sniHostForTest()->items();
+    return !items.empty() && !items[0].icon_pixmaps.empty()
+        && items[0].icon_pixmaps[0].data[1] == 0x11;   // kSniMockIcon2's first R byte
+  }));
+  CHECK(test::compareGolden(test::captureFrame(server),
+                            "tests/golden/v1-slit-icon2.png", 2, 80));
+
+  // Hard kill (no D-Bus goodbye, just the name drop): the slit empties, the
+  // strut drops, and the frame returns to the pre-item pixels EXACTLY.
+  mock.killHard();
+  REQUIRE(pumpUntil(server, [&] { return server.slitForTest()->itemCountForTest() == 0; }));
+  CHECK(server.activeOutputForTest()->workArea().width == wa_before.width);
+  const test::Frame after = test::captureFrame(server);
+  CHECK(after.pixels == before.pixels);
+}
