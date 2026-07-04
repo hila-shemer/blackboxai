@@ -244,3 +244,81 @@ TEST_CASE("updateRcKey: replace-in-place, append, create") {
   CHECK(slurp(p).find("session.workspaces: 6\n") != std::string::npos);
   std::remove(p.c_str());
 }
+
+#include <sys/stat.h>
+#include <unistd.h>
+
+TEST_CASE("updateRcKey: atomic replace - never truncate-in-place") {
+  const std::string p = "/tmp/bbai-updaterc-atomic.rc";
+  const std::string hard = p + ".hardlink";
+  std::remove(p.c_str());
+  std::remove(hard.c_str());
+  {
+    std::ofstream f(p);
+    f << "session.styleFile: /old/style\n";
+  }
+
+  // Pin the mechanism through its one userspace-visible effect: a hard link.
+  // In-place truncate writes through the shared inode (the link would see the
+  // new content); temp+rename swaps the inode, so the link keeps the old
+  // bytes. This is also exactly why a crash mid-write can't clobber the rc.
+  REQUIRE(::link(p.c_str(), hard.c_str()) == 0);
+  CHECK(bbai::updateRcKey(p, "session.styleFile", "/new/style"));
+  CHECK(slurp(p) == "session.styleFile: /new/style\n");
+  CHECK(slurp(hard) == "session.styleFile: /old/style\n");
+
+  // no temp residue after a successful update
+  CHECK(::access((p + ".tmp").c_str(), F_OK) != 0);
+  std::remove(p.c_str());
+  std::remove(hard.c_str());
+}
+
+TEST_CASE("updateRcKey: a symlinked rc is updated through, not replaced by a file") {
+  // Dotfile managers symlink ~/.blackboxrc; the rename must land on the
+  // target, or the first style pick silently detaches the rc from the repo.
+  const std::string target = "/tmp/bbai-updaterc-target.rc";
+  const std::string link = "/tmp/bbai-updaterc-link.rc";
+  std::remove(target.c_str());
+  std::remove(link.c_str());
+  {
+    std::ofstream f(target);
+    f << "session.focusModel: SloppyFocus\n";
+  }
+  REQUIRE(::symlink(target.c_str(), link.c_str()) == 0);
+
+  CHECK(bbai::updateRcKey(link, "session.styleFile", "/a/Night"));
+  struct stat st{};
+  REQUIRE(::lstat(link.c_str(), &st) == 0);
+  CHECK(S_ISLNK(st.st_mode));   // still a symlink
+  CHECK(slurp(target).find("session.styleFile: /a/Night\n") != std::string::npos);
+  CHECK(slurp(target).find("session.focusModel: SloppyFocus\n") != std::string::npos);
+  std::remove(link.c_str());
+  std::remove(target.c_str());
+}
+
+TEST_CASE("updateRcKey: failure leaves the original untouched") {
+  // A write-only rc reads as zero lines; the old code silently replaced the
+  // whole file with the single new entry. Refuse instead. (Skipped as root -
+  // permission checks don't bind, and the CI container runs as root.)
+  if (::geteuid() != 0) {
+    const std::string p = "/tmp/bbai-updaterc-wonly.rc";
+    std::remove(p.c_str());
+    {
+      std::ofstream f(p);
+      f << "session.focusModel: SloppyFocus\n";
+    }
+    REQUIRE(::chmod(p.c_str(), 0200) == 0);
+    CHECK_FALSE(bbai::updateRcKey(p, "session.styleFile", "/x"));
+    REQUIRE(::chmod(p.c_str(), 0600) == 0);
+    CHECK(slurp(p) == "session.focusModel: SloppyFocus\n");
+    std::remove(p.c_str());
+  }
+
+  // Unwritable destination (a directory in the way): false, no residue.
+  const std::string dir = "/tmp/bbai-updaterc-dir.rc";
+  ::rmdir(dir.c_str());
+  REQUIRE(::mkdir(dir.c_str(), 0700) == 0);
+  CHECK_FALSE(bbai::updateRcKey(dir, "session.styleFile", "/x"));
+  CHECK(::access((dir + ".tmp").c_str(), F_OK) != 0);
+  REQUIRE(::rmdir(dir.c_str()) == 0);
+}

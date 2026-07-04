@@ -11,8 +11,12 @@
 #include "Util.hh"
 
 #include <cctype>
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <vector>
+
+#include <unistd.h>
 
 // Install-path defaults injected by src/meson.build; empty fallbacks keep
 // stray compiles (and the unlikely no-define build) honest.
@@ -196,9 +200,21 @@ namespace bbai {
 
   bool updateRcKey(const std::string &rc_path, const std::string &key,
                    const std::string &value) {
+    // A symlinked rc (dotfile managers) must be updated THROUGH the link:
+    // rename below would otherwise replace the link itself with a plain file.
+    // realpath fails when the rc doesn't exist yet - the create case keeps
+    // the given path.
+    std::string target = rc_path;
+    if (char *real = ::realpath(rc_path.c_str(), nullptr)) {
+      target = real;
+      ::free(real);
+    }
     std::vector<std::string> lines;
     {
-      std::ifstream in(rc_path);
+      std::ifstream in(target);
+      // Exists but unreadable (write-only rc): reading zero lines and
+      // rewriting would replace the user's whole file with one entry. Refuse.
+      if (!in && ::access(target.c_str(), F_OK) == 0) return false;
       std::string line;
       while (std::getline(in, line)) lines.push_back(line);
     }
@@ -214,10 +230,23 @@ namespace bbai {
       if (k == key) { line = entry; replaced = true; break; }
     }
     if (!replaced) lines.push_back(entry);
-    std::ofstream out(rc_path, std::ios::trunc);
-    if (!out) return false;
-    for (const std::string &line : lines) out << line << '\n';
-    return static_cast<bool>(out);
+    // Sibling temp + rename: a crash mid-write leaves the rc untouched (the
+    // old truncate-in-place could destroy it). Same directory keeps the
+    // rename atomic; no fsync - ext4's rename-replace heuristic covers the
+    // power-loss window well enough for a config file.
+    const std::string tmp = target + ".tmp";
+    {
+      std::ofstream out(tmp, std::ios::trunc);
+      if (!out) return false;
+      for (const std::string &line : lines) out << line << '\n';
+      out.flush();
+      if (!out) { std::remove(tmp.c_str()); return false; }
+    }
+    if (std::rename(tmp.c_str(), target.c_str()) != 0) {
+      std::remove(tmp.c_str());
+      return false;
+    }
+    return true;
   }
 
 } // namespace bbai
