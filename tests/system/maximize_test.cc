@@ -9,7 +9,7 @@
 #include "Server.hh"
 #include "View.hh"
 #include "Frame.hh"
-#include "Toolbar.geom.hh"
+#include "Toolbar.hh"
 
 #include <cstdlib>
 #include <linux/input-event-codes.h>  // BTN_LEFT
@@ -19,8 +19,6 @@ using namespace bbai;
 // Headless output is fixed at 1280x720.
 static constexpr int kOutputW = 1280;
 static constexpr int kOutputH = 720;
-// Work area height: output minus the toolbar.
-static constexpr int kWorkH   = kOutputH - toolbar::kBarHeight;
 
 // Map one SSD client and settle decorations.
 static void mapOne(Server &server, test::TestClient &c, int iterations = 500) {
@@ -43,6 +41,7 @@ TEST_CASE("maximize button toggles maximize and restores geometry") {
     REQUIRE(server.ok());
     for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
         server.dispatch();
+    const int kWorkH = kOutputH - server.toolbarForTest()->barRectForTest().h;
 
     test::TestClient c(server.socketName(), 0xFFFF0000u, 200, 150,
                        test::TestClient::Deco::RequestSSD);
@@ -121,6 +120,7 @@ TEST_CASE("setMaximized is idempotent") {
     REQUIRE(server.ok());
     for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
         server.dispatch();
+    const int kWorkH = kOutputH - server.toolbarForTest()->barRectForTest().h;
 
     test::TestClient c(server.socketName(), 0xFFFF0000u, 200, 150,
                        test::TestClient::Deco::RequestSSD);
@@ -138,16 +138,170 @@ TEST_CASE("setMaximized is idempotent") {
     const int w0 = v->contentWidth();
     const int h0 = v->contentHeight();
 
-    v->setMaximized(true, kOutputW, kWorkH);
-    v->setMaximized(true, kOutputW, kWorkH);  // second call is a no-op
+    v->setMaximized(true, {0, 0, kOutputW, kWorkH});
+    v->setMaximized(true, {0, 0, kOutputW, kWorkH});   // second call is a no-op
     CHECK(v->isMaximized());
     CHECK(frame::frameWidth(v->contentWidth()) == kOutputW);
 
-    v->setMaximized(false, kOutputW, kWorkH);
-    v->setMaximized(false, kOutputW, kWorkH);  // second call is a no-op
+    v->setMaximized(false, {0, 0, kOutputW, kWorkH});
+    v->setMaximized(false, {0, 0, kOutputW, kWorkH});  // second call is a no-op
     CHECK_FALSE(v->isMaximized());
     CHECK(v->x() == x0);
     CHECK(v->y() == y0);
     CHECK(v->contentWidth()  == w0);
     CHECK(v->contentHeight() == h0);
+}
+
+TEST_CASE("maximize under a top toolbar starts below the bar") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+        server.dispatch();
+
+    const int barH = server.toolbarForTest()->barRectForTest().h;
+    server.toolbarForTest()->setPlacement(toolbar::Placement::TopCenter);
+
+    test::TestClient c(server.socketName(), 0xFFFF0000u, 200, 150,
+                       test::TestClient::Deco::RequestSSD);
+    REQUIRE(c.ok());
+    mapOne(server, c);
+    View *v = server.viewsForTest()[0].get();
+
+    server.injectPointerMotionForTest(v->x() + 100, v->y() + 10);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    REQUIRE(server.focusedViewForTest() == v);
+
+    const frame::Rect mb = frame::maximizeButton(v->contentWidth(), v->contentHeight());
+    const int mx = v->x() + mb.x + frame::kButtonWidth / 2;
+    const int my = v->y() + mb.y + frame::kButtonWidth / 2;
+    server.injectPointerMotionForTest(mx, my);
+    REQUIRE(server.partAtForTest(mx, my) == Part::MaximizeButton);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+
+    CHECK(v->isMaximized());
+    CHECK(v->x() == 0);
+    CHECK(v->y() == barH);   // below the bar - today this window hides UNDER it
+    CHECK(frame::frameWidth(v->contentWidth()) == kOutputW);
+    CHECK(v->y() + frame::frameHeight(v->contentHeight()) == kOutputH);
+}
+
+TEST_CASE("maximize on the second head fills that head, not the primary") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+        server.dispatch();
+    server.addHeadlessOutputForTest(1280, 720);
+    for (int i = 0; i < 50 && server.outputCountForTest() < 2; ++i) server.dispatch();
+    REQUIRE(server.outputCountForTest() == 2);
+
+    test::TestClient c(server.socketName(), 0xFFFF0000u, 200, 150,
+                       test::TestClient::Deco::RequestSSD);
+    REQUIRE(c.ok());
+    mapOne(server, c);
+    View *v = server.viewsForTest()[0].get();
+    v->setPosition(1400, 100);   // live on the second head
+
+    server.injectPointerMotionForTest(v->x() + 100, v->y() + 10);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    REQUIRE(server.focusedViewForTest() == v);
+
+    const frame::Rect mb = frame::maximizeButton(v->contentWidth(), v->contentHeight());
+    const int mx = v->x() + mb.x + frame::kButtonWidth / 2;
+    const int my = v->y() + mb.y + frame::kButtonWidth / 2;
+    server.injectPointerMotionForTest(mx, my);
+    REQUIRE(server.partAtForTest(mx, my) == Part::MaximizeButton);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+
+    CHECK(v->isMaximized());
+    // No toolbar on the second head: work area == full box {1280,0,1280,720}.
+    CHECK(v->x() == 1280);
+    CHECK(v->y() == 0);
+    CHECK(frame::frameWidth(v->contentWidth()) == 1280);
+    CHECK(v->y() + frame::frameHeight(v->contentHeight()) == 720);
+}
+
+TEST_CASE("remaximize: maximized window follows a strut flip; restore keeps premax") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+        server.dispatch();
+    const int barH = server.toolbarForTest()->barRectForTest().h;
+
+    test::TestClient c(server.socketName(), 0xFFFF0000u, 200, 150,
+                       test::TestClient::Deco::RequestSSD);
+    REQUIRE(c.ok());
+    mapOne(server, c);
+    View *v = server.viewsForTest()[0].get();
+
+    const int x0 = v->x(), y0 = v->y();
+    const int w0 = v->contentWidth(), h0 = v->contentHeight();
+
+    server.injectPointerMotionForTest(v->x() + 100, v->y() + 10);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    const frame::Rect mb = frame::maximizeButton(v->contentWidth(), v->contentHeight());
+    server.injectPointerMotionForTest(v->x() + mb.x + frame::kButtonWidth / 2,
+                                      v->y() + mb.y + frame::kButtonWidth / 2);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    REQUIRE(v->isMaximized());
+    REQUIRE(v->y() == 0);                     // bottom bar: frame starts at the top
+    // Pump so the client commits the maximized buffer and the decoration
+    // scene nodes rebuild - the next click needs live nodes under the cursor.
+    for (int i = 0; i < 30; ++i) { c.flush(); server.dispatch(); c.pump(); }
+
+    // Flip the bar to the top: strutsChanged -> remaximizeViewsOn -> re-follow.
+    server.toolbarForTest()->setPlacement(toolbar::Placement::TopCenter);
+    CHECK(v->isMaximized());
+    CHECK(v->y() == barH);                    // no second click needed
+    CHECK(v->y() + frame::frameHeight(v->contentHeight()) == kOutputH);
+    for (int i = 0; i < 30; ++i) { c.flush(); server.dispatch(); c.pump(); }
+
+    // Un-maximize via the button: the ORIGINAL premax rect comes back -
+    // remaximize must not have overwritten it.
+    const frame::Rect mb2 = frame::maximizeButton(v->contentWidth(), v->contentHeight());
+    const int mx2 = v->x() + mb2.x + frame::kButtonWidth / 2;
+    const int my2 = v->y() + mb2.y + frame::kButtonWidth / 2;
+    server.injectPointerMotionForTest(mx2, my2);
+    REQUIRE(server.partAtForTest(mx2, my2) == Part::MaximizeButton);
+    server.injectPointerButtonForTest(BTN_LEFT, true);
+    server.injectPointerButtonForTest(BTN_LEFT, false);
+    CHECK_FALSE(v->isMaximized());
+    CHECK(v->x() == x0); CHECK(v->y() == y0);
+    CHECK(v->contentWidth() == w0); CHECK(v->contentHeight() == h0);
+}
+
+TEST_CASE("remaximize is a no-op on a non-maximized view") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    for (int i = 0; i < 50 && server.activeSceneOutputForTest() == nullptr; ++i)
+        server.dispatch();
+
+    test::TestClient c(server.socketName(), 0xFFFF0000u, 200, 150,
+                       test::TestClient::Deco::RequestSSD);
+    REQUIRE(c.ok());
+    mapOne(server, c);
+    View *v = server.viewsForTest()[0].get();
+
+    const int x0 = v->x(), y0 = v->y();
+    v->remaximize({0, 0, 640, 480});
+    CHECK(v->x() == x0);
+    CHECK(v->y() == y0);
+    CHECK_FALSE(v->isMaximized());
 }

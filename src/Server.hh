@@ -50,6 +50,12 @@ namespace bbai {
     const std::string &socketName() const { return socket_name; }
     void removeView(View *view);
 
+    // An Output's wlr_output fired destroy (hot-unplug / backend teardown).
+    // Called by the Output's own destroy handler BEFORE it deletes itself, so
+    // re-homing the toolbar (whose strut points into the dying Output) still
+    // has a live object to unregister from.
+    void onOutputDestroyed(Output *o);
+
     // Restack a view to the top/bottom of its layer (model + scene).
     void raiseView(View *view);
     void lowerView(View *view);
@@ -80,6 +86,13 @@ namespace bbai {
     void deiconifyView(View *v);
     void closeMenus();
     void activeOutputSize(int &w, int &h) const;
+    // Per-output resolution (work-area slice). outputAt maps a layout point to
+    // our Output (nullptr from the layout -> active_output, so callers always
+    // get the primary as a floor). outputForView resolves by frame center -
+    // dynamic lookup, no stored membership, can't go stale.
+    Output *outputAt(double lx, double ly);
+    Output *outputForView(const View *v);
+    void remaximizeViewsOn(Output *o);
     bool menuOpenForTest() const { return active_menu_ != nullptr; }
     bool screenshotActiveForTest() const { return cursor_mode == CursorMode::ScreenshotSelect; }
     bool screenshotOverlayActiveForTest() const { return screenshot_overlay_ != nullptr; }
@@ -137,7 +150,9 @@ namespace bbai {
     // covers every lit head (M7).
     Output *activeOutputForTest() const { return active_output; }
     int outputCountForTest() const { return static_cast<int>(outputs_.size()); }
+    Output *outputForTest(int i) const { return outputs_[static_cast<size_t>(i)]; }
     void addHeadlessOutputForTest(int w, int h);
+    void destroyOutputForTest(int index);   // wlr_output_destroy on outputs_[index]
     Toolbar *toolbarForTest() const { return toolbar_.get(); }
     const std::string &toolbarWindowTitleForTest() const;
     wlr_scene_output *activeSceneOutput() const;     // production accessor
@@ -227,6 +242,7 @@ namespace bbai {
 
     bool headless = false;
     bool started_ = false;          // wlr_backend_start succeeded (ok() gate)
+    bool tearing_down_ = false;     // ~Server: skip toolbar re-home on output death
     std::string socket_name;
     wlr_session *session_ = nullptr;   // libseat/VT session (DRM only; null nested/headless)
     bt::Listener session_active;       // VT-switch active/inactive -> re-render on resume

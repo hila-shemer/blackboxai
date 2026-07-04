@@ -32,7 +32,7 @@ TEST_CASE("demo: toolbar_autohide — sliver, reveal on pointer-over, hide on po
   REQUIRE(tb != nullptr);
 
   // Enable auto-hide — bar starts hidden (2px sliver).
-  tb->setAutoHideForTest(true);
+  tb->setAutoHide(true);
   CHECK(tb->hiddenForTest());
   rec.shot(server, 2);
 

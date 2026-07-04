@@ -31,6 +31,7 @@ unit_sources = files(
   'unit/server_ok_test.cc',
   'unit/menu_parser_test.cc',
   'unit/sni_model_test.cc',
+  'unit/work_area_geom_test.cc',
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
@@ -287,6 +288,19 @@ test('toolbar_autohide_golden', toolbar_autohide_golden_exe, suite : 'system',
 multi_output_exe = executable('multi-output-test', files('system/multi_output_test.cc'),
   dependencies : [harness_dep, doctest_dep])
 test('multi_output', multi_output_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# Work-area slice: per-output fullBox/workArea + strut registry + resolution.
+work_area_exe = executable('work-area-test', files('system/work_area_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('work_area', work_area_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
+# Work-area slice: hot-unplug hygiene (best-effort headless destroy drive).
+output_destroy_exe = executable('output-destroy-test',
+  files('system/output_destroy_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('output_destroy', output_destroy_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
 # M7 autostart wiring: glob + filter + spawn .desktop entries via the fake runner.

@@ -231,8 +231,10 @@ namespace bbai {
       outputs_.push_back(o);
       if (!active_output) {
         active_output = o;
-        // The toolbar spans the primary output; create it now that the mode is set.
-        toolbar_ = std::make_unique<Toolbar>(*this, wlr_out->width, wlr_out->height);
+        // The toolbar spans the primary output; create it now that the mode is
+        // set. (Also the re-plug path: if every head died, active_output is
+        // null again and the next head becomes the new primary.)
+        toolbar_ = std::make_unique<Toolbar>(*this, *o);
         // Give the pointer an image from frame one - otherwise it's invisible
         // over our own chrome until the Super+F7 flow happens to latch one.
         // Real-output only: headless asserts byte-exact goldens and has no
@@ -269,6 +271,8 @@ namespace bbai {
   }
 
   Server::~Server() {
+    tearing_down_ = true;   // outputs die inside wl_display_destroy below;
+                            // erase-only handling, never re-home chrome
     // Tear down our scene-tracking objects before the wlroots stack: their
     // listeners point into backend/surface signals that wlr_*_finish asserts
     // are empty.
@@ -358,6 +362,53 @@ namespace bbai {
 
   void Server::addHeadlessOutputForTest(int w, int h) {
     wlr_headless_add_output(backend, w, h);   // fires new_output on the next dispatch
+  }
+
+  void Server::destroyOutputForTest(int index) {
+    wlr_output_destroy(outputs_[static_cast<size_t>(index)]->wlrOutput());
+  }
+
+  Output *Server::outputAt(double lx, double ly) {
+    wlr_output *wo = wlr_output_layout_output_at(output_layout, lx, ly);
+    if (!wo) return active_output;
+    for (Output *o : outputs_)
+      if (o->wlrOutput() == wo) return o;
+    return active_output;   // a layout output we don't track - shouldn't happen
+  }
+
+  Output *Server::outputForView(const View *v) {
+    const int fw = v->drawsFrame() ? frame::frameWidth(v->contentWidth())
+                                   : v->contentWidth();
+    const int fh = v->drawsFrame() ? frame::frameHeight(v->contentHeight())
+                                   : v->contentHeight();
+    return outputAt(v->x() + fw / 2.0, v->y() + fh / 2.0);
+  }
+
+  void Server::remaximizeViewsOn(Output *o) {
+    if (!o) return;
+    for (auto &v : views)
+      if (v->isMaximized() && outputForView(v.get()) == o)
+        v->remaximize(o->workArea());
+  }
+
+  void Server::onOutputDestroyed(Output *o) {
+    const bool primary_died = (active_output == o);
+    std::erase(outputs_, o);
+    if (primary_died)
+      active_output = outputs_.empty() ? nullptr : outputs_.front();
+    if (tearing_down_) return;
+    if (primary_died) {
+      // The toolbar's registered strut points into `o` - tear it down while
+      // `o` is still alive (we're inside its destroy handler), then rebuild
+      // on the survivor. If no head survives, the next new_output re-creates
+      // it (active_output is null again, so the primary branch re-fires).
+      toolbar_.reset();
+      if (active_output)
+        toolbar_ = std::make_unique<Toolbar>(*this, *active_output);
+    }
+    // Windows that lived on the dead head now resolve to the fallback head -
+    // snap maximized ones onto a real work area instead of a ghost rectangle.
+    remaximizeViewsOn(active_output);
   }
 
   void Server::runAutostart() {
@@ -834,9 +885,9 @@ namespace bbai {
     case Part::IconifyButton: iconifyView(v); break;
     case Part::CloseButton: wlr_xdg_toplevel_send_close(v->toplevel()); break;
     case Part::MaximizeButton: {
-      int ow = 0, oh = 0;
-      activeOutputSize(ow, oh);
-      v->setMaximized(!v->isMaximized(), ow, oh - toolbar::kBarHeight);
+      Output *o = outputForView(v);
+      if (!o) break;   // zero outputs - nowhere to fill
+      v->setMaximized(!v->isMaximized(), o->workArea());
       break;
     }
     default: break;

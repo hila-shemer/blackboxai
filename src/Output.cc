@@ -47,7 +47,10 @@ namespace bbai {
       clock_gettime(CLOCK_MONOTONIC, &now);
       wlr_scene_output_send_frame_done(scene_output, &now);
     });
-    destroy.connect(&output->events.destroy, [this](void *) { delete this; });
+    destroy.connect(&output->events.destroy, [this](void *) {
+      server.onOutputDestroyed(this);
+      delete this;
+    });
   }
 
   Output::~Output() {
@@ -57,6 +60,22 @@ namespace bbai {
   void Output::scheduleFrame() {
     wlr_output_schedule_frame(output);
   }
+
+  wlr_box Output::fullBox() const {
+    wlr_box box{};
+    wlr_output_layout_get_box(server.output_layout, output, &box);
+    return box;
+  }
+
+  wlr_box Output::workArea() const {
+    return workarea::computeWorkArea(fullBox(), struts_);
+  }
+
+  void Output::addStrut(const Strut *s) { struts_.push_back(s); strutsChanged(); }
+
+  void Output::removeStrut(const Strut *s) { std::erase(struts_, s); strutsChanged(); }
+
+  void Output::strutsChanged() { server.remaximizeViewsOn(this); }
 
   void Output::renderBackground() {
     const int w = output->width, h = output->height;
