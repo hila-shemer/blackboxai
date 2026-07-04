@@ -128,6 +128,7 @@ namespace bbai {
     layer_bottom     = wlr_scene_tree_create(&scene->tree);
     layer_window     = wlr_scene_tree_create(&scene->tree);
     layer_top        = wlr_scene_tree_create(&scene->tree);
+    layer_fullscreen = wlr_scene_tree_create(&scene->tree);   // above top, below overlay
     layer_overlay    = wlr_scene_tree_create(&scene->tree);
     layer_lock       = wlr_scene_tree_create(&scene->tree);
 
@@ -670,6 +671,7 @@ namespace bbai {
       wlr_seat_keyboard_notify_enter(seat, v->toplevel()->base->surface,
                                      kb->keycodes, kb->num_keycodes, &kb->modifiers);
     if (toolbar_) toolbar_->redrawWindowLabel(v->toplevel()->title);
+    syncFullscreenLayers(v);   // promote v if fullscreen, demote any other fullscreen
   }
 
   // The alt-tab candidate set: every mapped, non-iconified window across all
@@ -1127,7 +1129,36 @@ namespace bbai {
     // Exit while the view was maximized: re-apply maximized geometry onto the
     // (possibly different) target's work area - View left that to us.
     if (!on && v->isMaximized()) v->remaximize(o->workArea());
-    // [Task 6 inserts the layer_fullscreen reparent here.]
+    // A fullscreen view is promoted only while focused (classic: unfocused
+    // fullscreen demotes so an alt-tab preview underneath is visible). Enter
+    // while focused -> promote now; exit -> back to the window layer. The
+    // focus-change hooks (syncFullscreenLayers) keep it in sync afterwards.
+    if (on && focused_view == v) {
+      wlr_scene_node_reparent(&v->sceneTree()->node, layer_fullscreen);
+      raiseView(v);
+    } else if (!on) {
+      wlr_scene_node_reparent(&v->sceneTree()->node, layer_window);
+    }
+  }
+
+  void Server::syncFullscreenLayers(View *newly_focused) {
+    // Promote the focused view if it's fullscreen; demote every OTHER fullscreen
+    // view back to the window layer. Keeps the "only the focused fullscreen sits
+    // above the toolbar" invariant across focus swaps, workspace switches and
+    // alt-tab previews.
+    for (auto &up : views) {
+      View *v = up.get();
+      if (!v->isFullscreen()) continue;
+      wlr_scene_tree *want = (v == newly_focused) ? layer_fullscreen : layer_window;
+      if (v->sceneTree()->node.parent != want) {
+        wlr_scene_node_reparent(&v->sceneTree()->node, want);
+        if (v == newly_focused) raiseView(v);
+      }
+    }
+  }
+
+  bool Server::viewLayerIsFullscreenForTest(View *v) const {
+    return v && v->sceneTree()->node.parent == layer_fullscreen;
   }
 
   // --- test-only injection + introspection --------------------------------------
@@ -1298,6 +1329,7 @@ namespace bbai {
     focused_view = nullptr;
     wlr_seat_keyboard_notify_clear_focus(seat);
     if (toolbar_) toolbar_->redrawWindowLabel(nullptr);
+    syncFullscreenLayers(nullptr);   // nothing focused -> demote every fullscreen view
   }
 
   void Server::handleSessionLocked(bool takeover) {
