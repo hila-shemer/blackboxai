@@ -88,6 +88,13 @@ namespace bbai {
     // restore added in B5). No-op if i is out of range or already current.
     void setCurrentWorkspace(unsigned i);
 
+    // Explicit workspace removal (menu Act::RemoveWorkspace): re-home the
+    // dying workspace's views to the last survivor BEFORE the model pops the
+    // slot, follow with the current workspace when it is the one dying, and
+    // repair focus memory per gotcha #29. The rc/applyConfig path stays
+    // grow-only (locked) - this is the ONLY shrink path.
+    void removeLastWorkspaceAndRehome();
+
     CommandRunner &commandRunner() { return *command_runner_; }
     void setCommandRunnerForTest(CommandRunner *r) { command_runner_ = r; }
 
