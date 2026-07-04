@@ -337,6 +337,7 @@ namespace bbai {
     void snapFocused(uint32_t edge);   // WLR_EDGE_LEFT/RIGHT -> half the work area
     void moveFocusedToOutput(wlr_direction dir);   // adjacent head; NULL past edge = no-op
     void applyConfig();   // live knobs: toolbar enable/placement/autoHide, workspaces (grow-only)
+    void installSniHostEvents();   // Server OWNS the Host's single event slot
     void restyle();       // repaint everything off the current style_
     std::string rc_path_;    // remembered for reconfigure()/applyStyleFile()
     bbai::Config config_;
