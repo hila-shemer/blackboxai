@@ -11,6 +11,8 @@
 #include "Util.hh"
 
 #include <cctype>
+#include <fstream>
+#include <vector>
 
 // Install-path defaults injected by src/meson.build; empty fallbacks keep
 // stray compiles (and the unlikely no-define build) honest.
@@ -190,6 +192,32 @@ namespace bbai {
   Config Config::load(const std::string &filename, unsigned screen) {
     bt::Resource res(filename);  // unreadable file -> empty db -> all defaults
     return fromResource(res, screen);
+  }
+
+  bool updateRcKey(const std::string &rc_path, const std::string &key,
+                   const std::string &value) {
+    std::vector<std::string> lines;
+    {
+      std::ifstream in(rc_path);
+      std::string line;
+      while (std::getline(in, line)) lines.push_back(line);
+    }
+    const std::string entry = key + ": " + value;
+    bool replaced = false;
+    for (std::string &line : lines) {
+      const size_t first = line.find_first_not_of(" \t");
+      if (first == std::string::npos || line[first] == '!') continue;
+      const size_t colon = line.find(':');
+      if (colon == std::string::npos) continue;
+      std::string k = line.substr(first, colon - first);
+      while (!k.empty() && (k.back() == ' ' || k.back() == '\t')) k.pop_back();
+      if (k == key) { line = entry; replaced = true; break; }
+    }
+    if (!replaced) lines.push_back(entry);
+    std::ofstream out(rc_path, std::ios::trunc);
+    if (!out) return false;
+    for (const std::string &line : lines) out << line << '\n';
+    return static_cast<bool>(out);
   }
 
 } // namespace bbai

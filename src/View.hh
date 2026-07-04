@@ -74,6 +74,10 @@ namespace bbai {
     void setFocused(bool f);
     bool isFocused() const { return focused_; }
 
+    // Re-theme hook: rebuild the decorations from the server's CURRENT style.
+    // relayout() re-reads currentStyle() every time, so this is just a poke.
+    void restyle() { if (mapped) relayout(); }
+
   private:
     void relayout();             // (re)build decorations for the current size + focus
     void chooseDecorationMode(); // the SSD/CSD rule; safe to call repeatedly

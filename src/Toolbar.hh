@@ -34,6 +34,10 @@ namespace bbai {
     void redrawWorkspaceLabel(void);              // on workspace switch (Phase B)
     void redrawWindowLabel(const char *title);    // on focus change (null/"" -> blank)
 
+    // Re-theme hook: full rebuild (textures/fonts/metrics re-read from the
+    // server's current style) + reposition.
+    void restyle() { rebuild(); }
+
     toolbar::Rect barRectForTest(void) const { return currentBarRect(); }
     toolbar::Placement placementForTest(void) const { return placement_; }
     const std::string &windowTitleForTest(void) const { return window_title_; }

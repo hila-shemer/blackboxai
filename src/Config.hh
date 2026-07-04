@@ -87,6 +87,13 @@ namespace bbai {
     static Config load(const std::string &filename, unsigned screen = 0);
   };
 
+  // Rewrite ONE key in an rc file, preserving everything else the user wrote
+  // (classic Resource::merge saved the whole db and reformatted the file; this
+  // is deliberately narrower). Replaces the first "key:" line - comments
+  // excluded - or appends; creates the file if missing. False on I/O failure.
+  bool updateRcKey(const std::string &rc_path, const std::string &key,
+                   const std::string &value);
+
 } // namespace bbai
 
 #endif // BLACKBOXAI_CONFIG_HH
