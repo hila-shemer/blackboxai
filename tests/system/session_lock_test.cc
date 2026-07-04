@@ -374,6 +374,48 @@ TEST_CASE("a crashed locker leaves the session locked; a new locker takes over")
                       [&] { second.flush(); second.pump(); }));
 }
 
+TEST_CASE("head destroyed mid-lock-wait: dropped from the wait, locked still sent") {
+    setenv("WLR_BACKENDS", "headless", 1);
+    setenv("WLR_RENDERER", "pixman", 1);
+
+    Server server(/*headless=*/true);
+    REQUIRE(server.ok());
+    bootOutput(server);
+    server.addHeadlessOutputForTest(800, 600);
+    REQUIRE(pumpUntil(server, [&] { return server.outputCountForTest() == 2; },
+                      [&] {}));
+
+    test::LockTestClient lc(server.socketName());
+    REQUIRE(lc.ok());
+    REQUIRE(pumpUntil(server, [&] { return lc.sawLockManager(); },
+                      [&] { lc.flush(); lc.pump(); }));
+    lc.lock();
+    // Zero-sleep pumps: the lock request lands and both heads get blanked, but
+    // the ~16ms frame timer can't have fired inside them - we are mid-wait
+    // (same reasoning as the fallback-timer case above).
+    REQUIRE(pumpUntil(server, [&] {
+        return server.sessionLockForTest()->locked()
+            && server.sessionLockForTest()->blankRectCountForTest() == 2;
+    }, [&] { lc.flush(); lc.pump(); }));
+    REQUIRE_FALSE(server.sessionLockForTest()->lockedSentForTest());
+
+    // Hot-unplug the second head mid-wait: its blank dies, its entry leaves
+    // the wait set, and the recount is what lets `locked` go out at all -
+    // head 1 never commits a post-blank frame.
+    server.destroyOutputForTest(1);
+    CHECK(server.sessionLockForTest()->blankRectCountForTest() == 1);
+
+    bool got_locked = pumpUntil(server, [&] { return lc.lockedReceived(); },
+                                [&] { lc.flush(); lc.pump(); },
+                                /*iters=*/3000, /*sleep_us=*/1000);
+    CHECK(got_locked);
+    CHECK(server.sessionLockForTest()->lockedSentForTest());
+
+    lc.unlockAndDestroy();
+    REQUIRE(pumpUntil(server, [&] { return !server.sessionLockForTest()->locked(); },
+                      [&] { lc.flush(); lc.pump(); }));
+}
+
 TEST_CASE("takeover keeps the pre-lock focus for the eventual unlock") {
     setenv("WLR_BACKENDS", "headless", 1);
     setenv("WLR_RENDERER", "pixman", 1);
