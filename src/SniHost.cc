@@ -167,13 +167,16 @@ namespace bbai::sni {
     auto *reg = static_cast<Host::Reg *>(userdata);
     Host *host = reg->host;
     if (sd_bus_message_is_method_error(reply, nullptr)) {
-      // The item never answered its properties: drop the registration so
-      // items_ only ever holds materialized entries. Copy the keys out first -
-      // dropRegistration destroys reg, and passing reg's own strings by
-      // reference would leave them dangling mid-call. (Unref-from-own-callback
-      // is safe: sd-bus holds a ref on the slot during dispatch.)
-      const std::string service = reg->service, path = reg->path;
-      host->dropRegistration(service, path);
+      // The item didn't answer its properties - object not exported yet
+      // (UnknownObject) or a stalled main loop (NoReply after ~25s). KEEP the
+      // registration: dropping here was unrecoverable, since neither
+      // libappindicator nor KStatusNotifierItem watches
+      // StatusNotifierItemUnregistered for its own item, so one slow start
+      // lost the tray icon until app restart. The surviving reg is exactly
+      // what lets the item's next NewIcon/NewStatus re-fetch (onItemSignal),
+      // and the sd_bus_track still reaps it when the connection really dies.
+      // items_ still only holds materialized entries - same rule as the
+      // parse-fail return below.
       return 0;
     }
 

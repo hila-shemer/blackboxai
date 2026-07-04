@@ -115,9 +115,10 @@ namespace {
   }
 
   // A bare item object so the Host's post-registration GetAll succeeds with an
-  // empty dict (sd-bus serves org.freedesktop.DBus.Properties for any vtable).
-  // Without it sd-bus auto-replies UnknownObject and the Host - correctly, per
-  // its materialize-or-drop rule - unregisters the item before we can assert.
+  // empty dict (sd-bus serves org.freedesktop.DBus.Properties for any vtable)
+  // and the item materializes. Without it the GetAll draws UnknownObject and
+  // the item stays registered-but-unmaterialized (the late-materialization
+  // test below pins that survival).
   const sd_bus_vtable kEmptyItemVtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_VTABLE_END
@@ -152,6 +153,19 @@ namespace {
   const sd_bus_vtable kHostileIconVtable[] = {
     SD_BUS_VTABLE_START(0),
     SD_BUS_PROPERTY("IconPixmap", "a(iiay)", getHostileIconPixmap, 0, 0),
+    SD_BUS_VTABLE_END
+  };
+
+  // For the late-materialization test: an item whose object shows up only
+  // AFTER it registered (the libappindicator slow-start shape).
+  int getLateId(sd_bus *, const char *, const char *, const char *,
+                sd_bus_message *reply, void *, sd_bus_error *) {
+    return sd_bus_message_append(reply, "s", "late-bloomer");
+  }
+
+  const sd_bus_vtable kLateItemVtable[] = {
+    SD_BUS_VTABLE_START(0),
+    SD_BUS_PROPERTY("Id", "s", getLateId, 0, 0),
     SD_BUS_VTABLE_END
   };
 
@@ -343,6 +357,59 @@ TEST_CASE("name-variant registration resolves to the well-known name") {
 
   sd_bus_flush_close_unref(observer);
   sd_bus_flush_close_unref(item_conn);
+}
+
+TEST_CASE("GetAll failure keeps the registration - the item materializes late") {
+  Host host(nullptr);
+  REQUIRE(host.ok());
+  bool added = false;
+  HostEvents ev;
+  ev.itemAdded = [&](const Item &) { added = true; };
+  host.setEvents(std::move(ev));
+
+  sd_bus *observer = nullptr;
+  REQUIRE(sd_bus_open_user(&observer) >= 0);
+  SigWatch unreg_sig;
+  REQUIRE(sd_bus_match_signal(observer, nullptr, nullptr, "/StatusNotifierWatcher",
+                              "org.kde.StatusNotifierWatcher",
+                              "StatusNotifierItemUnregistered", onSig,
+                              &unreg_sig) >= 0);
+
+  // Register with NO object exported at the path: the Host's GetAll draws
+  // sd-bus's UnknownObject auto-reply - the slow-starting-app shape.
+  sd_bus *item_conn = nullptr;
+  REQUIRE(sd_bus_open_user(&item_conn) >= 0);
+  REQUIRE(sd_bus_call_method_async(item_conn, nullptr,
+                                   "org.kde.StatusNotifierWatcher",
+                                   "/StatusNotifierWatcher",
+                                   "org.kde.StatusNotifierWatcher",
+                                   "RegisterStatusNotifierItem", nullptr, nullptr,
+                                   "s", "/StatusNotifierItem") >= 0);
+
+  // Bounded pump: enough round trips for the GetAll error to land either way.
+  for (int i = 0; i < 100; ++i) {
+    host.processForTest();
+    while (sd_bus_process(item_conn, nullptr) > 0) {}
+    while (sd_bus_process(observer, nullptr) > 0) {}
+    usleep(2000);
+  }
+  CHECK(!unreg_sig.fired);                     // the failed fetch is not a death
+  CHECK(host.items().empty());                 // ...but nothing materialized yet
+  REQUIRE(registeredItems(host, observer).size() == 1);
+
+  // The app finishes starting: object appears, change signal fires -> the
+  // surviving registration re-fetches and the item materializes.
+  REQUIRE(sd_bus_add_object_vtable(item_conn, nullptr, "/StatusNotifierItem",
+                                   "org.kde.StatusNotifierItem",
+                                   kLateItemVtable, nullptr) >= 0);
+  REQUIRE(sd_bus_emit_signal(item_conn, "/StatusNotifierItem",
+                             "org.kde.StatusNotifierItem", "NewIcon", "") >= 0);
+  REQUIRE(pumpUntil(host, {item_conn, observer}, [&] { return added; }));
+  REQUIRE(host.items().size() == 1);
+  CHECK(host.items()[0].id == "late-bloomer");
+
+  sd_bus_flush_close_unref(item_conn);
+  sd_bus_flush_close_unref(observer);
 }
 
 TEST_CASE("mock publisher registers with the watcher and serves its icon") {
