@@ -144,6 +144,46 @@ TEST_CASE("focus radios: Sloppy enables the raise rows; the composite spelling a
   std::remove(kMenu);
 }
 
+TEST_CASE("focus radios: CTF preserves the raise sub-flags across a round-trip to Sloppy") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+  writeFile(kRc, "session.focusModel: SloppyFocus AutoRaise\n");
+  writeMenu();
+
+  Server server(/*headless=*/true, kRc);
+  boot(server);
+  server.setMenuFileForTest(kMenu);
+  REQUIRE(server.config().autoRaise);
+
+  // Switch to Click-to-Focus. Classic zeroes the raise flags only at load, not
+  // on the runtime toggle, so autoRaise must survive in memory; the persisted
+  // spelling is bare ClickToFocus (focusModelValue omits the flags under CTF).
+  Menu *cfg = openConfigMenu(server);
+  hoverRow(server, cfg, 0);
+  Menu *fm = cfg->child();
+  clickRow(server, fm, 0);                          // ClickToFocus
+  CHECK(server.config().focusModel == FocusModel::ClickToFocus);
+  CHECK(server.config().autoRaise);                 // NOT dropped on the toggle
+  CHECK(slurp(kRc).find("session.focusModel: ClickToFocus\n") != std::string::npos);
+
+  // Reopen under CTF: AutoRaise shows checked-but-disabled (classic), proving
+  // the flag is still live in memory.
+  cfg = openConfigMenu(server);
+  hoverRow(server, cfg, 0);
+  fm = cfg->child();
+  CHECK(fm->item(0).checked);                       // CTF radio
+  CHECK(fm->item(2).checked);                       // AutoRaise still checked...
+  CHECK_FALSE(fm->item(2).enabled);                 // ...but disabled under CTF
+
+  // Back to Sloppy: the preserved flag rewrites the composite spelling.
+  clickRow(server, fm, 1);                          // SloppyFocus
+  CHECK(server.config().focusModel == FocusModel::SloppyFocus);
+  CHECK(server.config().autoRaise);
+  CHECK(slurp(kRc).find("session.focusModel: SloppyFocus AutoRaise\n") != std::string::npos);
+  std::remove(kRc);
+  std::remove(kMenu);
+}
+
 TEST_CASE("placement radio: Cascade persists the classic *Placement spelling") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
