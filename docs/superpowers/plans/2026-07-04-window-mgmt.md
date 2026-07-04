@@ -1624,7 +1624,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: `wlr_output_layout_adjacent_output(layout, wlr_direction, ref_output, ref_lx, ref_ly)` (POC-proven: RIGHT/LEFT resolve, past-edge → NULL), `outputForView`, `outputForWlr` (Task 7), `Output::fullBox()`/`workArea()`, `View::remaximize`/`setFullscreen`/`setPosition`.
 - Produces: `void Server::moveFocusedToOutput(wlr_direction dir)`; `void Server::moveFocusedToOutputForTest(int dir)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/move_to_output_test.cc`:
 
@@ -1725,12 +1725,12 @@ test('move_to_output', move_to_output_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `move_to_output`.
 Expected: BUILD FAILURE — `no member named 'moveFocusedToOutputForTest'`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/Server.hh`:
 
@@ -1784,11 +1784,11 @@ Public wrapper:
   }
 ```
 
-- [ ] **Step 4: Run to verify it passes**
+- [x] **Step 4: Run to verify it passes**
 
 Container gate, `<tests>` = `move_to_output`. Expected: both cases pass. Full gate green; goldens clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/move_to_output_test.cc tests/meson.build

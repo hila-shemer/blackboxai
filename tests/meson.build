@@ -424,6 +424,12 @@ snap_exe = executable('snap-test', files('system/snap_test.cc'),
 test('snap', snap_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Move-to-output: adjacent head in a direction, NULL past the edge (no-op).
+move_to_output_exe = executable('move-to-output-test', files('system/move_to_output_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('move_to_output', move_to_output_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via
