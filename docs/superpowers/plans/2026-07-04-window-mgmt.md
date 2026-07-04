@@ -975,7 +975,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: `wlr_scene_node_reparent` (`wlr_scene.h`), `raiseView`, the layer trees.
 - Produces: `wlr_scene_tree *layer_fullscreen` (public, beside the other layers). Documents the KNOWN scene-vs-model layer divergence.
 
-- [ ] **Step 1: Write the failing golden + alt-tab test**
+- [x] **Step 1: Write the failing golden + alt-tab test**
 
 Create `tests/system/fullscreen_golden_test.cc`:
 
@@ -1076,12 +1076,12 @@ test('fullscreen_golden', fullscreen_golden_exe, suite : 'system',
 
 `viewLayerIsFullscreenForTest(View*)` is a new introspection helper (Step 4). It returns whether the view's `frame_tree` currently parents into `layer_fullscreen`.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Container gate, `<tests>` = `fullscreen_golden`.
 Expected: BUILD FAILURE — `no member named 'layer_fullscreen'` / `viewLayerIsFullscreenForTest`.
 
-- [ ] **Step 3: Create the scene layer**
+- [x] **Step 3: Create the scene layer**
 
 `src/Server.hh`, add the member with the other layers (after `layer_overlay`, line 219 — declare it BEFORE overlay in z-order terms, but as a field its declaration order doesn't set z; the CREATION order does):
 
@@ -1105,7 +1105,7 @@ Expected: BUILD FAILURE — `no member named 'layer_fullscreen'` / `viewLayerIsF
     layer_lock       = wlr_scene_tree_create(&scene->tree);
 ```
 
-- [ ] **Step 4: Reparent on focus change**
+- [x] **Step 4: Reparent on focus change**
 
 In `setViewFullscreen`, replace the `// [Task 6 inserts the layer_fullscreen reparent here.]` marker:
 
@@ -1152,7 +1152,7 @@ Add the introspection helper (public, near `viewsForTest`):
     }
 ```
 
-- [ ] **Step 5: Bless the ONE new golden, then run**
+- [x] **Step 5: Bless the ONE new golden, then run**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -1164,7 +1164,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: full gate green. Then `git status tests/golden/` must show EXACTLY one line — `tests/golden/v1-fullscreen.png` as an **untracked add** (`??`), never a modify of an existing file. If any existing golden shows modified, STOP: the layer creation shifted a pixel it shouldn't have — investigate, do not bless.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc tests/system/fullscreen_golden_test.cc \

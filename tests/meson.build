@@ -405,6 +405,13 @@ fullscreen_exe = executable('fullscreen-test', files('system/fullscreen_test.cc'
 test('fullscreen', fullscreen_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 
+# Fullscreen covers the toolbar (golden); unfocused fullscreen demotes.
+fullscreen_golden_exe = executable('fullscreen-golden-test',
+  files('system/fullscreen_golden_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('fullscreen_golden', fullscreen_golden_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # ---- Demo scenarios (suite: 'demo') ----------------------------------------
 # Each is a normal integration test that asserts multi-step behavior AND, when
 # BBAI_DEMO_DIR is set, dumps per-frame PNGs for video encoding via

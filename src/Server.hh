@@ -205,6 +205,7 @@ namespace bbai {
     const char *seatSelectionMimeForTest() const;
     wlr_data_source *seatSelectionSourceForTest() const { return seat->selection_source; }
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
+    bool viewLayerIsFullscreenForTest(View *v) const;   // frame_tree parents into layer_fullscreen?
 
     wl_display *display = nullptr;
     wlr_backend *backend = nullptr;
@@ -228,6 +229,14 @@ namespace bbai {
     wlr_scene_tree *layer_bottom = nullptr;
     wlr_scene_tree *layer_window = nullptr;
     wlr_scene_tree *layer_top = nullptr;
+    // Between top and overlay: a focused fullscreen view is promoted here so it
+    // covers the toolbar (layer_top) but stays under menus/screenshot overlays
+    // and the lock. KNOWN divergence: raiseView/lowerView restack flat within a
+    // node's parent tree and ignore StackingList's 5 model layers - this slice
+    // papers over it for THIS one layer via focus-keyed reparenting; a general
+    // layer-aware scene restack is a separate feature (the next Above/Below work
+    // owns it), NOT this slice.
+    wlr_scene_tree *layer_fullscreen = nullptr;
     wlr_scene_tree *layer_overlay = nullptr;
     // 6th, topmost: session-lock blanks + lock surfaces. Nothing renders above
     // a locked session - screenshot/menu overlays stay on layer_overlay below.
@@ -270,6 +279,10 @@ namespace bbai {
     void processResize();
     void focusView(View *v, bool update_mru = true);
     void clearFocus();                              // deactivate + clear keyboard focus
+    // Keep the fullscreen scene layer keyed to focus: the focused view (if
+    // fullscreen) promotes to layer_fullscreen, every other fullscreen view
+    // demotes to layer_window. Run at the tail of focusView/clearFocus.
+    void syncFullscreenLayers(View *newly_focused);
     // Session-lock hooks (called by the friend SessionLock). takeover = a new
     // locker replacing a crashed one while locked_ never dropped: everything
     // re-runs except the focus_before_lock_ capture (focused_view is already
