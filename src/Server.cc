@@ -1228,6 +1228,12 @@ namespace bbai {
     // client after unlock - the release erase in onKey is gated off while
     // locked, so drop the swallow set here.
     swallowed_keycodes_.clear();
+    // Same reasoning for a pending titlebar-button press: its terminating
+    // release is discarded by the locked pointer gate, so a stale entry would
+    // fire the pre-lock action (or swallow a legit client release) on the
+    // first release after unlock.
+    pressed_button_view_ = nullptr;
+    pressed_button_part_ = Part::None;
     focus_before_lock_ = focused_view;
     clearFocus();
     wlr_seat_pointer_notify_clear_focus(seat);
