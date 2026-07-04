@@ -95,6 +95,21 @@ sni-core: nm-applet-class items are activate-only until wave-2 dbusmenu (expecte
   after. Two implementers reported the same one-shot load flake. If it recurs, harden
   the test clients' connect with a bounded retry - do not loosen assertions.
 
+- Stop 4 `rc-style` (`687b286`): 5 files conflicted; the two predicted
+  out-of-marker jobs done (Toolbar shims deleted for work-area's setters;
+  FrameMetrics re-applied inside applyMaximizedGeometry; plus a second Toolbar
+  construction site in reconfigure moved to the Output-owning ctor). Gate 50/50,
+  91%; one golden flipped by design.
+- Stop 5 `menu-wire` (`94b2eec` + Task-9 `4d40079`): stubs died per their own
+  comments; menuFile wired from Config at boot + reconfigure; hermetic pins in
+  4 test files; the [reconfig] cache test adapted (mechanism, not requirement).
+  Gate 51/51, 91%, goldens clean. WAVE 1 CODE-COMPLETE.
+- Review-worthy items carried into the wave review: sni GetAll-error drops the
+  registration (product question: decouple watcher bookkeeping from host
+  materialization?); reconfigure() runs rc rootCommand with no headless gate;
+  Server::loadMenuFile reads menu_file_[0] behind a guard a future caller could
+  bypass; work-area's hot-unplug re-home semantics are new behavior.
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
