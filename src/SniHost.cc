@@ -311,6 +311,14 @@ namespace bbai::sni {
       fd_source_ = wl_event_loop_add_fd(loop_, sd_bus_get_fd(bus_),
                                         WL_EVENT_READABLE, Cb::onFd, this);
       timer_source_ = wl_event_loop_add_timer(loop_, Cb::onTimer, this);
+      if (!fd_source_ || !timer_source_) {
+        // Source allocation failed (OOM, or timerfd_create under fd
+        // exhaustion). A half-armed host either null-derefs in rearmSources
+        // or silently never pumps - inert-never-fatal instead.
+        fprintf(stderr, "blackboxai: SNI event sources unavailable - tray disabled\n");
+        teardownBus();
+        return;
+      }
       drain();   // flush the ctor-time emissions + arm both sources
     }
   }
@@ -339,7 +347,11 @@ namespace bbai::sni {
   }
 
   void Host::rearmSources() {
-    if (!loop_ || !bus_ || !fd_source_) return;
+    // timer_source_ in the guard: wl_event_source_timer_update(NULL,..)
+    // segfaults (no internal check - probed against the installed
+    // libwayland-server). The ctor tears down on a failed add, so both
+    // sources are non-null together - this is belt and braces.
+    if (!loop_ || !bus_ || !fd_source_ || !timer_source_) return;
     wl_event_source_fd_update(fd_source_, wlMaskFromPoll(sd_bus_get_events(bus_)));
 
     uint64_t usec = 0;
