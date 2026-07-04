@@ -271,7 +271,15 @@ namespace bbai {
       socket_name = sock;
 
     // Exec runner for menu actions (spawned children inherit our WAYLAND_DISPLAY).
-    default_runner_ = std::make_unique<PosixCommandRunner>(socket_name);
+    // Headless gets a recording non-spawning default: the ctor's !headless
+    // gates below are 'don't even try at boot', this is 'no path can fork on
+    // a CI box' - reconfigure() re-runs rootCommand unconditionally, and any
+    // future action must not depend on every test remembering to install a
+    // fake. Tests that assert argv still install their own FakeCommandRunner.
+    if (headless)
+      default_runner_ = std::make_unique<FakeCommandRunner>();
+    else
+      default_runner_ = std::make_unique<PosixCommandRunner>(socket_name);
     command_runner_ = default_runner_.get();
 
     started_ = wlr_backend_start(backend);
@@ -354,9 +362,9 @@ namespace bbai {
     applyConfig();
     restyle();
     // rc rootCommand re-runs (classic runs it on every style load). No
-    // headless gate here - by reconfigure time a test owns the runner; the
-    // ctor keeps its gate because fixtures with rootCommand exist for the
-    // parse tests.
+    // headless gate here and none needed: the headless default runner cannot
+    // spawn (ctor), so this is safe on CI whether or not a test installed
+    // its own fake.
     runRootCommand();
     return style_ok;
   }
