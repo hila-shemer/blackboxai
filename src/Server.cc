@@ -1192,7 +1192,7 @@ namespace bbai {
     if (toolbar_) toolbar_->redrawWindowLabel(nullptr);
   }
 
-  void Server::handleSessionLocked() {
+  void Server::handleSessionLocked(bool takeover) {
     // Abort every modal mode via its canonical cancel: their exit paths
     // re-sync the seat, and locked_ is already true (SessionLock sets it
     // before this hook), so those re-syncs hit the gate instead of handing
@@ -1219,7 +1219,7 @@ namespace bbai {
     // first release after unlock.
     pressed_button_view_ = nullptr;
     pressed_button_part_ = Part::None;
-    focus_before_lock_ = focused_view;
+    if (!takeover) focus_before_lock_ = focused_view;
     clearFocus();
     wlr_seat_pointer_notify_clear_focus(seat);
   }

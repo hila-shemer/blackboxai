@@ -43,7 +43,10 @@ namespace bbai {
     lock_unlock_.connect(&lock->events.unlock, [this](void *) { onUnlock(); });
     lock_destroy_.connect(&lock->events.destroy, [this](void *) { onLockDestroy(); });
 
-    server_.handleSessionLocked();   // idempotent: modes already dead under a takeover
+    // On a takeover the modal-mode cancels are already-dead no-ops, but the
+    // hook must NOT re-capture focus_before_lock_ (focused_view was parked to
+    // null by the first lock - re-capturing erases the real pre-lock window).
+    server_.handleSessionLocked(takeover);
 
     // Fresh lock: blank every head and wait for one post-blank commit each.
     // Takeover: the blanks never came down and each head already committed a
