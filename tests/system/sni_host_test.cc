@@ -9,6 +9,7 @@
 
 #include <systemd/sd-bus.h>
 
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
@@ -603,6 +604,84 @@ TEST_CASE("host announces itself: name + property + signal") {
 
   CHECK(watcherProp(host, observer, "IsStatusNotifierHostRegistered").boolean == 1);
   sd_bus_flush_close_unref(observer);
+}
+
+namespace {
+
+  // The private bus daemon's pid (dbus-run-session starts one per test exe) -
+  // the daemon will answer for its own name. Blocking is fine: the target is
+  // the daemon, not the in-process watcher.
+  pid_t busDaemonPid(sd_bus *conn) {
+    sd_bus_error err = SD_BUS_ERROR_NULL;
+    sd_bus_message *reply = nullptr;
+    uint32_t pid = 0;
+    if (sd_bus_call_method(conn, "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                           "org.freedesktop.DBus", "GetConnectionUnixProcessID",
+                           &err, &reply, "s", "org.freedesktop.DBus") >= 0) {
+      sd_bus_message_read(reply, "u", &pid);
+      sd_bus_message_unref(reply);
+    }
+    sd_bus_error_free(&err);
+    return pid_t(pid);
+  }
+
+  // SIGCONT-on-scope-exit: a REQUIRE failure mid-test must not leave the
+  // whole suite's bus daemon frozen.
+  struct StopDaemon {
+    pid_t pid;
+    explicit StopDaemon(pid_t p) : pid(p) { kill(pid, SIGSTOP); }
+    ~StopDaemon() { kill(pid, SIGCONT); }
+  };
+
+} // namespace
+
+TEST_CASE("a click queued on a blocked socket flushes from the event loop alone") {
+  wl_event_loop *loop = wl_event_loop_create();
+  REQUIRE(loop != nullptr);
+  {
+    Host host(loop);
+    REQUIRE(host.ok());
+    bool added = false;
+    HostEvents ev;
+    ev.itemAdded = [&](const Item &) { added = true; };
+    host.setEvents(std::move(ev));
+
+    bbai::test::SniMockChild mock;
+    REQUIRE(mock.ok());
+    for (int i = 0; i < 600 && !added; ++i)
+      wl_event_loop_dispatch(loop, 10);
+    REQUIRE(added);
+    const Item it = host.items()[0];
+
+    sd_bus *probe = nullptr;
+    REQUIRE(sd_bus_open_user(&probe) >= 0);
+    pid_t daemon = busDaemonPid(probe);
+    REQUIRE(daemon > 0);
+    {
+      // Freeze the daemon so the socket fills: sd-bus hits EAGAIN and parks
+      // the message in its write queue - the state only POLLOUT can clear.
+      StopDaemon frozen(daemon);
+      int bursts = 0;
+      while (!host.wantsWriteForTest() && bursts < 50000) {
+        host.activate(it, 1, 1);
+        ++bursts;
+      }
+      REQUIRE(host.wantsWriteForTest());
+      host.contextMenu(it, 31337, 7);          // the sentinel rides the queue
+    }                                          // daemon resumes here
+    // From here on ONLY the loop pumps the host. Unfixed, the fd mask is
+    // still POLLIN-only and nothing inbound ever arrives - the queue starves.
+    auto pump = [&] { wl_event_loop_dispatch(loop, 10); };
+    std::string line;
+    do {
+      line = mock.waitReport(10000, pump);
+    } while (!line.empty() && line != "ContextMenu 31337 7");
+    CHECK(line == "ContextMenu 31337 7");
+
+    sd_bus_flush_close_unref(probe);
+    mock.quit();
+  }
+  wl_event_loop_destroy(loop);
 }
 
 TEST_CASE("Host pumps itself from a wl_event_loop - no manual processForTest") {
