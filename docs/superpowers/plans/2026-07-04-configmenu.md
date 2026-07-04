@@ -527,7 +527,7 @@ for a lifeboat menu - not worth it)."
 - Consumes: `bbai::Config`, `bbai::updateRcKey` (`src/Config.hh:94`) and `Config::load` in tests only.
 - Produces: `std::string bbai::configmenu::focusModelValue(const Config &cfg)`; `const char *bbai::configmenu::windowPlacementValue(WindowPlacement p)`. Task 4's `setConfigOption` consumes both.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/configmenu_test.cc` (add `#include "ConfigSpelling.hh"` and `#include <cstdio>` at the top):
 
@@ -577,7 +577,7 @@ TEST_CASE("persist spellings: windowPlacement strings round-trip") {
 }
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c 'ninja -C build-f44'
@@ -585,7 +585,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: compile FAILURE - `ConfigSpelling.hh: No such file or directory`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Create `src/ConfigSpelling.hh`:
 
@@ -628,7 +628,7 @@ namespace bbai::configmenu {
 #endif // BLACKBOXAI_CONFIGSPELLING_HH
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 ```sh
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackboxai-ci:f44 bash -c '
@@ -639,7 +639,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" blackb
 
 Expected: all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```sh
 git add src/ConfigSpelling.hh tests/unit/configmenu_test.cc
