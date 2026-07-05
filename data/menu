@@ -1,0 +1,21 @@
+# BlackboxAI starter menu. This mirrors the compositor's built-in default so
+# first-run behaviour matches, plus a couple of extra entries to show the shape.
+# Point session.menuFile in ~/.blackboxrc at your own copy to customise it.
+# Grammar: see man blackboxai, MENU FILE. Pipe menus ([include] |cmd) are not
+# supported; a [reconfig] {command} is ignored (the compositor reloads itself).
+# The [stylesdir] path below is the default install prefix - edit it if you
+# built with a non-default prefix (e.g. /usr/local/share/blackboxai/styles).
+[begin] (BlackboxAI)
+  [exec] (Terminal) {kitty}
+  [exec] (Terminal (xterm)) {xterm}
+  [exec] (Run...) {fuzzel}
+  [separator]
+  [submenu] (Styles) {Pick a theme}
+    [stylesdir] (/usr/share/blackboxai/styles)
+  [end]
+  [config] (Configuration)
+  [workspaces] (Workspaces)
+  [separator]
+  [restart] (Restart)
+  [exit] (Exit)
+[end]

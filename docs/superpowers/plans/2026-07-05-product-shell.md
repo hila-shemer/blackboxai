@@ -231,7 +231,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 
 The built-in default (`src/Rootmenu.cc:93-107`) is: `kitty`, `xterm`, separator, Workspaces submenu, separator, Restart, Exit. The starter FILE should be that, made slightly richer as a first-run editable example (a Run entry, a Configuration entry, a Styles submenu) while staying inside the parsed grammar - so a user who opens `/usr/share/blackboxai/menu` sees the shape they would edit. Every directive used below is in `MenuParser.cc` (`[exec]`/`[submenu]`/`[workspaces]`/`[config]`/`[stylesdir]`/`[restart]`/`[exit]`/`[separator]`/`[end]`).
 
-- [ ] **Step 1: Write `data/menu`**
+- [x] **Step 1: Write `data/menu`**
 
 ```
 # BlackboxAI starter menu. This mirrors the compositor's built-in default so
@@ -261,7 +261,7 @@ Note: `@pkgdatadir@` here is NOT substituted (the menu is installed verbatim, no
     [stylesdir] (/usr/share/blackboxai/styles)
 ```
 
-- [ ] **Step 2: Add the install target to `meson.build`**
+- [x] **Step 2: Add the install target to `meson.build`**
 
 Immediately after the `install_subdir('data/styles', ...)` block (currently `meson.build:91-92`):
 
@@ -274,7 +274,7 @@ install_data('data/menu',
   install_dir : get_option('datadir') / 'blackboxai')
 ```
 
-- [ ] **Step 3: VERIFY - the menu parses cleanly and installs to the advertised path**
+- [x] **Step 3: VERIFY - the menu parses cleanly and installs to the advertised path**
 
 The parser has no standalone CLI, but the man page's own claim is "this file is a valid menu". Prove (a) it installs at `@pkgdatadir@/menu`, and (b) it round-trips through the real `MenuParser` with zero diagnostics, by running the existing menu-parser unit target against it:
 
@@ -292,7 +292,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: the dry-run shows `.../share/blackboxai/menu`; the pipe-menu grep finds nothing (no `[include] |...` and no `[reconfig] |...`); the directive count is > 0. (If a `tests=true` build is already available, additionally point `menuparser::parseFile("data/menu")` at it via the existing MenuParser test fixture and assert `diag.empty()` - stronger, but the grep gate is sufficient for this authoring task.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add data/menu meson.build
