@@ -601,7 +601,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **The teardown trap (POC-verified, load-bearing):** the manager's `display_destroy` handler asserts `wl_list_empty(&manager->events.commit.listener_list)` (`types/wlr_ext_workspace_v1.c:511`). Once the commit listener is connected, it MUST be disconnected before `wl_display_destroy` - the same class of trap as `new_output`, handled at the same spot (`:543`). This is why the listener and its disconnect land in ONE task: connecting it without the disconnect aborts every test at shutdown.
 
-- [ ] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
+- [x] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
 
 ```cpp
 TEST_CASE("client ACTIVATE routes through setCurrentWorkspace") {
@@ -631,7 +631,7 @@ TEST_CASE("client ACTIVATE routes through setCurrentWorkspace") {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run (in container):
 ```bash
@@ -639,7 +639,7 @@ meson test -C build ext_workspace -v
 ```
 Expected: FAIL - `current()` stays 0 (no commit listener honors the request yet).
 
-- [ ] **Step 3: Connect the commit listener + implement the handler**
+- [x] **Step 3: Connect the commit listener + implement the handler**
 
 In the ctor (`src/Server.cc`, right after the group creation from Task 2):
 
@@ -673,7 +673,7 @@ Implement the handler next to `syncExtWorkspaces` (`src/Server.cc`):
 
 > Re-verify the event struct name, the `requests` list field, the `link` member name, the request `.type` enum token, and `req->activate.workspace` against the container header (Task 1 Step 1's grep, extended to `commit_event`/`request`). The scout read these from the header but did NOT verify the enum-token spelling against source - grep `EXT_WORKSPACE_V1_REQUEST` in the container's `wlr/types/wlr_ext_workspace_v1.h` before trusting the token above.
 
-- [ ] **Step 4: Disconnect on teardown**
+- [x] **Step 4: Disconnect on teardown**
 
 In `~Server` (`src/Server.cc:543`), next to `new_output.disconnect()`:
 
@@ -684,7 +684,7 @@ In `~Server` (`src/Server.cc:543`), next to `new_output.disconnect()`:
                                          // and shutdown aborts (POC-verified).
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run (in container):
 ```bash
@@ -692,7 +692,7 @@ ninja -C build && meson test -C build ext_workspace -v
 ```
 Expected: PASS - `current()` moves to 2, `activeIndex()` mirrors to 2, and the process exits cleanly (no `wl_list_empty` abort at teardown).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Server.cc tests/system/ext_workspace_test.cc
