@@ -577,7 +577,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: the COPR id (Task 3), the container/Fedora build reality (`ci.yml`), the man page path (Task 1).
 - Produces: the deep-link targets Task 4's README §6 points at.
 
-- [ ] **Step 1: Re-verify the autostart + desktop facts**
+- [x] **Step 1: Re-verify the autostart + desktop facts**
 
 ```bash
 cd "$WT"
@@ -588,7 +588,7 @@ sed -n '8,40p' .github/workflows/ci.yml                       # the authoritativ
 
 Expected: `.desktop` has `Name=BlackboxAI`, `Exec=blackboxai`, `DesktopNames=Blackbox`; `Server.cc` sets `XDG_CURRENT_DESKTOP=Blackbox` and scans `~/.config/autostart` then `/etc/xdg/autostart`; `ci.yml` lists the deps. Correct any drift.
 
-- [ ] **Step 2: Write `docs/install.md`**
+- [x] **Step 2: Write `docs/install.md`**
 
 Sections (SFW voice):
 
@@ -597,13 +597,13 @@ Sections (SFW voice):
 - **C. Pick it at GDM.** Short - the mechanics live in `gdm-session.md`; here just: log out, choose "BlackboxAI" at the greeter gear, log in. Link `gdm-session.md`.
 - **D. Autostart.** Drop XDG `.desktop` files in `~/.config/autostart` or `/etc/xdg/autostart`; they run under `XDG_CURRENT_DESKTOP=Blackbox` (`Server.cc:750`). Target BlackboxAI specifically with `OnlyShowIn=Blackbox;`; `Hidden=true`/`NotShowIn=Blackbox;` suppress. Recommend `swaylock`/`swayidle` for lock + idle (protocol-only: `ext-session-lock-v1` + `ext-idle-notify-v1`; the compositor ships no locker).
 
-- [ ] **Step 3: Write `docs/gdm-session.md`**
+- [x] **Step 3: Write `docs/gdm-session.md`**
 
 - **How the session is listed.** `data/blackboxai.desktop` installs to `/usr/share/wayland-sessions/blackboxai.desktop` (`meson.build:86-87`). `Name=BlackboxAI` is the label at the greeter; `Exec=blackboxai` (bare, resolved via `/usr/bin` on PATH); `DesktopNames=Blackbox` sets `XDG_CURRENT_DESKTOP=Blackbox` for the whole session. Three spellings, one thing - be explicit so a reader does not look for a `blackbox` binary.
 - **The escape hatch.** `Ctrl+Alt+Backspace` = Quit the compositor (`Keybindings.cc`), the Wayland analogue of classic's X-server kill - but it is suppressed while a session lock is up (locked means locked; the wedged-locker escape is a kernel-side VT switch - `docs/superpowers/plans/2026-07-03-productize-v1-program.md:19-21`).
 - **Troubleshooting.** Session missing at the greeter -> the `.desktop` was not installed / wrong `datadir` (check `/usr/share/wayland-sessions/`). Session bounces straight back to the greeter -> the compositor failed to init (check the journal; usually no seat / no DRM master). VT-switch survives a running session; multi-head is supported.
 
-- [ ] **Step 4: VERIFY - facts trace to code, links resolve, no host-build trap**
+- [x] **Step 4: VERIFY - facts trace to code, links resolve, no host-build trap**
 
 ```bash
 cd "$WT"
@@ -621,7 +621,7 @@ echo "--- no stock-Ubuntu meson-setup instruction ---"
 
 Expected: the pin/container warning is present; the COPR line uses `hila-shemer`; the GDM doc's `XDG_CURRENT_DESKTOP`/`DesktopNames` claims match the `.desktop`; both docs exist (Task 4's README links now resolve); no instruction tempts an Ubuntu reader into a host `meson setup` that fails on the 0.20 pin.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/install.md docs/gdm-session.md
