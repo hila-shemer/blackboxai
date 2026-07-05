@@ -72,3 +72,34 @@ TEST_CASE("client ACTIVATE routes through setCurrentWorkspace") {
                             [&] { c.flush(); c.pump(); });
   CHECK(mirrored);
 }
+
+TEST_CASE("adding and removing a workspace reconciles the handle vector") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutput(server);
+
+  test::ExtWorkspaceTestClient c(server.socketName());
+  REQUIRE(c.ok());
+  REQUIRE(pumpUntil(server, [&] { return c.workspaceCount() == 4; },
+                    [&] { c.flush(); c.pump(); }));
+
+  // Grow: a 5th workspace appears out to the client.
+  server.workspaces().addWorkspace();
+  server.syncExtWorkspacesForTest();
+  CHECK(server.extWorkspaceHandleCountForTest() == 5);
+  bool grew = pumpUntil(server, [&] { return c.workspaceCount() == 5; },
+                        [&] { c.flush(); c.pump(); });
+  CHECK(grew);
+  CHECK(c.name(4) == "Workspace 5");
+
+  // Shrink: removeLastWorkspaceAndRehome pops the tail; the client sees `removed`.
+  server.removeLastWorkspaceAndRehome();
+  CHECK(server.extWorkspaceHandleCountForTest() == 4);
+  bool shrank = pumpUntil(server, [&] { return c.workspaceCount() == 4; },
+                          [&] { c.flush(); c.pump(); });
+  CHECK(shrank);
+  // No abort reaching here == destroy path is group-detach-clean.
+}
