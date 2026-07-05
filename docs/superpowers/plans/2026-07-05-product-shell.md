@@ -104,9 +104,10 @@ FILES: `blackboxai` binary; `~/.blackboxrc` (user rc); `@pkgdatadir@/menu` (defa
 
 DEVIATIONS FROM CLASSIC (the honest section, no reference counterpart): (1) `[restart]`/`[exit]` tear down ALL clients (`main.cc:31-34`); (2) no XWayland - X11-only apps do not run (deferred for v1); (3) no window shade - xdg-shell has no shade concept (note `data/styles/Shade` is a THEME name, not the feature); (4) the slit hosts SNI/D-Bus tray items, not XEMBED dockapps; (5) `onTop` is read from rc but has no menu toggle; (6) tray context menus are text-only (no icon column); (7) keybindings are built-in and fixed, not rc-driven.
 
-- [ ] **Step 1: Re-verify every cited fact against the post-ext-workspace tree**
+- [x] **Step 1: Re-verify every cited fact against the post-ext-workspace tree**
 
 Run each and confirm the fact still holds (line numbers may have drifted; the SYMBOL must match):
+Verified 2026-07-05: main.cc parses only --headless (:13) and -rc (:14); restart execvp at :39/:42. Toolbar.cc:75-76 formatClock(strftimeFormat). MenuParser.cc:203 pipe-menu diag, :248 reconfig-command-dropped diag. Keybindings.cc:10-35 table matches. Autostart drifted to Server.cc:781 (XDG_CURRENT_DESKTOP=Blackbox), :786-787 dirs, :806 shouldAutostart. ext-workspace IS live (Server.cc:148 wlr_ext_workspace_manager_v1_create). Reference man page not in worktree tree (gitignored); read from /home/hila/proj/blackboxai/reference/blackboxwm/doc/blackbox.1.in.
 
 ```bash
 cd "$WT"
@@ -120,7 +121,7 @@ sed -n '10,35p' src/Keybindings.cc                          # the keybinding tab
 
 Expected: `main.cc` matches only `--headless` and `-rc`; `Toolbar.cc` calls `formatClock`; `MenuParser.cc` carries both diagnostic strings; the keybinding table matches the table above. If any drifted, correct the plan's citation before writing prose.
 
-- [ ] **Step 2: Write `doc/meson.build`**
+- [x] **Step 2: Write `doc/meson.build`**
 
 Mirror `reference/blackboxwm/doc/Makefile.am`'s sed substitution (`@defaultmenu@` -> `$(pkgdatadir)/menu`, `@pkgdatadir@` -> `$(pkgdatadir)`, `@version@` -> `$(VERSION)`) as a meson `configure_file`. The `pkgdatadir` value must match `src/meson.build:8-11` exactly (`prefix / datadir / 'blackboxai'`):
 
@@ -143,7 +144,7 @@ blackboxai_man = configure_file(
 install_man(blackboxai_man)
 ```
 
-- [ ] **Step 3: Add `subdir('doc')` to the root `meson.build`**
+- [x] **Step 3: Add `subdir('doc')` to the root `meson.build`**
 
 Insert immediately after `subdir('src')` (currently `meson.build:96`), before the `if get_option('tests')` block:
 
@@ -155,7 +156,7 @@ if get_option('tests')
 endif
 ```
 
-- [ ] **Step 4: Author `doc/blackboxai.1.in`**
+- [x] **Step 4: Author `doc/blackboxai.1.in`**
 
 Port `reference/blackboxwm/doc/blackbox.1.in` section by section. Keep it a `.1.in` template (`@pkgdatadir@`/`@defaultmenu@`/`@version@` tokens survive into the file; Step 2 substitutes them). Section map (reference line ranges are the current `blackbox.1.in`):
 
@@ -177,7 +178,7 @@ Port `reference/blackboxwm/doc/blackbox.1.in` section by section. Keep it a `.1.
 
 Do NOT port the `fr_FR`/`ja_JP`/`nl_NL`/`sl_SI` translations - English page only.
 
-- [ ] **Step 5: VERIFY - build the man page, prove substitution + install, lint for nroff errors**
+- [x] **Step 5: VERIFY - build the man page, prove substitution + install, lint for nroff errors**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
@@ -194,7 +195,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: `ninja` builds `build-doc/doc/blackboxai.1`; the `grep "@...@"` finds nothing (exit non-zero, so `!` passes) - no literal `@pkgdatadir@` shipped; `man --warnings` prints no `.warnings` output; the dry-run shows `.../share/man/man1/blackboxai.1`. If `man` warns (e.g. an unescaped `-` or a broken `.TP`), fix the nroff and re-run.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add doc/blackboxai.1.in doc/meson.build meson.build

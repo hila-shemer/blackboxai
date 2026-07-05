@@ -93,6 +93,7 @@ install_subdir('data/styles',
 
 subdir('toolkit')
 subdir('src')
+subdir('doc')
 if get_option('tests')
   subdir('tests')
 endif

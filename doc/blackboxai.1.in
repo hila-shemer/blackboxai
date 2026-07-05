@@ -1,0 +1,672 @@
+.\"
+.\" nroff source for blackboxai.1 man page
+.\"
+.\" A template (.1.in): @pkgdatadir@, @defaultmenu@, and @version@ are
+.\" substituted at configure time (doc/meson.build) from the same values
+.\" src/meson.build bakes into the binary, so the page and the compositor
+.\" never disagree on where things live.
+.\"
+.\" Ported from the classic Blackbox page (Brad Hughes / bbidulock lineage,
+.\" R.B. "Brig" Young's nroff) and made honest for the Wayland build.
+.\"
+.\" Indented preformat macro.
+.de EX
+.ne 5
+.if n .sp 1
+.if t .sp .5
+.nf
+.in +.5i
+..
+.de EE
+.fi
+.in -.5i
+.if n .sp 1
+.if t .sp .5
+..
+.TH blackboxai 1 "July 2026" "@version@" "BlackboxAI"
+.\"
+.\" * * * * * NAME * * * * *
+.\"
+.SH NAME
+blackboxai \- a Wayland compositor in the style of the Blackbox window manager
+.\"
+.\" * * * * * SYNOPSIS * * * * *
+.\"
+.SH SYNOPSIS
+.B blackboxai
+.RI "[ \-\-headless ] [ \-rc" " rcfile " "]"
+.br
+Unknown arguments are ignored.
+.\"
+.\" * * * * * DESCRIPTION * * * * *
+.\"
+.SH DESCRIPTION
+.\" ----- overview -----
+BlackboxAI is a Wayland compositor that reproduces the look and behaviour of
+the classic Blackbox window manager. It is a from-scratch wlroots compositor,
+not an X11 port: it reads your existing
+.B ~/.blackboxrc
+resource file, style files, and menu files unchanged, and renders the same
+toolbar, root/window/workspace menus, workspaces, and slit.
+.PP
+.\" ----- usage overview -----
+Applications are launched from a menu opened by right-clicking the desktop
+(the root surface). Workspaces are switched from the toolbar or by keybinding.
+Individual windows are controlled by buttons on the title bar, and more options
+are available by right-clicking the title bar.
+.PP
+.\" ----- design overview -----
+BlackboxAI generates its window decorations on the fly from textures and
+gradients. Themes, called styles in Blackbox terminology, are colours, fonts,
+and texture descriptions rather than pixmaps, so there are no image
+dependencies and the decoration cost stays small.
+.PP
+.\" ----- keybindings / workspaces overview -----
+Keybindings are built in and fixed (see KEYBINDINGS), not delegated to an
+external tool and not yet configurable from the resource file. Workspaces use
+the built-in toolbar and workspace menu; there is no separate pager, though the
+compositor does export its workspace set over the ext-workspace-v1 protocol for
+an external panel that speaks it.
+.PP
+.\" ----- slit overview -----
+The slit is an edge-of-screen strip that hosts system-tray icons. On Wayland it
+speaks the StatusNotifierItem (SNI) protocol over D-Bus, not the X11 XEMBED
+dock-app protocol, so classic dockapps do not run in it; a StatusNotifierItem
+application (many modern tray programs) appears there instead.
+.\"
+.\" * * * * * OPTIONS * * * * *
+.\"
+.SH OPTIONS
+BlackboxAI parses only the following options; any other argument is ignored.
+.TP
+.B \-\-headless
+Run on the headless wlroots backend with no real output. Intended for
+development and automated tests, not for a login session.
+.TP
+.BI \-rc \ rcfile
+Use an alternate resource file instead of
+.BR ~/.blackboxrc .
+.\"
+.\" * * * * * STARTING AND EXITING * * * * *
+.\"
+.SH STARTING AND EXITING
+BlackboxAI is a Wayland session. Pick
+.B BlackboxAI
+at your display-manager (for example GDM) greeter and log in; the session is
+listed from
+.I <datadir>/wayland-sessions/blackboxai.desktop
+installed with the package.
+.PP
+On startup, BlackboxAI reads
+.B ~/.blackboxrc
+and uses
+.B session.menuFile
+to find the menu. If that key is unset or the file is missing it falls back to
+.B @defaultmenu@
+and, failing that, to a small built-in menu that can start a terminal and
+restart or exit the compositor.
+.PP
+On exit, BlackboxAI writes its current configuration back to
+.BR ~/.blackboxrc .
+.EX 0
+.B NOTE:
+If ~/.blackboxrc is edited during a session, restart the compositor
+("Restart" on the root menu) to apply the changes - otherwise they are
+overwritten when the running session writes its state on exit.
+.EE
+.B Ctrl+Alt+Backspace
+quits the compositor. This is the Wayland analogue of the classic X-server
+kill and exists to escape a wedged session; it is suppressed while a session
+lock is up (locked means locked).
+.PP
+.\"
+.\" * * * * * USING BLACKBOXAI * * * * *
+.\"
+.SH USING BLACKBOXAI
+.PP
+Mouse buttons on the desktop (root surface):
+.TP
+.BR "Button Three" "  (Right Button)"
+Open the root menu.
+.TP
+Button One and Button Two on the desktop are not bound.
+.\"
+.\" ***** ROOT MENU *****
+.\"
+.TP
+.B Root Menu
+The root menu launches applications and reaches the workspace and configuration
+menus. Its contents come from the menu file (see MENU FILE); a starter menu
+ships at
+.B @defaultmenu@
+and can be copied and pointed at with
+.B session.menuFile
+in
+.BR ~/.blackboxrc .
+.\"
+.\" ***** WORKSPACE MENU *****
+.\"
+.TP
+.B Workspace Menu
+Reached through the root menu (a
+.B [workspaces]
+entry). Lists workspaces by name; selecting one switches to it. Windows on a
+workspace appear in a pop-out submenu, and selecting a window switches to its
+workspace and focuses it. Workspaces can be named in
+.B ~/.blackboxrc
+(see RESOURCE FILE).
+.\"
+.\" ***** THE SLIT *****
+.\"
+.TP
+.B The Slit
+The slit hosts system-tray icons that speak the StatusNotifierItem protocol
+over D-Bus. Right-clicking the slit opens a menu to change its placement and to
+toggle auto-hide. A tray item's own context menu is shown as text entries (no
+icon column).
+.\"
+.\" ***** THE TOOLBAR *****
+.\"
+.TP
+.B The Toolbar
+The left of the toolbar is the workspace control, the centre shows the focused
+window, and the right is a clock whose format is set by
+.B session.screen<num>.strftimeFormat
+(see RESOURCE FILE). Right-clicking the toolbar opens a menu to set its
+placement and auto-hide.
+.\"
+.\" ***** WINDOW DECORATIONS *****
+.\"
+.TP
+.B Window Decorations
+A decorated window has a title bar with three buttons (iconify, maximize,
+close, left to right), and a bottom handle split into two corner resize grips
+and a centre move grip.
+.\"
+.\" ----- mouse buttons -----
+.\"
+.TP
+.BR "Button One" "  (Left Button)"
+Drag the title bar to move the window, or a corner grip to resize.
+Click iconify to hide the window, maximize to maximize it, or close to close it.
+.TP
+.BR "Alt + Button One" ""
+Drag anywhere on the window to move it.
+.TP
+.BR "Button Three" "  (Right Button)"
+Click the title bar to open the window menu.
+.TP
+.\"
+.\" ----- window menu -----
+.\"
+.B The window menu contains:
+.TP
+.B Send To ...
+Send this window to another workspace.
+.TP
+.B Iconify
+Hide the window; recover it from the icon menu (Super+Alt+T).
+.TP
+.B Maximize
+Toggle window maximization.
+.TP
+.B Raise
+Bring the window to the front and focus it.
+.TP
+.B Lower
+Drop the window below the others.
+.TP
+.B Stick
+Keep this window on every workspace.
+.TP
+.B Close
+Ask the client to close.
+.\"
+.\" * * * * * KEYBINDINGS * * * * *
+.\"
+.SH KEYBINDINGS
+Keybindings are built in and fixed in this release; they are not yet
+configurable from
+.BR ~/.blackboxrc .
+.TP
+.B Super+Right / Super+Left
+Next / previous workspace.
+.TP
+.B Super+1 .. Super+4
+Go to workspace 1-4.
+.TP
+.B Super+Space
+Open the root menu.
+.TP
+.B Super+Q
+Close the focused window.
+.TP
+.B Alt+Tab / Alt+Shift+Tab
+Cycle windows most-recently-used, forward / backward.
+.B Super+Tab
+and
+.B Super+Shift+Tab
+are aliases.
+.TP
+.B Super+Alt+T
+Open the icon menu (iconified windows).
+.TP
+.B Super+F7
+Screenshot a region to the clipboard.
+.TP
+.B Ctrl+Alt+Backspace
+Quit the compositor (escape a wedged session; suppressed while locked).
+.TP
+.B Super+F
+Toggle fullscreen for the focused window.
+.TP
+.B Super+Shift+Left / Super+Shift+Right
+Snap the window to the left / right half of the screen.
+.TP
+.B Super+Ctrl+Left / Right / Up / Down
+Move the window to the output in that direction.
+.\"
+.\" * * * * * STYLES * * * * *
+.\"
+.SH STYLES
+Styles are collections of colours, fonts, and textures that control the
+appearance of the compositor. They are recorded in style files. The bundled
+system styles are in
+.I @pkgdatadir@/styles
+and the default is
+.BR Results .
+The menu identifies a style by its file name; styles can be organised into
+directories at your discretion and listed with
+.B [stylesdir]
+or
+.B [stylesmenu]
+in the menu file.
+.PP
+A style file is a list of resources. The honoured families are the
+.B window.*
+decoration textures and their colour/text/border keys, the
+.BR toolbar.* ,
+.BR menu.* ,
+and
+.B slit
+families, and the top-level
+.BR rootCommand ,
+.BR borderWidth ,
+and
+.B bevelWidth
+keys. A style may set the desktop background; the background is drawn natively
+(the classic
+.B bsetroot
+gradient/solid syntax is interpreted directly). The per-key style syntax is not
+documented here - copy and edit an existing style file.
+.PP
+.B Security note:
+a
+.B rootCommand
+in
+.B ~/.blackboxrc
+is run through
+.BR /bin/sh .
+A
+.B rootCommand
+in a style file is
+.I not
+run through a shell (a downloaded theme should not run arbitrary commands).
+.\"
+.\" * * * * * MENU FILE * * * * *
+.\"
+.SH MENU FILE
+The starter menu is installed at
+.BR @defaultmenu@ .
+Copy it into your home directory, point
+.B session.menuFile
+in
+.B ~/.blackboxrc
+at the copy, and edit it. Menu commands follow this general form:
+.PP
+.BI "[command]" "  (label|filename) {shell command|filename}"
+.\"
+.\" ----- menu commands -----
+.\"
+.TP
+.BI "   #    " "string..."
+A hash starts a comment, whole-line or trailing.
+.TP
+.BI "[begin]" "  (string)"
+Opens the menu.
+.I string
+is the title shown at the top.
+.TP
+.B [end]
+Closes the menu file or a submenu block.
+.TP
+.BI "[exec]" "  (label) {command}"
+Run
+.I command
+through the shell.
+.TP
+.BR "[nop]" " (label)"
+An inert, disabled entry - a labelled spacer.
+.TP
+.BR "[separator]" " (or [sep])"
+A separator line.
+.TP
+.BI "[submenu]" "  (label) {title}"
+Open a submenu named
+.IR label .
+The optional
+.I title
+is accepted but not stored - the cascade is titled by the label.
+.TP
+.BI "[include]" "  (filename)"
+Insert
+.I filename
+at this point (it should not contain its own
+.BR [begin] / [end] ).
+.B Pipe menus are not supported:
+an
+.B [include] |command
+form is skipped with a diagnostic rather than run, because reading a
+subprocess at menu-open would stall the compositor.
+.TP
+.BI "[style]" "  (label) {filename}"
+Apply the style file
+.I filename
+when selected.
+.TP
+.BI "[stylesdir]" "  (path)"
+List the style files in
+.I path
+inline in the menu.
+.TP
+.BI "[stylesmenu]" "  (label) {path}"
+List the style files in
+.I path
+inside a submenu named
+.IR label .
+.TP
+.BI "[workspaces]" "  (label)"
+Insert the workspace menu.
+.TP
+.BI "[config]" "  (label)"
+Insert the configuration menu (focus model, placement, toolbar and slit
+options).
+.TP
+.BI "[reconfig]" "  (label)"
+Reread the configuration and reload.
+.B A trailing {command} is ignored
+- the classic page promised it would run first, but classic never ran it
+either, so it is dropped with a diagnostic here.
+.TP
+.BI "[restart]" "  (label) {command}"
+Restart the compositor. With
+.I command
+it execs the named window manager instead. Either way every client is torn
+down first - the compositor is the display server (see DEVIATIONS).
+.TP
+.BI "[exit]" "  (label)"
+Exit the compositor, ending the Wayland session.
+.EX
+.B A working example (close to the shipped starter menu):
+[begin] (BlackboxAI)
+   [exec] (Terminal) {kitty}
+   [exec] (Run...) {fuzzel}
+   [separator]
+   [submenu] (Styles) {Pick a theme}
+      [stylesdir] (@pkgdatadir@/styles)
+   [end]
+   [config] (Configuration)
+   [workspaces] (Workspaces)
+   [separator]
+   [restart] (Restart)
+   [exit] (Exit)
+[end]
+.EE
+.\"
+.\" * * * * * RESOURCE FILE * * * * *
+.\"
+.SH RESOURCE FILE
+.BI "$HOME" "/.blackboxrc"
+.PP
+These keys are read from
+.B ~/.blackboxrc
+at startup. Some are also set from the configuration menu, which writes the one
+changed key back to the file in place. As with the classic manager, edits made
+while a session is running take effect only after a restart, since the running
+session writes its state on exit.
+.PP
+Keys marked
+.I screen<num>
+are per-screen;
+.I <num>
+is the screen number, default 0.
+.TP 3
+.BI "session.styleFile" "  [filepath]"
+Path to the current style file. Default is the bundled
+.BR Results .
+.TP 3
+.BI "session.menuFile" "  [filepath]"
+Path to the menu file. Default is
+.BR @defaultmenu@ .
+.TP 3
+.BI "rootCommand" "  [command]"
+A command run through
+.B /bin/sh
+at startup (typically to set the desktop background).
+.TP 3
+.BI "session.focusModel" "  SEE BELOW"
+.B SloppyFocus
+(focus follows the mouse; the default) can be modified with
+.B AutoRaise
+(raise after
+.BR session.autoRaiseDelay )
+or
+.B ClickRaise
+(raise on a click in the client area).
+.B ClickToFocus
+requires a click to focus and raise and cannot be combined with the modifiers.
+.EX
+.B Default is SloppyFocus.
+[SloppyFocus [AutoRaise] [ClickRaise] | ClickToFocus]
+.EE
+.TP 3
+.BI "session.focusNewWindows" "  [True|False]"
+Give focus to a newly mapped window.
+.EX
+.B Default is True.
+.EE
+.TP 3
+.BI "session.autoRaiseDelay" "  [integer]"
+Milliseconds before an auto-raise or auto-hide fires.
+.EX
+.B Default is 400.
+.EE
+.TP 3
+.BI "session.doubleClickInterval" "  [integer]"
+Maximum milliseconds between two clicks to count as a double click.
+.EX
+.B Default is 250.
+.EE
+.TP 3
+.BI "session.changeWorkspaceWithMouseWheel" "  [True|False]"
+Scrolling on the desktop switches workspaces.
+.EX
+.B Default is True.
+.EE
+.TP 3
+.BI "session.toolbarActionsWithMouseWheel" "  [True|False]"
+Scrolling on the toolbar switches workspaces.
+.EX
+.B Default is True.
+.EE
+.TP 3
+.BI "session.windowPlacement" "  SEE BELOW"
+Where new windows are placed.
+.EX
+.B Default is RowSmart.
+[RowSmart | ColSmart | Center | Cascade]
+.EE
+.TP 3
+.BI "session.screen<num>.workspaces" "  [integer]"
+Number of workspaces.
+.EX
+.B Default is 4.
+.EE
+.TP 3
+.BI "session.screen<num>.workspaceNames" "  [string[, string...]]"
+Comma-separated workspace names; extra workspaces are named "Workspace N".
+.TP 3
+.BI "session.screen<num>.strftimeFormat" "  [string]"
+A
+.BR strftime (3)
+format string for the toolbar clock, applied live.
+.EX
+.B Default is %I:%M %p
+(12-hour clock with an am/pm indicator).
+.EE
+.TP 3
+.BI "session.screen<num>.toolbar.widthPercent" "  [1-100]"
+Percentage of screen width used by the toolbar.
+.EX
+.B Default is 66.
+.EE
+.TP 3
+.BI "session.screen<num>.toolbar.placement" "  SEE BELOW"
+Toolbar screen position.
+.EX
+[  TopLeft  |   TopCenter  |   TopRight  |
+ BottomLeft | BottomCenter | BottomRight ]
+.EE
+.TP 3
+.BI "session.screen<num>.toolbar.autoHide" "  [True|False]"
+Hide the toolbar when not in use.
+.EX
+.B Default is False.
+.EE
+.TP 3
+.BI "session.screen<num>.toolbar.onTop" "  [True|False]"
+Read but inert: the value is parsed, but there is no menu toggle and no layer
+restack, so it does not currently change stacking.
+.TP 3
+.BI "session.screen<num>.slit.placement" "  SEE BELOW"
+Slit screen position.
+.EX
+[  TopLeft  |   TopCenter  |   TopRight  |
+ CenterLeft |              | CenterRight |
+ BottomLeft | BottomCenter | BottomRight ]
+.EE
+.TP 3
+.BI "session.screen<num>.slit.direction" "  [Horizontal|Vertical]"
+Slit growth direction.
+.EX
+.B Default is Vertical.
+.EE
+.TP 3
+.BI "session.screen<num>.slit.autoHide" "  [True|False]"
+Hide the slit when not in use.
+.EX
+.B Default is False.
+.EE
+.TP 3
+.BI "session.screen<num>.slit.onTop" "  [True|False]"
+Read but inert, as with the toolbar.
+.\"
+.\" * * * * * ENVIRONMENT * * * * *
+.\"
+.SH ENVIRONMENT
+.TP
+.B HOME
+Used to find
+.B ~/.blackboxrc
+and the user config directory.
+.TP
+.B WAYLAND_DISPLAY
+When set, BlackboxAI runs nested inside the named parent Wayland compositor
+(useful for development).
+.TP
+.B XDG_CONFIG_HOME
+Overrides the location of
+.B ~/.config
+for the autostart scan.
+.\"
+.\" * * * * * FILES * * * * *
+.\"
+.SH FILES
+.TP
+.B blackboxai
+The compositor binary.
+.TP
+.B ~/.blackboxrc
+Per-user resource file.
+.TP
+.B @defaultmenu@
+The default menu file.
+.TP
+.I @pkgdatadir@/styles
+The bundled system styles (default
+.BR Results ).
+.TP
+.I <datadir>/wayland-sessions/blackboxai.desktop
+The session entry the display manager lists.
+.TP
+.B ~/.config/autostart
+.PD 0
+.TP
+.B /etc/xdg/autostart
+.PD
+Scanned at startup under
+.BR XDG_CURRENT_DESKTOP=Blackbox ;
+a matching
+.B .desktop
+file is launched.
+.\"
+.\" * * * * * DEVIATIONS FROM CLASSIC BLACKBOX * * * * *
+.\"
+.SH DEVIATIONS FROM CLASSIC BLACKBOX
+This build differs from the X11 Blackbox in ways that follow from being a
+Wayland compositor rather than a window manager:
+.TP
+.B Restart and exit tear down every client.
+The compositor is the display server, so
+.B [restart]
+and
+.B [exit]
+take every window with them - there is no separate X server to outlive them.
+.TP
+.B No XWayland.
+X11-only applications do not run in this release (deferred).
+.TP
+.B No window shade.
+The xdg-shell protocol has no shade concept. (The bundled
+.B Shade
+style is a theme name, not the feature.)
+.TP
+.B The slit is a tray, not a dock.
+It hosts StatusNotifierItem tray icons over D-Bus, not X11 XEMBED dockapps.
+.TP
+.B Tray context menus are text-only.
+A tray item's menu is shown as text entries, with no icon column.
+.TP
+.B onTop keys are inert.
+.B toolbar.onTop
+and
+.B slit.onTop
+are parsed but there is no menu toggle and no restack.
+.TP
+.B Keybindings are fixed.
+They are built in and not yet configurable from the resource file.
+.\"
+.\" * * * * * AUTHORS * * * * *
+.\"
+.SH AUTHORS
+BlackboxAI is a rewrite in the style of the bbidulock/blackboxwm line of
+Blackbox, originally designed and written by Brad Hughes. The classic manual
+page this one is derived from was written by R.B. "Brig" Young.
+.\"
+.\" * * * * * SEE ALSO * * * * *
+.\"
+.SH SEE ALSO
+.BR strftime (3)
+.PP
+Project page:
+.B https://github.com/hila-shemer/blackboxai
