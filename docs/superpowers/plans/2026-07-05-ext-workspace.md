@@ -803,7 +803,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 This slice must not regress the suite or drop coverage below the 80% gate (project ~92%), and it enters its own adversarial review next. This task is the gate.
 
-- [ ] **Step 1: Run the whole suite**
+- [x] **Step 1: Run the whole suite**
 
 Run (in container):
 ```bash
@@ -811,7 +811,7 @@ meson test -C build
 ```
 Expected: all tests PASS, including the three new `ext_workspace` cases and every prior wave-1/wave-2 test (proves the `Server.cc` insertions near `:139/:268/:1768/:1800/:2112` broke nothing below them).
 
-- [ ] **Step 2: Coverage gate**
+- [x] **Step 2: Coverage gate**
 
 Run (in container) the project's usual gcov flow (same one waves 1-2 used - configure a coverage build dir if absent):
 ```bash
@@ -821,7 +821,7 @@ ninja -C build-cov coverage
 ```
 Expected: overall line coverage >= 80% (project ~92%). Confirm `Server.cc`'s new `syncExtWorkspaces`/`onExtWorkspaceCommit` lines are exercised (the three cases hit grow, shrink, active-flip, and the ACTIVATE route). If the `onOutputDestroyed` `output_leave` line (Task 2 Step 11) is uncovered and you kept it, that single informational line is acceptable - note it.
 
-- [ ] **Step 3: Self-review against scope**
+- [x] **Step 3: Self-review against scope**
 
 Confirm, by reading the final diff:
 - No `wl_global` hand-roll, no `wayland-scanner` server-side codegen, no sanitize-shim (the one build change is the `toolkit/wlr.hpp` include).
@@ -829,9 +829,14 @@ Confirm, by reading the final diff:
 - ACTIVATE resolves by pointer-scan, not a stashed index.
 - `ext_workspace_commit.disconnect()` is present in `~Server` before `wl_display_destroy`.
 
-- [ ] **Step 4: Hand off to adversarial review**
+- [x] **Step 4: Hand off to adversarial review**
 
 The slice is complete and green. Per the wave-3 program decisions it gets its OWN adversarial review before merge-train entry - flag it for that review (do not merge yet). Reviewer focus areas: the destroy-ordering finding from Task 4, the teardown disconnect, the pointer-scan ACTIVATE resolution, and the container-verified header signatures (`set_coordinates`/`set_capabilities`/`create` arity, the `commit_event`/`request` struct shape).
+
+**GATE RESULT (blackboxai-ci:f44, coverage build-f44):**
+- Full suite: 76/76 tests pass. One flake on the first parallel run (`gray_window` `REQUIRE(mapped())`, the known cold-cache connect race) - re-ran alone and passed. `ext_workspace` = 3 cases / 25 assertions, clean exit.
+- Coverage: overall 92% line (`gcovr --fail-under-line=80` exit 0). Every new ext-workspace line in `Server.cc` is exercised, INCLUDING the `output_leave` (the live single-output-removal path is hit by an existing multihead test) - no uncovered new lines. `Server.cc` file total 85% (its pre-existing D-Bus/error-path baseline; the new code is fully covered).
+- Scope: no `wl_global`/`wayland-scanner` server codegen/`wl_resource_create` in `src/` (grep-clean); `protocols/meson.build` adds ONE client-side XML line only; caps = ACTIVATE-only at create + group caps 0; ACTIVATE resolves by pointer-scan; `ext_workspace_commit.disconnect()` present in `~Server` before `wl_display_destroy`.
 
 ---
 
