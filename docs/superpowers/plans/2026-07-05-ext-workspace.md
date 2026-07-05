@@ -720,7 +720,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 This task adds no product code - `syncExtWorkspaces` already grows and shrinks. It exists as its own reviewer gate because the **destroy-ordering is unverified against wlroots source** (the scout read only the header): does `wlr_ext_workspace_handle_v1_destroy` detach the handle from its group internally, or must we `set_group(NULL)` first? The test drives add-then-remove through a real client and asserts no abort - the empirical answer. If it aborts on destroy, the fix is a `set_group(h, nullptr)` (or the header's equivalent) before `_destroy` in `syncExtWorkspaces`'s shrink loop; re-run until green and note the finding in the commit body.
 
-- [ ] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
+**DESTROY-ORDERING FINDING (empirical, container run):** the grow/shrink test passes with a clean exit and NO abort/segfault. `wlr_ext_workspace_handle_v1_destroy` detaches the handle from its group internally - **no explicit `set_group(NULL)` was needed** before `_destroy`. The plain `_destroy` in the shrink loop is correct.
+
+- [x] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
 
 ```cpp
 TEST_CASE("adding and removing a workspace reconciles the handle vector") {
@@ -755,7 +757,7 @@ TEST_CASE("adding and removing a workspace reconciles the handle vector") {
 }
 ```
 
-- [ ] **Step 2: Add a test hook for the direct-grow case**
+- [x] **Step 2: Add a test hook for the direct-grow case**
 
 `addWorkspace()` on the model alone does not call `syncExtWorkspaces` (only the menu action does). Expose a thin test hook in `src/Server.hh` next to the other `ForTest` methods (near `:77`):
 
@@ -765,7 +767,7 @@ TEST_CASE("adding and removing a workspace reconciles the handle vector") {
 
 (The shrink half needs no hook - `removeLastWorkspaceAndRehome` reconciles on its own.)
 
-- [ ] **Step 3: Run to verify it passes (or catches the destroy-ordering trap)**
+- [x] **Step 3: Run to verify it passes (or catches the destroy-ordering trap)**
 
 Run (in container):
 ```bash
@@ -777,7 +779,7 @@ Expected: PASS. **If it aborts on the shrink** (`wlr_ext_workspace_handle_v1_des
 ```
 then re-run to green. Record which path was needed in the commit body.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/Server.hh tests/system/ext_workspace_test.cc
