@@ -327,7 +327,7 @@ meson installs exactly: `src/blackboxai` -> `%{_bindir}/blackboxai` (`src/meson.
 
 BuildRequires map 1:1 to `meson.build:15-29` dependency() calls, cross-checked against `ci.yml:14-17`: `meson`, `ninja-build`, `gcc-c++`, `sed` (build-time, `tools/sanitize-c-header.sh`), `pkgconfig(wlroots-0.20)`, `wayland-devel` (provides `wayland-scanner` + `pkgconfig(wayland-server/client)`), `wayland-protocols-devel`, `pkgconfig(pixman-1)`, `pkgconfig(libdrm)`, `pkgconfig(xkbcommon)`, `pkgconfig(fcft) >= 3.0.0`, `pkgconfig(libsystemd)`, `pkgconfig(libpng)`. NOT needed for a tarball RPM build: `gcovr`/`git`/`dbus-daemon` (coverage/clone/test-only).
 
-- [ ] **Step 1: Re-verify the install layout against the post-Tasks-1-2 tree**
+- [x] **Step 1: Re-verify the install layout against the post-Tasks-1-2 tree**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
@@ -338,7 +338,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: the dry-run lists exactly the binary, the `.desktop`, 19 style dirs, the man1 page, and the menu file - nothing else. Every path in the dry-run must appear in `%files`, and every `%files` entry must appear here (no unpackaged / missing files).
 
-- [ ] **Step 2: Write `blackboxai.spec`**
+- [x] **Step 2: Write `blackboxai.spec`**
 
 ```spec
 Name:           blackboxai
@@ -411,7 +411,7 @@ desktop-file-validate %{buildroot}%{_datadir}/wayland-sessions/%{name}.desktop
 - Initial package (productize-v1 Wave 3).
 ```
 
-- [ ] **Step 3: Add the COPR maintainer + user notes as spec-top comments**
+- [x] **Step 3: Add the COPR maintainer + user notes as spec-top comments**
 
 Prepend (above `Name:`) a comment block - the load-bearing owner string lives here and in the README:
 
@@ -427,7 +427,7 @@ Prepend (above `Name:`) a comment block - the load-bearing owner string lives he
 #   # log out, pick "BlackboxAI" at the GDM session gear.
 ```
 
-- [ ] **Step 4: VERIFY - rpmlint clean + a source build (or full build) with no unpackaged/missing files**
+- [x] **Step 4: VERIFY - rpmlint clean + a source build (or full build) with no unpackaged/missing files**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
@@ -445,7 +445,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: `rpmlint` reports no `E:` errors (an `invalid-url Source0` or `no-manual-page` style `W:` is acceptable); `rpmbuild -bs` produces `blackboxai-0.1.0-1.src.rpm`; `rpmbuild -bb` finishes with `Wrote: .../blackboxai-0.1.0-1.*.rpm` and **no** "Installed (but unpackaged) file(s) found" and **no** "File not found" for the man1 line. If `rpmbuild -bb` is too heavy for the box, `-bs` + the Step-1 dry-run cross-check (every install path is in `%files`, every `%files` path is installed) is the required minimum; note in the commit which gate ran.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add blackboxai.spec
