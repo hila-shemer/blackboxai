@@ -184,6 +184,36 @@ Two-phase because menus consumes all three others' seams as real (not stubs):
   in Server.cc), each with a pinning test watched failing first. Gate 71/71, 92%,
   goldens clean. WAVE 2 COMPLETE + pushed.
 
+## Wave 3 (decisions, 2026-07-05)
+
+Research found wlroots 0.20 ships a COMPLETE server-side ext_workspace_v1 helper -
+the code slice is a thin bind (one extern-C include, a manager + one all-outputs
+group, a syncExtWorkspaces() reconcile after each model mutation, ACTIVATE routed
+through the existing setCurrentWorkspace choke point), NOT a hand-rolled protocol.
+
+Plan-author calls:
+- ext-workspace-v1: IN (user-locked twice: spec 3 + full-sweep). Scope ACTIVATE-only
+  (export list/names/active + honor client activate; ignore create/remove/assign).
+  Lands FIRST, gets its own adversarial review (only runtime code in wave 3). The
+  teardown trap is real: ext_workspace_commit listener MUST disconnect before
+  wl_display_destroy (manager asserts wl_list_empty), same spot as new_output.
+- COPR owner = hila-shemer (default; the ONE string to change - lives in spec
+  Source0/URL + the README `dnf copr enable` line). RPM targets fedora-44 ONLY
+  (wlroots ABI breaks every minor; f44 is the CI chroot with 0.20.x).
+- Ship a starter data/menu (small, mirrors the built-in) + its install target + RPM
+  %files line, so the advertised /usr/share/blackboxai/menu exists and is editable.
+- Man page: doc/blackboxai.1.in via a meson configure_file (define pkgdatadir/
+  defaultmenu - none exist today). Prose docs under docs/ (install.md, gdm-session.md,
+  screenshots/). RPM %doc/%files reference both trees.
+- README screenshots: copy the 8-image story set into docs/screenshots/ (stable, no
+  harness dependency) - the set already shown to the user.
+- Fix-in-passing (doc writers must not paraphrase stale headers): Keybindings.hh:1-5
+  says rc keybinding parsing is 'M5' - it never shipped; keybindings are NOT rc-
+  configurable yet. Say so honestly.
+- Land order: ext-workspace -> man page -> RPM (lockstep with man) -> README+install.
+  Then the program-wide final review + demo/screenshot regen + push. No inter-slice
+  code seam this wave (ext-workspace is standalone; docs only cross-reference).
+
 ## Parked defects (found by scouts, not wave-1 work)
 
 - No cursor axis handler - scroll never reaches clients. Real daily-driver bug; parked to
