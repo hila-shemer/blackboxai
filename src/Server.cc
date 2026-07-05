@@ -28,6 +28,7 @@
 #include <fstream>                     // read .desktop files
 #include <set>                         // basename dedup (user shadows system)
 #include <sstream>
+#include <string>                      // std::to_string for ext-workspace handle ids
 #include <dirent.h>                    // opendir/readdir glob
 #include <sys/stat.h>                  // stat-on-open menu reload (classic checkMenu)
 #include <unistd.h>                    // access(X_OK) for TryExec
@@ -137,6 +138,17 @@ namespace bbai {
     wlr_data_device_manager_create(display);
     wlr_single_pixel_buffer_manager_v1_create(display);
     idle_notifier_ = wlr_idle_notifier_v1_create(display);
+    // ext-workspace-v1: one manager, one all-outputs group (group caps = 0 - we
+    // advertise no group-level operations). Handles are NOT built here: the
+    // model's final size/names are only known after the primary output's
+    // applyConfig, so syncExtWorkspaces() populates them then (and after every
+    // later mutation). The client ACTIVATE commit listener is connected in a
+    // later step (with its matching ~Server disconnect); until then the manager
+    // is a pure observer and its display_destroy assert (empty listener list)
+    // holds trivially.
+    ext_workspace_mgr_ = wlr_ext_workspace_manager_v1_create(display, 1);
+    ext_workspace_group_ =
+        wlr_ext_workspace_group_handle_v1_create(ext_workspace_mgr_, 0);
 
     scene = wlr_scene_create();
     output_layout = wlr_output_layout_create(display);
@@ -273,6 +285,10 @@ namespace bbai {
       // the rest just render their background and can host windows.
       Output *o = new Output(*this, wlr_out);
       outputs_.push_back(o);
+      // Advertise this head under the one all-outputs workspace group (pagers
+      // read it as informational; switching spans all heads regardless).
+      if (ext_workspace_group_)
+        wlr_ext_workspace_group_handle_v1_output_enter(ext_workspace_group_, wlr_out);
       if (!active_output) {
         active_output = o;
         // Chrome on the (new) primary comes up through applyConfig - the same
@@ -380,6 +396,11 @@ namespace bbai {
       slit_ = std::make_unique<Slit>(*this, *active_output);
     if (slit_)
       slit_->applyOptions(config_.slit);
+
+    // Config may have grown the workspace count or renamed workspaces; push the
+    // result out to pagers. Null-safe before the manager exists (the ctor's
+    // early applyConfig runs before it is created).
+    syncExtWorkspaces();
   }
 
   void Server::restyle() {
@@ -727,7 +748,13 @@ namespace bbai {
     std::erase(outputs_, o);
     if (primary_died)
       active_output = outputs_.empty() ? nullptr : outputs_.front();
-    if (tearing_down_) return;
+    if (tearing_down_) return;   // display teardown frees the workspace group +
+                                 // all outputs itself; touching the group here
+                                 // (output_leave below) races its destruction.
+    // Drop the dying head from the workspace group while both are still alive
+    // (a live single-output removal - not the whole-display teardown above).
+    if (ext_workspace_group_)
+      wlr_ext_workspace_group_handle_v1_output_leave(ext_workspace_group_, o->wlrOutput());
     if (primary_died) {
       // The toolbar's registered strut points into `o` - tear it down while
       // `o` is still alive (we're inside its destroy handler), then rebuild
@@ -1742,6 +1769,42 @@ namespace bbai {
     return nullptr;
   }
 
+  // Reconcile the ext-workspace handle vector against the model, then push names
+  // + the active bit. Idempotent and cheap (a handful of workspaces). Early-out
+  // until the manager exists: the ctor's applyConfig() runs before the manager
+  // is created, and this is called from applyConfig.
+  void Server::syncExtWorkspaces() {
+    if (!ext_workspace_mgr_) return;
+    const unsigned n = workspaces_.count();
+
+    // Grow: create missing tail handles against the manager, attach to the group,
+    // id = the index string, caps = ACTIVATE only. (The header takes caps at
+    // create time - there is no set_capabilities; the handle is manager-created
+    // then set_group'd into the one group.)
+    while (ext_ws_handles_.size() < n) {
+      const unsigned i = static_cast<unsigned>(ext_ws_handles_.size());
+      wlr_ext_workspace_handle_v1 *h = wlr_ext_workspace_handle_v1_create(
+          ext_workspace_mgr_, std::to_string(i).c_str(),
+          EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE);
+      wlr_ext_workspace_handle_v1_set_group(h, ext_workspace_group_);
+      wlr_ext_workspace_handle_v1_set_coordinates(h, nullptr, 0);  // positional; no coords
+      ext_ws_handles_.push_back(h);
+    }
+    // Shrink: destroy surplus tail handles. Whether _destroy detaches the handle
+    // from its group internally or needs an explicit set_group(NULL) first is
+    // exercised empirically by the add/remove test.
+    while (ext_ws_handles_.size() > n) {
+      wlr_ext_workspace_handle_v1_destroy(ext_ws_handles_.back());
+      ext_ws_handles_.pop_back();
+    }
+    // Push current names + active bit. set_* batch on the manager's idle source;
+    // the running event loop flushes a `done` - no manual flush.
+    for (unsigned i = 0; i < n; ++i) {
+      wlr_ext_workspace_handle_v1_set_name(ext_ws_handles_[i], workspaces_.name(i).c_str());
+      wlr_ext_workspace_handle_v1_set_active(ext_ws_handles_[i], i == workspaces_.current());
+    }
+  }
+
   void Server::setCurrentWorkspace(unsigned i) {
     if (i >= workspaces_.count() || i == workspaces_.current()) return;
 
@@ -1766,6 +1829,7 @@ namespace bbai {
     }
     onPointerMotion(nowMsec());   // refresh pointer focus off any hidden surface
     if (toolbar_) toolbar_->redrawWorkspaceLabel();
+    syncExtWorkspaces();   // flip the active bit out to pagers
   }
 
   void Server::removeLastWorkspaceAndRehome() {
@@ -1798,6 +1862,7 @@ namespace bbai {
 
     workspaces_.removeLastWorkspace();        // pops the dying slot, clamps current_
     if (toolbar_) toolbar_->redrawWorkspaceLabel();
+    syncExtWorkspaces();   // shrink the handle vector to match
   }
 
   void Server::injectKeyForTest(xkb_keysym_t sym, uint32_t mods, bool pressed) {
@@ -2109,7 +2174,7 @@ namespace bbai {
     switch (copy.action) {
     case MenuItem::Act::Exec:            commandRunner().run(copy.argv); break;
     case MenuItem::Act::WorkspaceSwitch: setCurrentWorkspace(copy.workspace); break;
-    case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); break;
+    case MenuItem::Act::NewWorkspace:    workspaces_.addWorkspace(); syncExtWorkspaces(); break;
     case MenuItem::Act::RemoveWorkspace: removeLastWorkspaceAndRehome(); break;
     case MenuItem::Act::Exit:            terminate(); break;
     case MenuItem::Act::Restart:         requestRestart({}); break;

@@ -125,6 +125,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Modify: `tests/meson.build` (harness sources `:82-83` + register the test)
 - Create: `tests/system/ext_workspace_test.cc`
 
+**IMPLEMENTATION DEVIATIONS (container header is source of truth):**
+- **Manager listener member order:** the generated `ext_workspace_manager_v1_listener` is `{ workspace_group, workspace, done, finished }` - the group callback comes FIRST. The plan's `s_mgr_listener` had `mgr_workspace, mgr_group` swapped; corrected in the impl.
+- **`state` event is a `uint32_t` bitmask**, NOT a `wl_array`. The plan's `ws_state` (wl_array loop) was rewritten to `(state & EXT_WORKSPACE_HANDLE_V1_STATE_ACTIVE)`.
+- **`wlr_ext_workspace_handle_v1_create(manager, id, caps)`** takes the MANAGER + caps (there is NO `set_capabilities`); attach to the group via `set_group(h, group)`. `set_coordinates(h, nullptr, 0)`.
+- **`wlr_ext_workspace_group_handle_v1_create(mgr, caps)`** takes a caps arg (passed 0).
+- **Teardown SIGSEGV (NEW trap, not in plan):** calling `output_leave` in `onOutputDestroyed` during full-display teardown races the group's own destruction (the display frees group + outputs) - SIGSEGV. Fixed by gating the `output_leave` behind `!tearing_down_` (moved below the existing teardown early-return). A live single-output removal still emits the leave.
+
 **Interfaces:**
 - Consumes: `WorkspaceModel::count()/current()/name(unsigned)` (`src/Workspace.hh:19-24`); `Server::workspaces()` returns `WorkspaceModel&` (`src/Server.hh:87`).
 - Produces:
@@ -133,7 +140,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 This is the pure-observer half: no commit listener yet, so the teardown assert-trap does not apply here (the manager's `display_destroy` handler asserts an *empty* commit-listener list, which it is until Task 3 connects one).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/ext_workspace_test.cc`:
 
@@ -188,7 +195,7 @@ TEST_CASE("ext-workspace mirrors the model out: 4 workspaces, names, one active"
 }
 ```
 
-- [ ] **Step 2: Add the client-side protocol stub**
+- [x] **Step 2: Add the client-side protocol stub**
 
 In `protocols/meson.build`, add to `client_protocols` (the list at `:8-14`), after the `ext-idle-notify` line:
 
@@ -198,7 +205,7 @@ In `protocols/meson.build`, add to `client_protocols` (the list at `:8-14`), aft
 
 That generates `ext-workspace-v1-client-protocol.h` + `-protocol.c` for the test client. The compositor needs NO server-side codegen here (wlroots ships the helper + `ext-workspace-v1-enum.h`).
 
-- [ ] **Step 3: Write the test-client header**
+- [x] **Step 3: Write the test-client header**
 
 Create `tests/harness/ExtWorkspaceTestClient.hh`:
 
@@ -241,7 +248,7 @@ namespace bbai::test {
 #endif
 ```
 
-- [ ] **Step 4: Write the test-client implementation**
+- [x] **Step 4: Write the test-client implementation**
 
 Create `tests/harness/ExtWorkspaceTestClient.cc`. **First** (in container) grep the generated client header for the exact request/event names - the protocol is stable but confirm before coding:
 ```bash
@@ -400,7 +407,7 @@ namespace bbai::test {
 } // namespace bbai::test
 ```
 
-- [ ] **Step 5: Register the harness client + the test**
+- [x] **Step 5: Register the harness client + the test**
 
 In `tests/meson.build`, add `ExtWorkspaceTestClient.cc` to the `harness_lib` source list at `:82-83`:
 
@@ -424,7 +431,7 @@ test('ext_workspace', ext_workspace_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run (in container):
 ```bash
@@ -432,7 +439,7 @@ meson test -C build ext_workspace -v
 ```
 Expected: FAIL - `sawManager()` never turns true / `workspaceCount()` stays 0 (the compositor creates no manager yet).
 
-- [ ] **Step 7: Add the Server members**
+- [x] **Step 7: Add the Server members**
 
 In `src/Server.hh`, next to the `bt::Listener new_output;` member (`:391`) and the `idle_notifier_` member (`:415`):
 
@@ -455,7 +462,7 @@ Add a test accessor next to the other `ForTest` accessors (near `:138`):
     size_t extWorkspaceHandleCountForTest() const { return ext_ws_handles_.size(); }
 ```
 
-- [ ] **Step 8: Create the manager + group in the ctor**
+- [x] **Step 8: Create the manager + group in the ctor**
 
 In `src/Server.cc`, right after the idle-notifier line at `:139`:
 
@@ -473,7 +480,7 @@ In `src/Server.cc`, right after the idle-notifier line at `:139`:
 
 > Re-verify the `_group_handle_v1_create` arity against the container header from Task 1 Step 1 - the scout saw `create(mgr)`; if it takes a caps argument, pass `0` (group caps = 0).
 
-- [ ] **Step 9: Implement `syncExtWorkspaces`**
+- [x] **Step 9: Implement `syncExtWorkspaces`**
 
 Add near `setCurrentWorkspace` in `src/Server.cc` (a natural home - same subsystem):
 
@@ -514,7 +521,7 @@ Add near `setCurrentWorkspace` in `src/Server.cc` (a natural home - same subsyst
 
 > Re-verify `set_capabilities` / `set_coordinates` / `set_name` / `set_active` signatures against the container header. The scout saw `set_coordinates(h, &i, 1)` in its POC; passing empty coordinates is fine for positional workspaces - use whatever the header's signature is (a `wl_array`-style `(handle, coords, len)` takes `(h, nullptr, 0)`). Add `#include <string>` if not already transitively present in `Server.cc`.
 
-- [ ] **Step 10: Call `syncExtWorkspaces` from the mutation sites**
+- [x] **Step 10: Call `syncExtWorkspaces` from the mutation sites**
 
 Four call sites in `src/Server.cc`:
 
@@ -535,7 +542,7 @@ Four call sites in `src/Server.cc`:
    ```
    (`RemoveWorkspace` at `:2113` already reconciles via `removeLastWorkspaceAndRehome`.)
 
-- [ ] **Step 11: Wire the group's outputs**
+- [x] **Step 11: Wire the group's outputs**
 
 In the `new_output` lambda (`src/Server.cc:275`, after `outputs_.push_back(o);`):
 
@@ -554,7 +561,7 @@ In `Server::onOutputDestroyed` (the server-side output-death path called from `O
 
 > With one group spanning all outputs this is informational for pagers - switching works regardless. Wire it, but it is the lowest-risk piece if the `onOutputDestroyed` signature makes the `wlr_output*` awkward to reach; if so, skip the leave and note it in the commit body (the group outlives all outputs and dies with the display anyway).
 
-- [ ] **Step 12: Run the test to verify it passes**
+- [x] **Step 12: Run the test to verify it passes**
 
 Run (in container):
 ```bash
@@ -562,7 +569,7 @@ ninja -C build && meson test -C build ext_workspace -v
 ```
 Expected: PASS - the client sees 4 workspaces, names `"Workspace 1".."Workspace 4"`, and `activeIndex()` matches `server.workspaces().current()`.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc protocols/meson.build \
@@ -770,7 +777,7 @@ Expected: PASS. **If it aborts on the shrink** (`wlr_ext_workspace_handle_v1_des
 ```
 then re-run to green. Record which path was needed in the commit body.
 
-- [x] **Step 4: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add src/Server.hh tests/system/ext_workspace_test.cc
