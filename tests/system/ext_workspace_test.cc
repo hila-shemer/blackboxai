@@ -46,3 +46,29 @@ TEST_CASE("ext-workspace mirrors the model out: 4 workspaces, names, one active"
   CHECK(c.name(3) == "Workspace 4");
   CHECK(c.activeIndex() == static_cast<int>(server.workspaces().current()));
 }
+
+TEST_CASE("client ACTIVATE routes through setCurrentWorkspace") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutput(server);
+
+  test::ExtWorkspaceTestClient c(server.socketName());
+  REQUIRE(c.ok());
+  REQUIRE(pumpUntil(server, [&] { return c.workspaceCount() == 4; },
+                    [&] { c.flush(); c.pump(); }));
+  REQUIRE(server.workspaces().current() == 0);   // boots on workspace 0
+
+  c.activate(2);
+  bool moved = pumpUntil(server,
+      [&] { return server.workspaces().current() == 2; },
+      [&] { c.flush(); c.pump(); });
+  CHECK(moved);
+  CHECK(server.workspaces().current() == 2);
+  // The active bit is mirrored back out to the client.
+  bool mirrored = pumpUntil(server, [&] { return c.activeIndex() == 2; },
+                            [&] { c.flush(); c.pump(); });
+  CHECK(mirrored);
+}

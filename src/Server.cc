@@ -142,13 +142,14 @@ namespace bbai {
     // advertise no group-level operations). Handles are NOT built here: the
     // model's final size/names are only known after the primary output's
     // applyConfig, so syncExtWorkspaces() populates them then (and after every
-    // later mutation). The client ACTIVATE commit listener is connected in a
-    // later step (with its matching ~Server disconnect); until then the manager
-    // is a pure observer and its display_destroy assert (empty listener list)
-    // holds trivially.
+    // later mutation). The commit listener carries client ACTIVATE requests back
+    // in; it MUST be disconnected in ~Server before wl_display_destroy or the
+    // manager's display_destroy handler asserts an empty commit-listener list.
     ext_workspace_mgr_ = wlr_ext_workspace_manager_v1_create(display, 1);
     ext_workspace_group_ =
         wlr_ext_workspace_group_handle_v1_create(ext_workspace_mgr_, 0);
+    ext_workspace_commit.connect(&ext_workspace_mgr_->events.commit,
+                                 [this](void *data) { onExtWorkspaceCommit(data); });
 
     scene = wlr_scene_create();
     output_layout = wlr_output_layout_create(display);
@@ -562,6 +563,9 @@ namespace bbai {
     // are empty.
     session_active.disconnect();   // points into session->events; drop before backend finish
     new_output.disconnect();
+    ext_workspace_commit.disconnect();   // the manager's display_destroy handler
+                                         // asserts an empty commit-listener list;
+                                         // skip this and shutdown aborts.
     new_xdg_toplevel.disconnect();
     new_toplevel_decoration.disconnect();
     new_input.disconnect();
@@ -1818,6 +1822,24 @@ namespace bbai {
     for (unsigned i = 0; i < n; ++i) {
       wlr_ext_workspace_handle_v1_set_name(ext_ws_handles_[i], workspaces_.name(i).c_str());
       wlr_ext_workspace_handle_v1_set_active(ext_ws_handles_[i], i == workspaces_.current());
+    }
+  }
+
+  // A client committed a batch of requests. We advertise ACTIVATE only, so honor
+  // ACTIVATE and ignore the rest. Resolve the target by SCANNING the handle
+  // vector for the pointer - never by a stashed index (indices renumber on
+  // removeLastWorkspace). setCurrentWorkspace is the same choke point the menu +
+  // Super+arrow keys use; ext-workspace never becomes a second source of truth
+  // for switching.
+  void Server::onExtWorkspaceCommit(void *data) {
+    auto *ev = static_cast<wlr_ext_workspace_v1_commit_event *>(data);
+    wlr_ext_workspace_v1_request *req;
+    wl_list_for_each(req, ev->requests, link) {
+      if (req->type != WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE) continue;
+      wlr_ext_workspace_handle_v1 *target = req->activate.workspace;
+      if (!target) continue;   // protocol nulls the field if the handle died
+      for (unsigned i = 0; i < ext_ws_handles_.size(); ++i)
+        if (ext_ws_handles_[i] == target) { setCurrentWorkspace(i); break; }
     }
   }
 
