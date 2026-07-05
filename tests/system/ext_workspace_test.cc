@@ -73,6 +73,59 @@ TEST_CASE("client ACTIVATE routes through setCurrentWorkspace") {
   CHECK(mirrored);
 }
 
+TEST_CASE("client ACTIVATE is refused while the session is locked") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutput(server);
+
+  test::ExtWorkspaceTestClient c(server.socketName());
+  REQUIRE(c.ok());
+  REQUIRE(pumpUntil(server, [&] { return c.workspaceCount() == 4; },
+                    [&] { c.flush(); c.pump(); }));
+  REQUIRE(server.workspaces().current() == 0);
+
+  // Locking must gate the ext-workspace switch exactly as it gates Super+arrow:
+  // routing to an empty workspace would clearFocus() the lock surface and deny
+  // password entry. A hostile pager cannot become a lock-screen bypass.
+  server.lockForTest();
+  c.activate(2);
+  bool moved = pumpUntil(server,
+      [&] { return server.workspaces().current() == 2; },
+      [&] { c.flush(); c.pump(); }, /*iters=*/200);
+  CHECK_FALSE(moved);
+  CHECK(server.workspaces().current() == 0);   // still on the pre-lock workspace
+}
+
+TEST_CASE("client ACTIVATE is refused while a modal menu owns input") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true);
+  REQUIRE(server.ok());
+  bootOutput(server);
+
+  test::ExtWorkspaceTestClient c(server.socketName());
+  REQUIRE(c.ok());
+  REQUIRE(pumpUntil(server, [&] { return c.workspaceCount() == 4; },
+                    [&] { c.flush(); c.pump(); }));
+  REQUIRE(server.workspaces().current() == 0);
+
+  // A modal mode owns input; the key path swallows WorkspaceNext here, so the
+  // pager mirror must refuse too - no switching the ground out from under an
+  // open menu.
+  server.openRootMenu(400, 300);
+  REQUIRE(server.menuOpenForTest());
+  c.activate(1);
+  bool moved = pumpUntil(server,
+      [&] { return server.workspaces().current() == 1; },
+      [&] { c.flush(); c.pump(); }, /*iters=*/200);
+  CHECK_FALSE(moved);
+  CHECK(server.workspaces().current() == 0);
+}
+
 TEST_CASE("adding and removing a workspace reconciles the handle vector") {
   setenv("WLR_BACKENDS", "headless", 1);
   setenv("WLR_RENDERER", "pixman", 1);
