@@ -80,7 +80,7 @@ test('style', style_test_exe, suite : 'unit',
 png_dep = dependency('libpng')
 harness_lib = static_library('harness',
   files('harness/HeadlessFixture.cc', 'harness/TestClient.cc',
-        'harness/LockTestClient.cc'),
+        'harness/LockTestClient.cc', 'harness/ExtWorkspaceTestClient.cc'),
   dependencies : [bbai_dep, png_dep, client_protos_dep, wayland_client_dep],
   include_directories : include_directories('harness'))
 harness_dep = declare_dependency(link_with : harness_lib,
@@ -407,6 +407,14 @@ harness_connect_exe = executable('harness-connect-test',
   include_directories : include_directories('harness'),
   dependencies : [doctest_dep, wayland_client_dep, dependency('threads')])
 test('harness_connect', harness_connect_exe, suite : 'system', env : test_env)
+
+# ext-workspace-v1 export: bind the manager, drain the burst, assert the model
+# is mirrored out; drive an ACTIVATE back in; mutate the model's size.
+ext_workspace_exe = executable('ext-workspace-test',
+  files('system/ext_workspace_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('ext_workspace', ext_workspace_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
 
 # lock-idle: ext-idle-notify-v1 wiring (timeout=0 = deterministic, no goldens).
 idle_notify_exe = executable('idle-notify-test', files('system/idle_notify_test.cc'),

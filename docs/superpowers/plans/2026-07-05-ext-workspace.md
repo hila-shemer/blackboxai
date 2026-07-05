@@ -56,7 +56,19 @@ Then each "Run" step below is executed from the container's `/work`.
 
 The scout's POC proved (in the container) that a bare C++ include of this header compiles but **fails to link** - the header does not self-wrap in `extern "C"`, so C++ name-mangling produces 7 undefined references. Wrapping the include in `toolkit/wlr.hpp`'s existing `extern "C"` block links cleanly. `-DWLR_USE_UNSTABLE` is already set project-wide (`meson.build:5`), which this header `#error`s without. No sanitize shim: the header uses no `[static N]` array hints (unlike `wlr_scene.h`/`color.h`).
 
-- [ ] **Step 1: Re-verify the header exists in the container (the one fact this host cannot check)**
+- [x] **Step 1: Re-verify the header exists in the container (the one fact this host cannot check)**
+
+  VERIFIED in blackboxai-ci:f44. Header present. Signatures found (source of truth over the prose below - several differ):
+  - `wlr_ext_workspace_manager_v1_create(display, uint32_t version)`
+  - `wlr_ext_workspace_group_handle_v1_create(manager, uint32_t caps)` - takes caps (pass 0)
+  - `wlr_ext_workspace_handle_v1_create(manager, const char *id, uint32_t caps)` - takes the **manager** (NOT the group) and caps at creation; there is **NO `set_capabilities`** function.
+  - `wlr_ext_workspace_handle_v1_set_group(handle, group)` - attach a manager-created handle to the group.
+  - `wlr_ext_workspace_handle_v1_set_coordinates(handle, const uint32_t *coords, size_t coords_len)` -> `(h, nullptr, 0)`
+  - `wlr_ext_workspace_handle_v1_set_name(handle, const char *)`, `_set_active(handle, bool)`.
+  - Commit event: `struct wlr_ext_workspace_v1_commit_event { struct wl_list *requests; }` (requests is a `wl_list *`).
+  - Request: `struct wlr_ext_workspace_v1_request { enum ..._request_type type; struct wl_list link; union { ...; struct { wlr_ext_workspace_handle_v1 *workspace; } activate; ... }; }`.
+  - Request enum tokens are **WLR_-prefixed**: `WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE`.
+  - Caps/state enum (wayland-protocols header, no WLR_ prefix): `EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE = 1`, `EXT_WORKSPACE_HANDLE_V1_STATE_ACTIVE = 1`.
 
 Run (in container):
 ```bash
@@ -66,7 +78,7 @@ grep -n 'wlr_ext_workspace_manager_v1_create\|wlr_ext_workspace_group_handle_v1_
 ```
 Expected: the file exists; the grep prints the create/mutator/commit declarations. **Copy the exact signatures you see** - Tasks 2/3 cite them, and the container header is the source of truth over this plan's prose.
 
-- [ ] **Step 2: Add the include**
+- [x] **Step 2: Add the include**
 
 In `toolkit/wlr.hpp`, inside the `extern "C"` block, immediately after the idle-notify include at line 65:
 
@@ -79,7 +91,7 @@ In `toolkit/wlr.hpp`, inside the `extern "C"` block, immediately after the idle-
 #include <wlr/types/wlr_ext_workspace_v1.h>
 ```
 
-- [ ] **Step 3: Build to confirm still-green**
+- [x] **Step 3: Build to confirm still-green**
 
 Run (in container):
 ```bash
@@ -87,7 +99,7 @@ ninja -C build
 ```
 Expected: clean build, zero errors. This proves the header integrates with the real toolchain (the linkable-only-inside-extern-C claim).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add toolkit/wlr.hpp
@@ -113,6 +125,13 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 - Modify: `tests/meson.build` (harness sources `:82-83` + register the test)
 - Create: `tests/system/ext_workspace_test.cc`
 
+**IMPLEMENTATION DEVIATIONS (container header is source of truth):**
+- **Manager listener member order:** the generated `ext_workspace_manager_v1_listener` is `{ workspace_group, workspace, done, finished }` - the group callback comes FIRST. The plan's `s_mgr_listener` had `mgr_workspace, mgr_group` swapped; corrected in the impl.
+- **`state` event is a `uint32_t` bitmask**, NOT a `wl_array`. The plan's `ws_state` (wl_array loop) was rewritten to `(state & EXT_WORKSPACE_HANDLE_V1_STATE_ACTIVE)`.
+- **`wlr_ext_workspace_handle_v1_create(manager, id, caps)`** takes the MANAGER + caps (there is NO `set_capabilities`); attach to the group via `set_group(h, group)`. `set_coordinates(h, nullptr, 0)`.
+- **`wlr_ext_workspace_group_handle_v1_create(mgr, caps)`** takes a caps arg (passed 0).
+- **Teardown SIGSEGV (NEW trap, not in plan):** calling `output_leave` in `onOutputDestroyed` during full-display teardown races the group's own destruction (the display frees group + outputs) - SIGSEGV. Fixed by gating the `output_leave` behind `!tearing_down_` (moved below the existing teardown early-return). A live single-output removal still emits the leave.
+
 **Interfaces:**
 - Consumes: `WorkspaceModel::count()/current()/name(unsigned)` (`src/Workspace.hh:19-24`); `Server::workspaces()` returns `WorkspaceModel&` (`src/Server.hh:87`).
 - Produces:
@@ -121,7 +140,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 This is the pure-observer half: no commit listener yet, so the teardown assert-trap does not apply here (the manager's `display_destroy` handler asserts an *empty* commit-listener list, which it is until Task 3 connects one).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/system/ext_workspace_test.cc`:
 
@@ -176,7 +195,7 @@ TEST_CASE("ext-workspace mirrors the model out: 4 workspaces, names, one active"
 }
 ```
 
-- [ ] **Step 2: Add the client-side protocol stub**
+- [x] **Step 2: Add the client-side protocol stub**
 
 In `protocols/meson.build`, add to `client_protocols` (the list at `:8-14`), after the `ext-idle-notify` line:
 
@@ -186,7 +205,7 @@ In `protocols/meson.build`, add to `client_protocols` (the list at `:8-14`), aft
 
 That generates `ext-workspace-v1-client-protocol.h` + `-protocol.c` for the test client. The compositor needs NO server-side codegen here (wlroots ships the helper + `ext-workspace-v1-enum.h`).
 
-- [ ] **Step 3: Write the test-client header**
+- [x] **Step 3: Write the test-client header**
 
 Create `tests/harness/ExtWorkspaceTestClient.hh`:
 
@@ -229,7 +248,7 @@ namespace bbai::test {
 #endif
 ```
 
-- [ ] **Step 4: Write the test-client implementation**
+- [x] **Step 4: Write the test-client implementation**
 
 Create `tests/harness/ExtWorkspaceTestClient.cc`. **First** (in container) grep the generated client header for the exact request/event names - the protocol is stable but confirm before coding:
 ```bash
@@ -388,7 +407,7 @@ namespace bbai::test {
 } // namespace bbai::test
 ```
 
-- [ ] **Step 5: Register the harness client + the test**
+- [x] **Step 5: Register the harness client + the test**
 
 In `tests/meson.build`, add `ExtWorkspaceTestClient.cc` to the `harness_lib` source list at `:82-83`:
 
@@ -412,7 +431,7 @@ test('ext_workspace', ext_workspace_exe, suite : 'system',
   workdir : meson.project_source_root(), env : test_env)
 ```
 
-- [ ] **Step 6: Run the test to verify it fails**
+- [x] **Step 6: Run the test to verify it fails**
 
 Run (in container):
 ```bash
@@ -420,7 +439,7 @@ meson test -C build ext_workspace -v
 ```
 Expected: FAIL - `sawManager()` never turns true / `workspaceCount()` stays 0 (the compositor creates no manager yet).
 
-- [ ] **Step 7: Add the Server members**
+- [x] **Step 7: Add the Server members**
 
 In `src/Server.hh`, next to the `bt::Listener new_output;` member (`:391`) and the `idle_notifier_` member (`:415`):
 
@@ -443,7 +462,7 @@ Add a test accessor next to the other `ForTest` accessors (near `:138`):
     size_t extWorkspaceHandleCountForTest() const { return ext_ws_handles_.size(); }
 ```
 
-- [ ] **Step 8: Create the manager + group in the ctor**
+- [x] **Step 8: Create the manager + group in the ctor**
 
 In `src/Server.cc`, right after the idle-notifier line at `:139`:
 
@@ -461,7 +480,7 @@ In `src/Server.cc`, right after the idle-notifier line at `:139`:
 
 > Re-verify the `_group_handle_v1_create` arity against the container header from Task 1 Step 1 - the scout saw `create(mgr)`; if it takes a caps argument, pass `0` (group caps = 0).
 
-- [ ] **Step 9: Implement `syncExtWorkspaces`**
+- [x] **Step 9: Implement `syncExtWorkspaces`**
 
 Add near `setCurrentWorkspace` in `src/Server.cc` (a natural home - same subsystem):
 
@@ -502,7 +521,7 @@ Add near `setCurrentWorkspace` in `src/Server.cc` (a natural home - same subsyst
 
 > Re-verify `set_capabilities` / `set_coordinates` / `set_name` / `set_active` signatures against the container header. The scout saw `set_coordinates(h, &i, 1)` in its POC; passing empty coordinates is fine for positional workspaces - use whatever the header's signature is (a `wl_array`-style `(handle, coords, len)` takes `(h, nullptr, 0)`). Add `#include <string>` if not already transitively present in `Server.cc`.
 
-- [ ] **Step 10: Call `syncExtWorkspaces` from the mutation sites**
+- [x] **Step 10: Call `syncExtWorkspaces` from the mutation sites**
 
 Four call sites in `src/Server.cc`:
 
@@ -523,7 +542,7 @@ Four call sites in `src/Server.cc`:
    ```
    (`RemoveWorkspace` at `:2113` already reconciles via `removeLastWorkspaceAndRehome`.)
 
-- [ ] **Step 11: Wire the group's outputs**
+- [x] **Step 11: Wire the group's outputs**
 
 In the `new_output` lambda (`src/Server.cc:275`, after `outputs_.push_back(o);`):
 
@@ -542,7 +561,7 @@ In `Server::onOutputDestroyed` (the server-side output-death path called from `O
 
 > With one group spanning all outputs this is informational for pagers - switching works regardless. Wire it, but it is the lowest-risk piece if the `onOutputDestroyed` signature makes the `wlr_output*` awkward to reach; if so, skip the leave and note it in the commit body (the group outlives all outputs and dies with the display anyway).
 
-- [ ] **Step 12: Run the test to verify it passes**
+- [x] **Step 12: Run the test to verify it passes**
 
 Run (in container):
 ```bash
@@ -550,7 +569,7 @@ ninja -C build && meson test -C build ext_workspace -v
 ```
 Expected: PASS - the client sees 4 workspaces, names `"Workspace 1".."Workspace 4"`, and `activeIndex()` matches `server.workspaces().current()`.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add src/Server.hh src/Server.cc protocols/meson.build \
@@ -582,7 +601,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 **The teardown trap (POC-verified, load-bearing):** the manager's `display_destroy` handler asserts `wl_list_empty(&manager->events.commit.listener_list)` (`types/wlr_ext_workspace_v1.c:511`). Once the commit listener is connected, it MUST be disconnected before `wl_display_destroy` - the same class of trap as `new_output`, handled at the same spot (`:543`). This is why the listener and its disconnect land in ONE task: connecting it without the disconnect aborts every test at shutdown.
 
-- [ ] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
+- [x] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
 
 ```cpp
 TEST_CASE("client ACTIVATE routes through setCurrentWorkspace") {
@@ -612,7 +631,7 @@ TEST_CASE("client ACTIVATE routes through setCurrentWorkspace") {
 }
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run (in container):
 ```bash
@@ -620,7 +639,7 @@ meson test -C build ext_workspace -v
 ```
 Expected: FAIL - `current()` stays 0 (no commit listener honors the request yet).
 
-- [ ] **Step 3: Connect the commit listener + implement the handler**
+- [x] **Step 3: Connect the commit listener + implement the handler**
 
 In the ctor (`src/Server.cc`, right after the group creation from Task 2):
 
@@ -654,7 +673,7 @@ Implement the handler next to `syncExtWorkspaces` (`src/Server.cc`):
 
 > Re-verify the event struct name, the `requests` list field, the `link` member name, the request `.type` enum token, and `req->activate.workspace` against the container header (Task 1 Step 1's grep, extended to `commit_event`/`request`). The scout read these from the header but did NOT verify the enum-token spelling against source - grep `EXT_WORKSPACE_V1_REQUEST` in the container's `wlr/types/wlr_ext_workspace_v1.h` before trusting the token above.
 
-- [ ] **Step 4: Disconnect on teardown**
+- [x] **Step 4: Disconnect on teardown**
 
 In `~Server` (`src/Server.cc:543`), next to `new_output.disconnect()`:
 
@@ -665,7 +684,7 @@ In `~Server` (`src/Server.cc:543`), next to `new_output.disconnect()`:
                                          // and shutdown aborts (POC-verified).
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run (in container):
 ```bash
@@ -673,7 +692,7 @@ ninja -C build && meson test -C build ext_workspace -v
 ```
 Expected: PASS - `current()` moves to 2, `activeIndex()` mirrors to 2, and the process exits cleanly (no `wl_list_empty` abort at teardown).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Server.cc tests/system/ext_workspace_test.cc
@@ -701,7 +720,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 This task adds no product code - `syncExtWorkspaces` already grows and shrinks. It exists as its own reviewer gate because the **destroy-ordering is unverified against wlroots source** (the scout read only the header): does `wlr_ext_workspace_handle_v1_destroy` detach the handle from its group internally, or must we `set_group(NULL)` first? The test drives add-then-remove through a real client and asserts no abort - the empirical answer. If it aborts on destroy, the fix is a `set_group(h, nullptr)` (or the header's equivalent) before `_destroy` in `syncExtWorkspaces`'s shrink loop; re-run until green and note the finding in the commit body.
 
-- [ ] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
+**DESTROY-ORDERING FINDING (empirical, container run):** the grow/shrink test passes with a clean exit and NO abort/segfault. `wlr_ext_workspace_handle_v1_destroy` detaches the handle from its group internally - **no explicit `set_group(NULL)` was needed** before `_destroy`. The plain `_destroy` in the shrink loop is correct.
+
+- [x] **Step 1: Write the failing test (ADD to `ext_workspace_test.cc`)**
 
 ```cpp
 TEST_CASE("adding and removing a workspace reconciles the handle vector") {
@@ -736,7 +757,7 @@ TEST_CASE("adding and removing a workspace reconciles the handle vector") {
 }
 ```
 
-- [ ] **Step 2: Add a test hook for the direct-grow case**
+- [x] **Step 2: Add a test hook for the direct-grow case**
 
 `addWorkspace()` on the model alone does not call `syncExtWorkspaces` (only the menu action does). Expose a thin test hook in `src/Server.hh` next to the other `ForTest` methods (near `:77`):
 
@@ -746,7 +767,7 @@ TEST_CASE("adding and removing a workspace reconciles the handle vector") {
 
 (The shrink half needs no hook - `removeLastWorkspaceAndRehome` reconciles on its own.)
 
-- [ ] **Step 3: Run to verify it passes (or catches the destroy-ordering trap)**
+- [x] **Step 3: Run to verify it passes (or catches the destroy-ordering trap)**
 
 Run (in container):
 ```bash
@@ -758,7 +779,7 @@ Expected: PASS. **If it aborts on the shrink** (`wlr_ext_workspace_handle_v1_des
 ```
 then re-run to green. Record which path was needed in the commit body.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/Server.hh tests/system/ext_workspace_test.cc
@@ -782,7 +803,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 
 This slice must not regress the suite or drop coverage below the 80% gate (project ~92%), and it enters its own adversarial review next. This task is the gate.
 
-- [ ] **Step 1: Run the whole suite**
+- [x] **Step 1: Run the whole suite**
 
 Run (in container):
 ```bash
@@ -790,7 +811,7 @@ meson test -C build
 ```
 Expected: all tests PASS, including the three new `ext_workspace` cases and every prior wave-1/wave-2 test (proves the `Server.cc` insertions near `:139/:268/:1768/:1800/:2112` broke nothing below them).
 
-- [ ] **Step 2: Coverage gate**
+- [x] **Step 2: Coverage gate**
 
 Run (in container) the project's usual gcov flow (same one waves 1-2 used - configure a coverage build dir if absent):
 ```bash
@@ -800,7 +821,7 @@ ninja -C build-cov coverage
 ```
 Expected: overall line coverage >= 80% (project ~92%). Confirm `Server.cc`'s new `syncExtWorkspaces`/`onExtWorkspaceCommit` lines are exercised (the three cases hit grow, shrink, active-flip, and the ACTIVATE route). If the `onOutputDestroyed` `output_leave` line (Task 2 Step 11) is uncovered and you kept it, that single informational line is acceptable - note it.
 
-- [ ] **Step 3: Self-review against scope**
+- [x] **Step 3: Self-review against scope**
 
 Confirm, by reading the final diff:
 - No `wl_global` hand-roll, no `wayland-scanner` server-side codegen, no sanitize-shim (the one build change is the `toolkit/wlr.hpp` include).
@@ -808,9 +829,14 @@ Confirm, by reading the final diff:
 - ACTIVATE resolves by pointer-scan, not a stashed index.
 - `ext_workspace_commit.disconnect()` is present in `~Server` before `wl_display_destroy`.
 
-- [ ] **Step 4: Hand off to adversarial review**
+- [x] **Step 4: Hand off to adversarial review**
 
 The slice is complete and green. Per the wave-3 program decisions it gets its OWN adversarial review before merge-train entry - flag it for that review (do not merge yet). Reviewer focus areas: the destroy-ordering finding from Task 4, the teardown disconnect, the pointer-scan ACTIVATE resolution, and the container-verified header signatures (`set_coordinates`/`set_capabilities`/`create` arity, the `commit_event`/`request` struct shape).
+
+**GATE RESULT (blackboxai-ci:f44, coverage build-f44):**
+- Full suite: 76/76 tests pass. One flake on the first parallel run (`gray_window` `REQUIRE(mapped())`, the known cold-cache connect race) - re-ran alone and passed. `ext_workspace` = 3 cases / 25 assertions, clean exit.
+- Coverage: overall 92% line (`gcovr --fail-under-line=80` exit 0). Every new ext-workspace line in `Server.cc` is exercised, INCLUDING the `output_leave` (the live single-output-removal path is hit by an existing multihead test) - no uncovered new lines. `Server.cc` file total 85% (its pre-existing D-Bus/error-path baseline; the new code is fully covered).
+- Scope: no `wl_global`/`wayland-scanner` server codegen/`wl_resource_create` in `src/` (grep-clean); `protocols/meson.build` adds ONE client-side XML line only; caps = ACTIVATE-only at create + group caps 0; ACTIVATE resolves by pointer-scan; `ext_workspace_commit.disconnect()` present in `~Server` before `wl_display_destroy`.
 
 ---
 

@@ -11,6 +11,7 @@ client_protocols = [
   protos_dir / 'unstable' / 'xdg-decoration' / 'xdg-decoration-unstable-v1.xml',
   protos_dir / 'staging' / 'ext-session-lock' / 'ext-session-lock-v1.xml',
   protos_dir / 'staging' / 'ext-idle-notify' / 'ext-idle-notify-v1.xml',
+  protos_dir / 'staging' / 'ext-workspace' / 'ext-workspace-v1.xml',
 ]
 
 client_proto_targets = []

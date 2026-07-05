@@ -63,6 +63,13 @@ extern "C" {
 // stays untouched.
 #include <wlr/types/wlr_session_lock_v1.h>
 #include <wlr/types/wlr_idle_notify_v1.h>
+// ext-workspace-v1 export (productize-v1 wave 3). wlroots ships the complete
+// server-side helper; this one include is the whole compositor-side build
+// change. The header is NOT self-extern-C'd, so it MUST live inside this block
+// or the link fails with mangled wlr_ext_workspace_* symbols (verified in
+// blackboxai-ci:f44). It pulls the generated wayland-protocols enum header
+// (ext-workspace-v1-enum.h) transitively - no protocols/meson.build codegen.
+#include <wlr/types/wlr_ext_workspace_v1.h>
 
 // Keysym constants (XKB_KEY_*) for the M4 keybinding table + menu navigation.
 // wlr_keyboard.h already pulls <xkbcommon/xkbcommon.h> (the xkb_* functions);
