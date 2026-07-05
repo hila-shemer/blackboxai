@@ -56,7 +56,19 @@ Then each "Run" step below is executed from the container's `/work`.
 
 The scout's POC proved (in the container) that a bare C++ include of this header compiles but **fails to link** - the header does not self-wrap in `extern "C"`, so C++ name-mangling produces 7 undefined references. Wrapping the include in `toolkit/wlr.hpp`'s existing `extern "C"` block links cleanly. `-DWLR_USE_UNSTABLE` is already set project-wide (`meson.build:5`), which this header `#error`s without. No sanitize shim: the header uses no `[static N]` array hints (unlike `wlr_scene.h`/`color.h`).
 
-- [ ] **Step 1: Re-verify the header exists in the container (the one fact this host cannot check)**
+- [x] **Step 1: Re-verify the header exists in the container (the one fact this host cannot check)**
+
+  VERIFIED in blackboxai-ci:f44. Header present. Signatures found (source of truth over the prose below - several differ):
+  - `wlr_ext_workspace_manager_v1_create(display, uint32_t version)`
+  - `wlr_ext_workspace_group_handle_v1_create(manager, uint32_t caps)` - takes caps (pass 0)
+  - `wlr_ext_workspace_handle_v1_create(manager, const char *id, uint32_t caps)` - takes the **manager** (NOT the group) and caps at creation; there is **NO `set_capabilities`** function.
+  - `wlr_ext_workspace_handle_v1_set_group(handle, group)` - attach a manager-created handle to the group.
+  - `wlr_ext_workspace_handle_v1_set_coordinates(handle, const uint32_t *coords, size_t coords_len)` -> `(h, nullptr, 0)`
+  - `wlr_ext_workspace_handle_v1_set_name(handle, const char *)`, `_set_active(handle, bool)`.
+  - Commit event: `struct wlr_ext_workspace_v1_commit_event { struct wl_list *requests; }` (requests is a `wl_list *`).
+  - Request: `struct wlr_ext_workspace_v1_request { enum ..._request_type type; struct wl_list link; union { ...; struct { wlr_ext_workspace_handle_v1 *workspace; } activate; ... }; }`.
+  - Request enum tokens are **WLR_-prefixed**: `WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE`.
+  - Caps/state enum (wayland-protocols header, no WLR_ prefix): `EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE = 1`, `EXT_WORKSPACE_HANDLE_V1_STATE_ACTIVE = 1`.
 
 Run (in container):
 ```bash
@@ -66,7 +78,7 @@ grep -n 'wlr_ext_workspace_manager_v1_create\|wlr_ext_workspace_group_handle_v1_
 ```
 Expected: the file exists; the grep prints the create/mutator/commit declarations. **Copy the exact signatures you see** - Tasks 2/3 cite them, and the container header is the source of truth over this plan's prose.
 
-- [ ] **Step 2: Add the include**
+- [x] **Step 2: Add the include**
 
 In `toolkit/wlr.hpp`, inside the `extern "C"` block, immediately after the idle-notify include at line 65:
 
@@ -79,7 +91,7 @@ In `toolkit/wlr.hpp`, inside the `extern "C"` block, immediately after the idle-
 #include <wlr/types/wlr_ext_workspace_v1.h>
 ```
 
-- [ ] **Step 3: Build to confirm still-green**
+- [x] **Step 3: Build to confirm still-green**
 
 Run (in container):
 ```bash
@@ -87,7 +99,7 @@ ninja -C build
 ```
 Expected: clean build, zero errors. This proves the header integrates with the real toolchain (the linkable-only-inside-extern-C claim).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add toolkit/wlr.hpp
@@ -758,7 +770,7 @@ Expected: PASS. **If it aborts on the shrink** (`wlr_ext_workspace_handle_v1_des
 ```
 then re-run to green. Record which path was needed in the commit body.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/Server.hh tests/system/ext_workspace_test.cc
