@@ -104,9 +104,10 @@ FILES: `blackboxai` binary; `~/.blackboxrc` (user rc); `@pkgdatadir@/menu` (defa
 
 DEVIATIONS FROM CLASSIC (the honest section, no reference counterpart): (1) `[restart]`/`[exit]` tear down ALL clients (`main.cc:31-34`); (2) no XWayland - X11-only apps do not run (deferred for v1); (3) no window shade - xdg-shell has no shade concept (note `data/styles/Shade` is a THEME name, not the feature); (4) the slit hosts SNI/D-Bus tray items, not XEMBED dockapps; (5) `onTop` is read from rc but has no menu toggle; (6) tray context menus are text-only (no icon column); (7) keybindings are built-in and fixed, not rc-driven.
 
-- [ ] **Step 1: Re-verify every cited fact against the post-ext-workspace tree**
+- [x] **Step 1: Re-verify every cited fact against the post-ext-workspace tree**
 
 Run each and confirm the fact still holds (line numbers may have drifted; the SYMBOL must match):
+Verified 2026-07-05: main.cc parses only --headless (:13) and -rc (:14); restart execvp at :39/:42. Toolbar.cc:75-76 formatClock(strftimeFormat). MenuParser.cc:203 pipe-menu diag, :248 reconfig-command-dropped diag. Keybindings.cc:10-35 table matches. Autostart drifted to Server.cc:781 (XDG_CURRENT_DESKTOP=Blackbox), :786-787 dirs, :806 shouldAutostart. ext-workspace IS live (Server.cc:148 wlr_ext_workspace_manager_v1_create). Reference man page not in worktree tree (gitignored); read from /home/hila/proj/blackboxai/reference/blackboxwm/doc/blackbox.1.in.
 
 ```bash
 cd "$WT"
@@ -120,7 +121,7 @@ sed -n '10,35p' src/Keybindings.cc                          # the keybinding tab
 
 Expected: `main.cc` matches only `--headless` and `-rc`; `Toolbar.cc` calls `formatClock`; `MenuParser.cc` carries both diagnostic strings; the keybinding table matches the table above. If any drifted, correct the plan's citation before writing prose.
 
-- [ ] **Step 2: Write `doc/meson.build`**
+- [x] **Step 2: Write `doc/meson.build`**
 
 Mirror `reference/blackboxwm/doc/Makefile.am`'s sed substitution (`@defaultmenu@` -> `$(pkgdatadir)/menu`, `@pkgdatadir@` -> `$(pkgdatadir)`, `@version@` -> `$(VERSION)`) as a meson `configure_file`. The `pkgdatadir` value must match `src/meson.build:8-11` exactly (`prefix / datadir / 'blackboxai'`):
 
@@ -143,7 +144,7 @@ blackboxai_man = configure_file(
 install_man(blackboxai_man)
 ```
 
-- [ ] **Step 3: Add `subdir('doc')` to the root `meson.build`**
+- [x] **Step 3: Add `subdir('doc')` to the root `meson.build`**
 
 Insert immediately after `subdir('src')` (currently `meson.build:96`), before the `if get_option('tests')` block:
 
@@ -155,7 +156,7 @@ if get_option('tests')
 endif
 ```
 
-- [ ] **Step 4: Author `doc/blackboxai.1.in`**
+- [x] **Step 4: Author `doc/blackboxai.1.in`**
 
 Port `reference/blackboxwm/doc/blackbox.1.in` section by section. Keep it a `.1.in` template (`@pkgdatadir@`/`@defaultmenu@`/`@version@` tokens survive into the file; Step 2 substitutes them). Section map (reference line ranges are the current `blackbox.1.in`):
 
@@ -177,7 +178,7 @@ Port `reference/blackboxwm/doc/blackbox.1.in` section by section. Keep it a `.1.
 
 Do NOT port the `fr_FR`/`ja_JP`/`nl_NL`/`sl_SI` translations - English page only.
 
-- [ ] **Step 5: VERIFY - build the man page, prove substitution + install, lint for nroff errors**
+- [x] **Step 5: VERIFY - build the man page, prove substitution + install, lint for nroff errors**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
@@ -194,7 +195,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: `ninja` builds `build-doc/doc/blackboxai.1`; the `grep "@...@"` finds nothing (exit non-zero, so `!` passes) - no literal `@pkgdatadir@` shipped; `man --warnings` prints no `.warnings` output; the dry-run shows `.../share/man/man1/blackboxai.1`. If `man` warns (e.g. an unescaped `-` or a broken `.TP`), fix the nroff and re-run.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add doc/blackboxai.1.in doc/meson.build meson.build
@@ -230,7 +231,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 
 The built-in default (`src/Rootmenu.cc:93-107`) is: `kitty`, `xterm`, separator, Workspaces submenu, separator, Restart, Exit. The starter FILE should be that, made slightly richer as a first-run editable example (a Run entry, a Configuration entry, a Styles submenu) while staying inside the parsed grammar - so a user who opens `/usr/share/blackboxai/menu` sees the shape they would edit. Every directive used below is in `MenuParser.cc` (`[exec]`/`[submenu]`/`[workspaces]`/`[config]`/`[stylesdir]`/`[restart]`/`[exit]`/`[separator]`/`[end]`).
 
-- [ ] **Step 1: Write `data/menu`**
+- [x] **Step 1: Write `data/menu`**
 
 ```
 # BlackboxAI starter menu. This mirrors the compositor's built-in default so
@@ -260,7 +261,7 @@ Note: `@pkgdatadir@` here is NOT substituted (the menu is installed verbatim, no
     [stylesdir] (/usr/share/blackboxai/styles)
 ```
 
-- [ ] **Step 2: Add the install target to `meson.build`**
+- [x] **Step 2: Add the install target to `meson.build`**
 
 Immediately after the `install_subdir('data/styles', ...)` block (currently `meson.build:91-92`):
 
@@ -273,7 +274,7 @@ install_data('data/menu',
   install_dir : get_option('datadir') / 'blackboxai')
 ```
 
-- [ ] **Step 3: VERIFY - the menu parses cleanly and installs to the advertised path**
+- [x] **Step 3: VERIFY - the menu parses cleanly and installs to the advertised path**
 
 The parser has no standalone CLI, but the man page's own claim is "this file is a valid menu". Prove (a) it installs at `@pkgdatadir@/menu`, and (b) it round-trips through the real `MenuParser` with zero diagnostics, by running the existing menu-parser unit target against it:
 
@@ -291,7 +292,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: the dry-run shows `.../share/blackboxai/menu`; the pipe-menu grep finds nothing (no `[include] |...` and no `[reconfig] |...`); the directive count is > 0. (If a `tests=true` build is already available, additionally point `menuparser::parseFile("data/menu")` at it via the existing MenuParser test fixture and assert `diag.empty()` - stronger, but the grep gate is sufficient for this authoring task.)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add data/menu meson.build
@@ -326,7 +327,7 @@ meson installs exactly: `src/blackboxai` -> `%{_bindir}/blackboxai` (`src/meson.
 
 BuildRequires map 1:1 to `meson.build:15-29` dependency() calls, cross-checked against `ci.yml:14-17`: `meson`, `ninja-build`, `gcc-c++`, `sed` (build-time, `tools/sanitize-c-header.sh`), `pkgconfig(wlroots-0.20)`, `wayland-devel` (provides `wayland-scanner` + `pkgconfig(wayland-server/client)`), `wayland-protocols-devel`, `pkgconfig(pixman-1)`, `pkgconfig(libdrm)`, `pkgconfig(xkbcommon)`, `pkgconfig(fcft) >= 3.0.0`, `pkgconfig(libsystemd)`, `pkgconfig(libpng)`. NOT needed for a tarball RPM build: `gcovr`/`git`/`dbus-daemon` (coverage/clone/test-only).
 
-- [ ] **Step 1: Re-verify the install layout against the post-Tasks-1-2 tree**
+- [x] **Step 1: Re-verify the install layout against the post-Tasks-1-2 tree**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
@@ -337,7 +338,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: the dry-run lists exactly the binary, the `.desktop`, 19 style dirs, the man1 page, and the menu file - nothing else. Every path in the dry-run must appear in `%files`, and every `%files` entry must appear here (no unpackaged / missing files).
 
-- [ ] **Step 2: Write `blackboxai.spec`**
+- [x] **Step 2: Write `blackboxai.spec`**
 
 ```spec
 Name:           blackboxai
@@ -410,7 +411,7 @@ desktop-file-validate %{buildroot}%{_datadir}/wayland-sessions/%{name}.desktop
 - Initial package (productize-v1 Wave 3).
 ```
 
-- [ ] **Step 3: Add the COPR maintainer + user notes as spec-top comments**
+- [x] **Step 3: Add the COPR maintainer + user notes as spec-top comments**
 
 Prepend (above `Name:`) a comment block - the load-bearing owner string lives here and in the README:
 
@@ -426,7 +427,7 @@ Prepend (above `Name:`) a comment block - the load-bearing owner string lives he
 #   # log out, pick "BlackboxAI" at the GDM session gear.
 ```
 
-- [ ] **Step 4: VERIFY - rpmlint clean + a source build (or full build) with no unpackaged/missing files**
+- [x] **Step 4: VERIFY - rpmlint clean + a source build (or full build) with no unpackaged/missing files**
 
 ```bash
 docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
@@ -444,7 +445,7 @@ docker run --rm --shm-size=1g -v /home/hila/proj:/home/hila/proj -w "$WT" \
 
 Expected: `rpmlint` reports no `E:` errors (an `invalid-url Source0` or `no-manual-page` style `W:` is acceptable); `rpmbuild -bs` produces `blackboxai-0.1.0-1.src.rpm`; `rpmbuild -bb` finishes with `Wrote: .../blackboxai-0.1.0-1.*.rpm` and **no** "Installed (but unpackaged) file(s) found" and **no** "File not found" for the man1 line. If `rpmbuild -bb` is too heavy for the box, `-bs` + the Step-1 dry-run cross-check (every install path is in `%files`, every `%files` path is installed) is the required minimum; note in the commit which gate ran.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add blackboxai.spec
@@ -477,7 +478,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: the COPR id `hila-shemer/blackboxai` (Task 3), the man page (Task 1, link `man blackboxai`), `docs/install.md` + `docs/gdm-session.md` (Task 5, deep links).
 - Produces: nothing other tasks consume.
 
-- [ ] **Step 1: Copy the 8 goldens into `docs/screenshots/`**
+- [x] **Step 1: Copy the 8 goldens into `docs/screenshots/`**
 
 ```bash
 cd "$WT"
@@ -491,7 +492,7 @@ ls -la docs/screenshots/
 
 Expected: 8 PNGs present. These are stable copies so a golden re-bless does not silently change README imagery.
 
-- [ ] **Step 2: Re-verify the keybinding + config-knob facts (do not trust memory)**
+- [x] **Step 2: Re-verify the keybinding + config-knob facts (do not trust memory)**
 
 ```bash
 cd "$WT"
@@ -502,7 +503,7 @@ rg -n 'setConfigOption|ConfigOption::' src/Server.cc | head   # live config-menu
 
 Expected: matches the tables in Task 1 / below. Correct any drift before writing.
 
-- [ ] **Step 3: Write `README.md`**
+- [x] **Step 3: Write `README.md`**
 
 Sections (SFW voice throughout - competent-reader, mechanism-first, honest about limits; no marketing adjectives):
 
@@ -522,7 +523,7 @@ Sections (SFW voice throughout - competent-reader, mechanism-first, honest about
 
 8. **Build/dev + license.** A "rewrite in the style of" bbidulock/blackboxwm, attributed; `bt::` gradient math ported verbatim. Link the design spec (`docs/superpowers/specs/`) and `man blackboxai`. MIT (`LICENSE`).
 
-- [ ] **Step 4: VERIFY - links resolve, images exist, no stale/false claim**
+- [x] **Step 4: VERIFY - links resolve, images exist, no stale/false claim**
 
 ```bash
 cd "$WT"
@@ -544,7 +545,7 @@ if grep -qi 'ext-workspace' README.md; then rg -q 'ext_workspace_manager_v1' src
 
 Expected: all screenshots resolve; `docs/install.md`/`docs/gdm-session.md` are the only "PENDING" (Task 5); the COPR line uses `hila-shemer`; no shade-feature or rc-keybinding claim; any ext-workspace mention is backed by real code. Render the Markdown once (any viewer) to eye the gallery and tables.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/screenshots/
@@ -576,7 +577,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: the COPR id (Task 3), the container/Fedora build reality (`ci.yml`), the man page path (Task 1).
 - Produces: the deep-link targets Task 4's README §6 points at.
 
-- [ ] **Step 1: Re-verify the autostart + desktop facts**
+- [x] **Step 1: Re-verify the autostart + desktop facts**
 
 ```bash
 cd "$WT"
@@ -587,7 +588,7 @@ sed -n '8,40p' .github/workflows/ci.yml                       # the authoritativ
 
 Expected: `.desktop` has `Name=BlackboxAI`, `Exec=blackboxai`, `DesktopNames=Blackbox`; `Server.cc` sets `XDG_CURRENT_DESKTOP=Blackbox` and scans `~/.config/autostart` then `/etc/xdg/autostart`; `ci.yml` lists the deps. Correct any drift.
 
-- [ ] **Step 2: Write `docs/install.md`**
+- [x] **Step 2: Write `docs/install.md`**
 
 Sections (SFW voice):
 
@@ -596,13 +597,13 @@ Sections (SFW voice):
 - **C. Pick it at GDM.** Short - the mechanics live in `gdm-session.md`; here just: log out, choose "BlackboxAI" at the greeter gear, log in. Link `gdm-session.md`.
 - **D. Autostart.** Drop XDG `.desktop` files in `~/.config/autostart` or `/etc/xdg/autostart`; they run under `XDG_CURRENT_DESKTOP=Blackbox` (`Server.cc:750`). Target BlackboxAI specifically with `OnlyShowIn=Blackbox;`; `Hidden=true`/`NotShowIn=Blackbox;` suppress. Recommend `swaylock`/`swayidle` for lock + idle (protocol-only: `ext-session-lock-v1` + `ext-idle-notify-v1`; the compositor ships no locker).
 
-- [ ] **Step 3: Write `docs/gdm-session.md`**
+- [x] **Step 3: Write `docs/gdm-session.md`**
 
 - **How the session is listed.** `data/blackboxai.desktop` installs to `/usr/share/wayland-sessions/blackboxai.desktop` (`meson.build:86-87`). `Name=BlackboxAI` is the label at the greeter; `Exec=blackboxai` (bare, resolved via `/usr/bin` on PATH); `DesktopNames=Blackbox` sets `XDG_CURRENT_DESKTOP=Blackbox` for the whole session. Three spellings, one thing - be explicit so a reader does not look for a `blackbox` binary.
 - **The escape hatch.** `Ctrl+Alt+Backspace` = Quit the compositor (`Keybindings.cc`), the Wayland analogue of classic's X-server kill - but it is suppressed while a session lock is up (locked means locked; the wedged-locker escape is a kernel-side VT switch - `docs/superpowers/plans/2026-07-03-productize-v1-program.md:19-21`).
 - **Troubleshooting.** Session missing at the greeter -> the `.desktop` was not installed / wrong `datadir` (check `/usr/share/wayland-sessions/`). Session bounces straight back to the greeter -> the compositor failed to init (check the journal; usually no seat / no DRM master). VT-switch survives a running session; multi-head is supported.
 
-- [ ] **Step 4: VERIFY - facts trace to code, links resolve, no host-build trap**
+- [x] **Step 4: VERIFY - facts trace to code, links resolve, no host-build trap**
 
 ```bash
 cd "$WT"
@@ -620,7 +621,7 @@ echo "--- no stock-Ubuntu meson-setup instruction ---"
 
 Expected: the pin/container warning is present; the COPR line uses `hila-shemer`; the GDM doc's `XDG_CURRENT_DESKTOP`/`DesktopNames` claims match the `.desktop`; both docs exist (Task 4's README links now resolve); no instruction tempts an Ubuntu reader into a host `meson setup` that fails on the 0.20 pin.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/install.md docs/gdm-session.md

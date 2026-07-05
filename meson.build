@@ -91,8 +91,16 @@ install_data('data/blackboxai.desktop',
 install_subdir('data/styles',
   install_dir : get_option('datadir') / 'blackboxai')
 
+# The advertised default menu (BBAI_DEFAULT_MENU = <datadir>/blackboxai/menu).
+# A starter file so a first-run user has something to edit at that path; the
+# binary falls back to the built-in menu if it is absent, so this is a
+# convenience, not a hard runtime dependency.
+install_data('data/menu',
+  install_dir : get_option('datadir') / 'blackboxai')
+
 subdir('toolkit')
 subdir('src')
+subdir('doc')
 if get_option('tests')
   subdir('tests')
 endif
