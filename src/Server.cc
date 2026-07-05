@@ -1816,6 +1816,18 @@ namespace bbai {
   // Super+arrow keys use; ext-workspace never becomes a second source of truth
   // for switching.
   void Server::onExtWorkspaceCommit(void *data) {
+    // A client-driven switch is no more privileged than the Super+arrow it
+    // mirrors, so it honors the SAME modal gates onKey applies before dispatching
+    // a workspace binding: never while locked, and never while a modal mode owns
+    // input (open menu / screenshot-select / alt-tab cycle). The lock case is the
+    // sharp one - setCurrentWorkspace onto an empty workspace calls clearFocus(),
+    // which strips the lock surface's keyboard focus and denies password entry
+    // until a VT switch; a client could weaponize that. Refusing the whole commit
+    // leaves our exported state untouched, and the client learns its request
+    // didn't take from the state events it gets back.
+    if ((session_lock_ && session_lock_->locked()) || active_menu_ ||
+        cursor_mode == CursorMode::ScreenshotSelect || cycling_)
+      return;
     auto *ev = static_cast<wlr_ext_workspace_v1_commit_event *>(data);
     wlr_ext_workspace_v1_request *req;
     wl_list_for_each(req, ev->requests, link) {
