@@ -85,6 +85,10 @@ namespace bbai {
     // menu-wire's Act::SetStyle entrypoint.
     bool applyStyleFile(const std::string &path);
     WorkspaceModel &workspaces() { return workspaces_; }
+    // ext-workspace-v1 test seams: the handle-vector size, and a direct reconcile
+    // hook (addWorkspace() on the model alone does not sync - only the menu does).
+    size_t extWorkspaceHandleCountForTest() const { return ext_ws_handles_.size(); }
+    void syncExtWorkspacesForTest() { syncExtWorkspaces(); }
 
     // Switch to workspace i (model + toolbar label in B3; view show/hide + focus
     // restore added in B5). No-op if i is out of range or already current.
@@ -418,6 +422,19 @@ namespace bbai {
     std::unique_ptr<Slit> slit_;                // primary-output tray chrome (wave-2)
     std::unique_ptr<SessionLock> session_lock_;   // ext-session-lock-v1 (lock-idle)
     wlr_idle_notifier_v1 *idle_notifier_ = nullptr;  // ext-idle-notify-v1
+
+    // ext-workspace-v1 export (productize-v1 wave 3). ONE group spans every
+    // output (classic workspaces are head-wide). syncExtWorkspaces() reconciles
+    // the handle vector against workspaces_ after every model mutation; the
+    // commit listener carries client ACTIVATE requests back in (connected in
+    // the ctor, disconnected in ~Server before wl_display_destroy).
+    wlr_ext_workspace_manager_v1 *ext_workspace_mgr_ = nullptr;
+    wlr_ext_workspace_group_handle_v1 *ext_workspace_group_ = nullptr;
+    std::vector<wlr_ext_workspace_handle_v1 *> ext_ws_handles_;
+    bt::Listener ext_workspace_commit;
+    void syncExtWorkspaces();
+    void onExtWorkspaceCommit(void *data);
+
     Keybindings keybindings_;                   // M4 built-in keybinding table
 
     // AutoRaise: a one-shot timer armed when sloppy focus settles on a window;
