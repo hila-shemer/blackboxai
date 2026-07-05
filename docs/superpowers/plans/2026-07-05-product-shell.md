@@ -478,7 +478,7 @@ Claude-Session: https://claude.ai/code/session_01DfRfEGgpiDzryN8MWZDQeb"
 - Consumes: the COPR id `hila-shemer/blackboxai` (Task 3), the man page (Task 1, link `man blackboxai`), `docs/install.md` + `docs/gdm-session.md` (Task 5, deep links).
 - Produces: nothing other tasks consume.
 
-- [ ] **Step 1: Copy the 8 goldens into `docs/screenshots/`**
+- [x] **Step 1: Copy the 8 goldens into `docs/screenshots/`**
 
 ```bash
 cd "$WT"
@@ -492,7 +492,7 @@ ls -la docs/screenshots/
 
 Expected: 8 PNGs present. These are stable copies so a golden re-bless does not silently change README imagery.
 
-- [ ] **Step 2: Re-verify the keybinding + config-knob facts (do not trust memory)**
+- [x] **Step 2: Re-verify the keybinding + config-knob facts (do not trust memory)**
 
 ```bash
 cd "$WT"
@@ -503,7 +503,7 @@ rg -n 'setConfigOption|ConfigOption::' src/Server.cc | head   # live config-menu
 
 Expected: matches the tables in Task 1 / below. Correct any drift before writing.
 
-- [ ] **Step 3: Write `README.md`**
+- [x] **Step 3: Write `README.md`**
 
 Sections (SFW voice throughout - competent-reader, mechanism-first, honest about limits; no marketing adjectives):
 
@@ -523,7 +523,7 @@ Sections (SFW voice throughout - competent-reader, mechanism-first, honest about
 
 8. **Build/dev + license.** A "rewrite in the style of" bbidulock/blackboxwm, attributed; `bt::` gradient math ported verbatim. Link the design spec (`docs/superpowers/specs/`) and `man blackboxai`. MIT (`LICENSE`).
 
-- [ ] **Step 4: VERIFY - links resolve, images exist, no stale/false claim**
+- [x] **Step 4: VERIFY - links resolve, images exist, no stale/false claim**
 
 ```bash
 cd "$WT"
@@ -545,7 +545,7 @@ if grep -qi 'ext-workspace' README.md; then rg -q 'ext_workspace_manager_v1' src
 
 Expected: all screenshots resolve; `docs/install.md`/`docs/gdm-session.md` are the only "PENDING" (Task 5); the COPR line uses `hila-shemer`; no shade-feature or rc-keybinding claim; any ext-workspace mention is backed by real code. Render the Markdown once (any viewer) to eye the gallery and tables.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/screenshots/
