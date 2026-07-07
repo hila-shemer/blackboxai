@@ -9,6 +9,8 @@
 #include "wlr.hpp"
 
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <vector>
 
 namespace bbai {
@@ -34,6 +36,21 @@ namespace bbai {
     // The compiled-in default table (the historical M4 bindings). The default
     // ctor installs these; loadFile() replaces them with a user's keys file.
     static std::vector<Binding> builtinDefaults();
+
+    // Parse one fluxbox-style line "<modifiers> <key> :<Action> [args]".
+    // Returns the binding on success; nullopt with *err EMPTY for a blank or
+    // '#' comment line; nullopt with *err SET describing why for a malformed
+    // line. The produced (mods, sym) is in the same normalised shape dispatch()
+    // matches against. err may be null.
+    static std::optional<Binding> parseLine(const std::string &line,
+                                             std::string *err);
+
+    // Replace the table with the bindings parsed from `path` (fluxbox-style,
+    // one per line). Malformed lines are skipped with a stderr diagnostic. The
+    // reserved Ctrl+Alt+BackSpace -> Quit escape valve is installed with
+    // precedence (matched first) and cannot be shadowed by the file. Returns
+    // false and leaves the current table untouched if the file cannot be read.
+    bool loadFile(const std::string &path);
 
     // CapsLock + NumLock(Mod2) are masked out before comparing.
     static uint32_t cleanMods(uint32_t mods) {

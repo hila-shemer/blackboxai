@@ -23,6 +23,7 @@ unit_sources = files(
   'unit/screenshot_geom_test.cc',
   'unit/keycode_test.cc',
   'unit/keybinding_test.cc',
+  'unit/keybindings_file_test.cc',
   'unit/menu_geometry_test.cc',
   'unit/command_runner_test.cc',
   'unit/rootmenu_submenu_test.cc',
