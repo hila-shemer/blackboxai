@@ -62,8 +62,8 @@ and texture descriptions rather than pixmaps, so there are no image
 dependencies and the decoration cost stays small.
 .PP
 .\" ----- keybindings / workspaces overview -----
-Keybindings are built in and fixed (see KEYBINDINGS), not delegated to an
-external tool and not yet configurable from the resource file. Workspaces use
+Keybindings are built in (see KEYBINDINGS), not delegated to an external tool,
+and may be overridden by a fluxbox-style keys file. Workspaces use
 the built-in toolbar and workspace menu; there is no separate pager, though the
 compositor does export its workspace set over the ext-workspace-v1 protocol for
 an external panel that speaks it.
@@ -225,9 +225,45 @@ Ask the client to close.
 .\" * * * * * KEYBINDINGS * * * * *
 .\"
 .SH KEYBINDINGS
-Keybindings are built in and fixed in this release; they are not yet
-configurable from
-.BR ~/.blackboxrc .
+The bindings below are the built-in defaults. They can be replaced with a
+keys file: copy the shipped
+.I @pkgdatadir@/keys
+to
+.I ~/.blackboxai/keys
+and edit it, or point
+.B session.keyFile
+in
+.B ~/.blackboxrc
+at a file of your own. A keys file is authoritative \(em when one loads it
+.I replaces
+the defaults entirely (fluxbox-style), and it is re-read on reconfigure.
+.PP
+Each line is
+.RB \(dq "modifiers key " :Action " [args]" \(dq,
+for example
+.RB \(dq "Super Shift Left :SnapLeft" \(dq .
+Modifier tokens are
+.BR Super / Mod4 ,
+.BR Alt / Mod1 ,
+.BR Control / Ctrl ,
+.BR Shift ,
+.BR Mod5 ,
+and
+.BR None ;
+the key is any XKB keysym name
+.RB ( Right ", " q ", " F7 ", " space ", " BackSpace ).
+Actions are
+.BR NextWorkspace ", " PrevWorkspace ", " "Workspace N" ", " RootMenu ,
+.BR IconMenu ", " Close ", " NextWindow ", " PrevWindow ", " ToggleFullscreen ,
+.BR SnapLeft ", " SnapRight ", " "MoveToOutput " { Left | Right | Up | Down },
+.BR Screenshot ", " Quit ", and " "Exec command" .
+Blank lines and lines beginning with
+.B #
+are ignored; a malformed line is skipped with a message on standard error.
+.PP
+.B Ctrl+Alt+BackSpace
+is reserved as the emergency quit: it fires even if a keys file omits or
+rebinds it, so a bad keys file cannot wedge the session.
 .TP
 .B Super+Right / Super+Left
 Next / previous workspace.
@@ -449,6 +485,12 @@ Path to the current style file. Default is the bundled
 Path to the menu file. Default is
 .BR @defaultmenu@ .
 .TP 3
+.BI "session.keyFile" "  [filepath]"
+Path to a fluxbox-style keybindings file (see KEYBINDINGS). When set, it
+replaces the built-in bindings. Unset, the compositor reads
+.I ~/.blackboxai/keys
+if it exists, otherwise the built-in defaults apply.
+.TP 3
 .BI "rootCommand" "  [command]"
 A command run through
 .B /bin/sh
@@ -599,8 +641,16 @@ The compositor binary.
 .B ~/.blackboxrc
 Per-user resource file.
 .TP
+.B ~/.blackboxai/keys
+Per-user keybindings file, read when
+.B session.keyFile
+is unset (see KEYBINDINGS).
+.TP
 .B @defaultmenu@
 The default menu file.
+.TP
+.I @pkgdatadir@/keys
+The default keybindings, in file form \(em a copyable reference.
 .TP
 .I @pkgdatadir@/styles
 The bundled system styles (default
@@ -653,8 +703,11 @@ and
 .B slit.onTop
 are parsed but there is no menu toggle and no restack.
 .TP
-.B Keybindings are fixed.
-They are built in and not yet configurable from the resource file.
+.B Keybindings come from a keys file, not bbkeys.
+Classic Blackbox delegated keys to the external
+.B bbkeys
+tool; here they are built in and overridable by a fluxbox-style keys file
+(see KEYBINDINGS), since there is no X11 grab-based helper on Wayland.
 .\"
 .\" * * * * * AUTHORS * * * * *
 .\"

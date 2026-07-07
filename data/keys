@@ -1,0 +1,46 @@
+# BlackboxAI default keybindings.
+#
+# Copy this file to ~/.blackboxai/keys and edit it, or point session.keyFile
+# in ~/.blackboxrc at a file of your own. When a keys file loads it REPLACES
+# this whole set (it is authoritative, fluxbox-style).
+#
+# Grammar, one binding per line:
+#     <modifiers...> <key> :<Action> [args]
+#   modifiers : Super/Mod4  Alt/Mod1  Control/Ctrl  Shift  Mod5  None
+#   key       : any XKB keysym name (Right, q, F7, space, BackSpace, ...)
+#   actions   : NextWorkspace PrevWorkspace  Workspace N  RootMenu IconMenu
+#               Close  NextWindow PrevWindow  ToggleFullscreen
+#               SnapLeft SnapRight  MoveToOutput <Left|Right|Up|Down>
+#               Screenshot  Quit  Exec <command>
+# Lines starting with '#' and blank lines are ignored; a malformed line is
+# skipped with a message on stderr.
+#
+# Ctrl+Alt+BackSpace is RESERVED as the emergency "quit the compositor" key:
+# it always works even if you do not list it (and cannot be rebound away).
+
+Super Right         :NextWorkspace
+Super Left          :PrevWorkspace
+Super 1             :Workspace 1
+Super 2             :Workspace 2
+Super 3             :Workspace 3
+Super 4             :Workspace 4
+Super space         :RootMenu
+Super q             :Close
+Alt Tab             :NextWindow
+Alt Shift Tab       :PrevWindow
+Super Tab           :NextWindow
+Super Shift Tab     :PrevWindow
+Super Alt t         :IconMenu
+Super F7            :Screenshot
+Super f             :ToggleFullscreen
+Super Shift Left    :SnapLeft
+Super Shift Right   :SnapRight
+Super Control Left  :MoveToOutput Left
+Super Control Right :MoveToOutput Right
+Super Control Up    :MoveToOutput Up
+Super Control Down  :MoveToOutput Down
+Control Alt BackSpace :Quit
+
+# Bind keys to launch programs with :Exec, e.g.
+# Super e             :Exec thunar
+# Super Return        :Exec kitty

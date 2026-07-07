@@ -1,8 +1,8 @@
-// The M4 built-in keybinding table + matcher (pure; no wlroots state). Maps a
+// The keybinding table + matcher (pure; no wlroots state). Maps a
 // (modifier-mask, keysym) to a WM Action. Match is by modifier EQUALITY (after
 // stripping CapsLock/NumLock) so Mod4+Tab does not also fire on Mod4+Shift+Tab,
-// and case-insensitive on letters. Drop-in .blackboxrc keybinding parsing is M5;
-// these defaults are hardcoded.
+// and case-insensitive on letters. builtinDefaults() is the compiled-in table;
+// loadFile() replaces it with a user's fluxbox-style keys file (session.keyFile).
 #ifndef BLACKBOXAI_KEYBINDINGS_HH
 #define BLACKBOXAI_KEYBINDINGS_HH
 

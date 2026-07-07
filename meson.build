@@ -98,6 +98,12 @@ install_subdir('data/styles',
 install_data('data/menu',
   install_dir : get_option('datadir') / 'blackboxai')
 
+# The default keybindings, in file form. A copyable reference: the compositor
+# uses the compiled-in defaults when ~/.blackboxai/keys is absent, so this is
+# a starting point to copy, not a hard runtime dependency.
+install_data('data/keys',
+  install_dir : get_option('datadir') / 'blackboxai')
+
 subdir('toolkit')
 subdir('src')
 subdir('doc')

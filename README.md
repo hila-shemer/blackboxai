@@ -45,9 +45,13 @@ shell. A downloaded theme should not be able to run arbitrary commands.
 
 ## Keybindings
 
-Keybindings are built in and fixed in this release. They are not yet configurable
-from `~/.blackboxrc` - the `Keybindings.hh` header still carries an "M5" comment
-promising rc-driven bindings, but that never shipped.
+The table below is the default set. To change it, copy the shipped
+`/usr/share/blackboxai/keys` to `~/.blackboxai/keys` and edit, or point
+`session.keyFile` in `~/.blackboxrc` at a file of your own. A keys file is
+authoritative (fluxbox-style: it *replaces* the defaults), one binding per line
+`<modifiers> <key> :<Action> [args]`. `Ctrl+Alt+BackSpace` is reserved as the
+emergency quit and always works. Beyond the built-in actions, `:Exec <command>`
+binds a key to launch a program. See `man blackboxai` for the full grammar.
 
 | Keys | Action |
 | --- | --- |
@@ -117,7 +121,6 @@ Named honestly, each with its reason:
   display server, so there is no separate X server to outlive the windows.
 - **`toolbar.onTop` / `slit.onTop` are inert** - read from the rc file, but there
   is no menu toggle and no restack, so no lying toggle is shown.
-- **Keybindings are fixed**, not yet rc-configurable.
 - **Workspace count is grow-only** on a live reconfigure.
 - **The screen locker is external** - locking and idle are protocol-only
   (`ext-session-lock-v1` + `ext-idle-notify-v1`); pair it with `swaylock` /
