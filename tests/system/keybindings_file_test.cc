@@ -92,3 +92,28 @@ TEST_CASE("reconfigure() re-reads an edited keys file live") {
   std::remove(keys.c_str());
   std::remove(rc.c_str());
 }
+
+TEST_CASE("reconfigure() reverts to built-in defaults when the keys file is gone") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  const std::string keys = std::string(std::tmpnam(nullptr)) + ".keys";
+  const std::string rc   = std::string(std::tmpnam(nullptr)) + ".blackboxrc";
+  writeFile(keys, "Super n :NextWorkspace\n");   // no Super+Right in this file
+  writeFile(rc, "session.keyFile: " + keys + "\n");
+
+  Server server(/*headless=*/true, rc);
+  REQUIRE(server.ok());
+  server.injectKeyForTest(XKB_KEY_Right, SUPER, true);   // not bound by the file
+  CHECK(server.currentWorkspaceForTest() == 0);
+
+  // Delete the file and reconfigure: the built-in defaults must come back
+  // (Super+Right -> NextWorkspace again), not the stale custom table.
+  std::remove(keys.c_str());
+  server.reconfigure("");
+  server.injectKeyForTest(XKB_KEY_Right, SUPER, true);
+  CHECK(server.lastActionForTest() == Action::WorkspaceNext);
+  CHECK(server.currentWorkspaceForTest() == 1);
+
+  std::remove(rc.c_str());
+}

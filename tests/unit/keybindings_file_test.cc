@@ -36,6 +36,7 @@ TEST_CASE("modifiers: aliases and fluxbox tokens both resolve") {
   CHECK(Keybindings::parseLine("None space :RootMenu", &err)->mods == 0);
   CHECK(Keybindings::parseLine("Super Shift Left :SnapLeft", &err)->mods
         == (WLR_MODIFIER_LOGO | WLR_MODIFIER_SHIFT));
+  CHECK(Keybindings::parseLine("Mod5 x :Close", &err)->mods == WLR_MODIFIER_MOD5);
 }
 
 TEST_CASE("keysym resolves case-insensitively") {
@@ -90,6 +91,37 @@ TEST_CASE("Exec with no command is malformed") {
   CHECK_FALSE(Keybindings::parseLine("Super e :Exec", &err).has_value());
   CHECK_FALSE(err.empty());
   CHECK_FALSE(Keybindings::parseLine("Super e :Exec   ", &err).has_value());
+}
+
+TEST_CASE("Exec tolerates whitespace between the colon and the action token") {
+  std::string err;
+  // A space after ':' must not bleed the literal "Exec" into the command.
+  CHECK(Keybindings::parseLine("Super e : Exec kitty", &err)->action.exec == "kitty");
+  CHECK(Keybindings::parseLine("Super e :\tExec kitty --flag", &err)->action.exec
+        == "kitty --flag");
+}
+
+TEST_CASE("Shift+Tab in a keys file matches a real ISO_Left_Tab press") {
+  Keybindings kb;
+  auto p = writeTmp("Alt Shift Tab :PrevWindow\n");
+  REQUIRE(kb.loadFile(p));
+  // parseLine stores the Tab keysym; a real shifted Tab press arrives as
+  // XKB_KEY_ISO_Left_Tab. dispatch() folds them so the binding still fires.
+  CHECK(kb.dispatch(WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT, XKB_KEY_ISO_Left_Tab).kind
+        == Action::CyclePrev);
+  CHECK(kb.dispatch(WLR_MODIFIER_ALT | WLR_MODIFIER_SHIFT, XKB_KEY_Tab).kind
+        == Action::CyclePrev);
+  std::remove(p.c_str());
+}
+
+TEST_CASE("CRLF line endings do not corrupt an Exec command") {
+  Keybindings kb;
+  auto p = writeTmp("Super e :Exec kitty\r\nSuper n :NextWorkspace\r\n");
+  REQUIRE(kb.loadFile(p));
+  CHECK(kb.dispatch(WLR_MODIFIER_LOGO, XKB_KEY_e).kind == Action::Exec);
+  CHECK(kb.dispatch(WLR_MODIFIER_LOGO, XKB_KEY_e).exec == "kitty");   // no trailing \r
+  CHECK(kb.dispatch(WLR_MODIFIER_LOGO, XKB_KEY_n).kind == Action::WorkspaceNext);
+  std::remove(p.c_str());
 }
 
 TEST_CASE("blank and comment lines are silently skipped") {

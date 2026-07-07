@@ -125,12 +125,17 @@ Unknown action token, missing required arg (`:Workspace` with no number,
     be opened, so the caller falls back to defaults.
 
 ### Config (`src/Config.hh` / `.cc`)
-- `Config.hh:60` (session-file-paths block, after `menuFile`): add
-  `std::string keyFile;   // session.keyFile; default ~/.blackboxai/keys`.
-- `Config.cc:83` (after the `menuFile` read): add
+- `Config.hh` (session-file-paths block, after `menuFile`): add
+  `std::string keyFile;` with an **empty** compiled default (not
+  `~/.blackboxai/keys`). Rationale: the default is a user-home path, and baking
+  it into Config would make headless auto-load a dev box's real keys file into
+  the golden suite. So Config stays deterministic (empty unless the rc sets it),
+  and **Server** resolves `~/.blackboxai/keys` — and only when not headless,
+  exactly mirroring the rc-discovery stance.
+- `Config.cc` (after the `menuFile` read):
   `cfg.keyFile = bt::expandTilde(res.read("session.keyFile", "Session.KeyFile",
-  "~/.blackboxai/keys"));` — note the `Session.KeyFile` **class** capitalisation;
-  `expandTilde` (already included via `Util.hh`) because it is a path.
+  ""));` — note the `Session.KeyFile` **class** capitalisation; `expandTilde`
+  (already included via `Util.hh`) still applies to an explicitly-set path.
 - Read-only key ⇒ **no** `ConfigSpelling.hh` / config-menu writer changes.
 
 ### Server (`src/Server.cc`)

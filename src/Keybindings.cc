@@ -34,6 +34,16 @@ namespace bbai {
       if (k == "down")  { out = WLR_DIRECTION_DOWN;  return true; }
       return false;
     }
+
+    // Case-fold, then fold ISO_Left_Tab (the keysym a physical Shift+Tab emits)
+    // onto Tab, so a keys-file "Shift Tab" binding - which names the Tab keysym -
+    // matches the real shifted press. The SHIFT modifier bit still distinguishes
+    // Tab from Shift+Tab, so this only unifies the same physical key.
+    xkb_keysym_t canonSym(xkb_keysym_t sym) {
+      sym = xkb_keysym_to_lower(sym);
+      if (sym == XKB_KEY_ISO_Left_Tab) sym = XKB_KEY_Tab;
+      return sym;
+    }
   } // namespace
 
   std::vector<Keybindings::Binding> Keybindings::builtinDefaults() {
@@ -127,14 +137,14 @@ namespace bbai {
     } else if (a == "exec") {
       // The command is the rest of the line after the "Exec" token, verbatim
       // (may contain spaces/quotes) - not tokenised, since /bin/sh -c parses it.
-      const std::string rest = line.substr(colon + 1);   // "Exec <cmd...>"
-      const size_t after = rest.find_first_of(" \t");
-      const size_t cmd0 = (after == std::string::npos)
-                            ? std::string::npos
-                            : rest.find_first_not_of(" \t", after);
+      // Read it from the same stream that already consumed "Exec", so leading
+      // whitespace after the colon (": Exec cmd") cannot bleed into the command.
+      std::string cmd;
+      std::getline(rs, cmd);
+      const size_t cmd0 = cmd.find_first_not_of(" \t");
       if (cmd0 == std::string::npos) return fail("Exec needs a command");
       act.kind = Action::Exec;
-      act.exec = rest.substr(cmd0);
+      act.exec = cmd.substr(cmd0);
     } else {
       return fail("unknown action");
     }
@@ -155,6 +165,7 @@ namespace bbai {
     int lineno = 0;
     while (std::getline(in, line)) {
       ++lineno;
+      if (!line.empty() && line.back() == '\r') line.pop_back();  // tolerate CRLF
       std::string err;
       if (auto b = parseLine(line, &err))
         next.push_back(*b);
@@ -168,9 +179,9 @@ namespace bbai {
 
   Action Keybindings::dispatch(uint32_t mods, xkb_keysym_t sym) const {
     const uint32_t m = cleanMods(mods);
-    const xkb_keysym_t s = xkb_keysym_to_lower(sym);
+    const xkb_keysym_t s = canonSym(sym);
     for (const Binding &b : bindings_)
-      if (cleanMods(b.mods) == m && xkb_keysym_to_lower(b.sym) == s)
+      if (cleanMods(b.mods) == m && canonSym(b.sym) == s)
         return b.action;
     return {};
   }
