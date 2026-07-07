@@ -5,11 +5,13 @@
 #include <doctest/doctest.h>
 #include "HeadlessFixture.hh"
 #include "Server.hh"
+#include "CommandRunner.hh"
 
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <vector>
 
 using namespace bbai;
 
@@ -47,6 +49,21 @@ TEST_CASE("the reserved escape valve survives an authoritative keys file") {
   server.injectKeyForTest(XKB_KEY_BackSpace, WLR_MODIFIER_CTRL | WLR_MODIFIER_ALT, true);
   CHECK(server.lastActionForTest() == Action::Quit);
   server.dispatch();   // terminate() drains cleanly
+}
+
+TEST_CASE("an :Exec binding spawns its command through the command runner") {
+  setenv("WLR_BACKENDS", "headless", 1);
+  setenv("WLR_RENDERER", "pixman", 1);
+
+  Server server(/*headless=*/true, "tests/fixtures/keys-exec.blackboxrc");
+  REQUIRE(server.ok());
+  FakeCommandRunner fake;
+  server.setCommandRunnerForTest(&fake);
+
+  server.injectKeyForTest(XKB_KEY_e, SUPER, /*pressed=*/true);   // Super+e :Exec kitty
+  CHECK(server.lastActionForTest() == Action::Exec);
+  CHECK(fake.runCount() == 1);
+  CHECK(fake.lastCommand() == std::vector<std::string>{"/bin/sh", "-c", "kitty"});
 }
 
 TEST_CASE("reconfigure() re-reads an edited keys file live") {

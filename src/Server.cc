@@ -1704,6 +1704,11 @@ namespace bbai {
     case Action::SnapLeft:     snapFocused(WLR_EDGE_LEFT);  break;
     case Action::SnapRight:    snapFocused(WLR_EDGE_RIGHT); break;
     case Action::MoveToOutput: moveFocusedToOutput(static_cast<wlr_direction>(a.arg)); break;
+    case Action::Exec:
+      // User-authored keys file, so /bin/sh is fine (same stance as rc
+      // rootCommand). Routes through commandRunner() so headless records it.
+      commandRunner().run({"/bin/sh", "-c", a.exec});
+      break;
     case Action::None:      break;
     }
   }
