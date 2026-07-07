@@ -163,14 +163,19 @@ TEST_CASE("style/menu file keys expand tilde; absent keys take the compiled defa
   setenv("HOME", "/home/tester", 1);
   Config c = parse(
     "session.styleFile: ~/.blackbox/styles/Night\n"
-    "session.menuFile:  ~/.bbmenu\n");
+    "session.menuFile:  ~/.bbmenu\n"
+    "session.keyFile:   ~/.mykeys\n");
   CHECK(c.styleFile == "/home/tester/.blackbox/styles/Night");
   CHECK(c.menuFile == "/home/tester/.bbmenu");
+  CHECK(c.keyFile == "/home/tester/.mykeys");
 
   Config d = parse("");
   // Defaults come from the meson defines (install paths); pin the tails.
   CHECK(d.styleFile.find("styles/Results") != std::string::npos);
   CHECK(d.menuFile.find("blackboxai/menu") != std::string::npos);
+  // keyFile has no compiled default - it stays empty unless the rc sets it
+  // (Server resolves ~/.blackboxai/keys, non-headless only).
+  CHECK(d.keyFile.empty());
 }
 
 TEST_CASE("rc rootCommand and strftimeFormat parse") {

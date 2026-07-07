@@ -58,6 +58,8 @@ namespace bbai {
     // --- session file paths (tilde-expanded) ---
     std::string styleFile;   // session.styleFile; default BBAI_DEFAULT_STYLE
     std::string menuFile;    // session.menuFile;  default BBAI_DEFAULT_MENU
+    std::string keyFile;     // session.keyFile; empty unless set (Server resolves
+                             // the default ~/.blackboxai/keys, non-headless only)
 
     // rc-file rootCommand - user-authored, run via /bin/sh by the Server.
     // (The STYLE file's rootCommand never reaches a shell - see Style.)

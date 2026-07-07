@@ -81,6 +81,11 @@ namespace bbai {
       res.read("session.styleFile", "Session.StyleFile", BBAI_DEFAULT_STYLE));
     cfg.menuFile = bt::expandTilde(
       res.read("session.menuFile", "Session.MenuFile", BBAI_DEFAULT_MENU));
+    // Empty default: Server resolves ~/.blackboxai/keys itself, and only when
+    // not headless - a user-home keys file must not leak into the golden suite
+    // (same stance as rc discovery). An explicit key expands its tilde here.
+    cfg.keyFile = bt::expandTilde(
+      res.read("session.keyFile", "Session.KeyFile", ""));
     cfg.rootCommand = res.read("rootCommand", "RootCommand", "");
 
     // --- focus model ---
