@@ -94,6 +94,7 @@ namespace bbai {
     config_ = bbai::Config::load(rc_path_);
     style_ = loadStyleWithFallback(config_.styleFile);
     menu_file_ = config().menuFile;   // tilde-expanded by Config (rc-style contract)
+    loadKeybindings();
 
     // Workspace count/names from the rc. Applied before any output exists so
     // the toolbar's first render already shows the configured name. The shrink
@@ -412,11 +413,25 @@ namespace bbai {
     if (slit_) slit_->restyle();   // after the toolbar: repositions against its new rect
   }
 
+  void Server::loadKeybindings() {
+    keybindings_ = Keybindings{};     // reset to the built-in defaults
+    std::string path = config_.keyFile;
+    // Resolve the default ~/.blackboxai/keys only outside headless, so a dev
+    // box's real keys file cannot leak into the golden suite (same stance as
+    // rc discovery). An explicit session.keyFile is always honored.
+    if (path.empty() && !headless)
+      if (const char *home = getenv("HOME"))
+        path = std::string(home) + "/.blackboxai/keys";
+    if (!path.empty())
+      keybindings_.loadFile(path);    // false -> the built-in defaults stand
+  }
+
   bool Server::reconfigure(const std::string &rc_override) {
     if (!rc_override.empty()) rc_path_ = rc_override;
     config_ = bbai::Config::load(rc_path_);
     menu_file_ = config().menuFile;
     menu_loaded_ = false;             // classic reconfigure re-parses the menu
+    loadKeybindings();                // re-read the keys file live
     bool style_ok = true;
     style_ = loadStyleWithFallback(config_.styleFile, &style_ok);
     applyConfig();

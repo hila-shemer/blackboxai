@@ -308,6 +308,10 @@ namespace bbai {
     void removeKeyboard(Keyboard *kb);
     bool dispatchBinding(uint32_t mods, xkb_keysym_t sym);  // true if a binding fired
     void executeAction(const Action &a);
+    // (Re)build keybindings_: reset to the built-in defaults, then apply the
+    // keys file - config_.keyFile if set, else ~/.blackboxai/keys when not
+    // headless. Called at boot and on reconfigure.
+    void loadKeybindings();
     void notifyIdleActivity();   // ext-idle-notify: call at EVERY input-funnel entry
     void cycleWorkspace(int delta);
     // menu modal helpers

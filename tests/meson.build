@@ -204,6 +204,13 @@ ws_switch_exe = executable('workspace-switch-test', files('system/workspace_swit
 test('workspace_switch', ws_switch_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# session.keyFile: a user keys file rebinds chords through the real onKey path,
+# the reserved escape valve survives, reconfigure() re-reads it live. Nonvisual.
+kbfile_exe = executable('keybindings-file-test', files('system/keybindings_file_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('keybindings_file', kbfile_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : test_env)
+
 # MRU alt-tab: cycle session state machine via injected seams (focus + MRU order,
 # preview vs commit, wraparound, cancel, cross-workspace commit). Nonvisual.
 alttab_exe = executable('alttab-test', files('system/alttab_test.cc'),
