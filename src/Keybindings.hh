@@ -20,10 +20,12 @@ namespace bbai {
       None, WorkspaceNext, WorkspacePrev, WorkspaceTo,
       OpenMenu, CloseWindow, CycleNext, CyclePrev,
       IconMenu, Screenshot, Quit,
-      ToggleFullscreen, SnapLeft, SnapRight, MoveToOutput
+      ToggleFullscreen, SnapLeft, SnapRight, MoveToOutput,
+      Exec              // spawn `exec` via /bin/sh -c (keys-file :Exec only)
     };
     Kind kind = None;
-    int arg = 0;     // workspace index for WorkspaceTo; wlr_direction for MoveToOutput
+    int arg = 0;         // workspace index for WorkspaceTo; wlr_direction for MoveToOutput
+    std::string exec;    // shell command for Exec (rest of the :Exec line, verbatim)
   };
 
   class Keybindings {

@@ -124,6 +124,17 @@ namespace bbai {
       if (!(rs >> d) || !dirToken(d, dir)) return fail("MoveToOutput needs a direction");
       act.kind = Action::MoveToOutput;
       act.arg  = dir;
+    } else if (a == "exec") {
+      // The command is the rest of the line after the "Exec" token, verbatim
+      // (may contain spaces/quotes) - not tokenised, since /bin/sh -c parses it.
+      const std::string rest = line.substr(colon + 1);   // "Exec <cmd...>"
+      const size_t after = rest.find_first_of(" \t");
+      const size_t cmd0 = (after == std::string::npos)
+                            ? std::string::npos
+                            : rest.find_first_not_of(" \t", after);
+      if (cmd0 == std::string::npos) return fail("Exec needs a command");
+      act.kind = Action::Exec;
+      act.exec = rest.substr(cmd0);
     } else {
       return fail("unknown action");
     }

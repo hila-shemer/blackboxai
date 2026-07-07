@@ -75,6 +75,23 @@ TEST_CASE("actions and args") {
   CHECK(parseAction("Super Control Down :MoveToOutput down").arg == WLR_DIRECTION_DOWN);
 }
 
+TEST_CASE("Exec captures the command verbatim (spaces preserved)") {
+  std::string err;
+  auto b = Keybindings::parseLine("Super e :Exec thunar --new-window ~/dir", &err);
+  REQUIRE_MESSAGE(b.has_value(), err);
+  CHECK(b->action.kind == Action::Exec);
+  CHECK(b->action.exec == "thunar --new-window ~/dir");
+  // extra spaces after :Exec are trimmed from the front of the command
+  CHECK(Keybindings::parseLine("Super e :Exec    kitty", &err)->action.exec == "kitty");
+}
+
+TEST_CASE("Exec with no command is malformed") {
+  std::string err;
+  CHECK_FALSE(Keybindings::parseLine("Super e :Exec", &err).has_value());
+  CHECK_FALSE(err.empty());
+  CHECK_FALSE(Keybindings::parseLine("Super e :Exec   ", &err).has_value());
+}
+
 TEST_CASE("blank and comment lines are silently skipped") {
   std::string err;
   CHECK_FALSE(Keybindings::parseLine("", &err).has_value());     CHECK(err.empty());
