@@ -26,8 +26,14 @@ namespace bbai {
 
   class Keybindings {
   public:
-    Keybindings();                                       // installs the M4 defaults
+    struct Binding { uint32_t mods; xkb_keysym_t sym; Action action; };
+
+    Keybindings();                                       // installs the built-in defaults
     Action dispatch(uint32_t mods, xkb_keysym_t sym) const;
+
+    // The compiled-in default table (the historical M4 bindings). The default
+    // ctor installs these; loadFile() replaces them with a user's keys file.
+    static std::vector<Binding> builtinDefaults();
 
     // CapsLock + NumLock(Mod2) are masked out before comparing.
     static uint32_t cleanMods(uint32_t mods) {
@@ -36,7 +42,6 @@ namespace bbai {
     }
 
   private:
-    struct Binding { uint32_t mods; xkb_keysym_t sym; Action action; };
     std::vector<Binding> bindings_;
   };
 

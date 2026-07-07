@@ -20,6 +20,15 @@ TEST_CASE("default bindings map to the expected actions") {
   CHECK(ws3.arg == 2);              // "3" -> index 2
 }
 
+TEST_CASE("builtinDefaults matches the constructed table") {
+  Keybindings kb;
+  CHECK(kb.dispatch(SUPER, XKB_KEY_Right).kind == Action::WorkspaceNext);
+  Action ws1 = kb.dispatch(SUPER, XKB_KEY_1);
+  CHECK(ws1.kind == Action::WorkspaceTo);
+  CHECK(ws1.arg == 0);
+  CHECK(Keybindings::builtinDefaults().size() >= 20);
+}
+
 TEST_CASE("modifier match is by equality, not subset") {
   Keybindings kb;
   // Super+Tab is CycleNext; Super+Shift+Tab is CyclePrev (must not fire CycleNext).

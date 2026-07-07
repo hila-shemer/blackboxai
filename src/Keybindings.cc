@@ -2,12 +2,12 @@
 
 namespace bbai {
 
-  Keybindings::Keybindings() {
+  std::vector<Keybindings::Binding> Keybindings::builtinDefaults() {
     const uint32_t SUPER = WLR_MODIFIER_LOGO;
     const uint32_t ALT   = WLR_MODIFIER_ALT;
     const uint32_t SHIFT = WLR_MODIFIER_SHIFT;
     const uint32_t CTRL  = WLR_MODIFIER_CTRL;
-    bindings_ = {
+    return {
       { SUPER,         XKB_KEY_Right, { Action::WorkspaceNext } },
       { SUPER,         XKB_KEY_Left,  { Action::WorkspacePrev } },
       { SUPER,         XKB_KEY_1,     { Action::WorkspaceTo, 0 } },
@@ -34,6 +34,8 @@ namespace bbai {
       { SUPER | CTRL,  XKB_KEY_Down,  { Action::MoveToOutput, WLR_DIRECTION_DOWN } },
     };
   }
+
+  Keybindings::Keybindings() { bindings_ = builtinDefaults(); }
 
   Action Keybindings::dispatch(uint32_t mods, xkb_keysym_t sym) const {
     const uint32_t m = cleanMods(mods);
