@@ -396,6 +396,7 @@ namespace bbai {
     std::string socket_name;
     wlr_session *session_ = nullptr;   // libseat/VT session (DRM only; null nested/headless)
     bt::Listener session_active;       // VT-switch active/inactive -> re-render on resume
+    bt::Listener session_destroy;      // runtime libseat death: drop session_active pre-assert
     bt::Listener new_output;
     bt::Listener new_xdg_toplevel;
     bt::Listener new_toplevel_decoration;

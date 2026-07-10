@@ -127,6 +127,16 @@ namespace bbai {
         if (session_ && session_->active)
           for (Output *o : outputs_) o->scheduleFrame();
       });
+      // wlroots destroys the session AT RUNTIME on libseat death (logind
+      // restart, seatd crash) - not just at backend finish - and
+      // wlr_session_destroy asserts the active listener list is empty right
+      // after emitting this signal. Disconnect or the recovery path is an
+      // abort. Our own disconnect goes last (last-statement rule).
+      session_destroy.connect(&session_->events.destroy, [this](void *) {
+        session_ = nullptr;
+        session_active.disconnect();
+        session_destroy.disconnect();
+      });
     }
 
     renderer = wlr_renderer_autocreate(backend);
@@ -582,6 +592,7 @@ namespace bbai {
     // listeners point into backend/surface signals that wlr_*_finish asserts
     // are empty.
     session_active.disconnect();   // points into session->events; drop before backend finish
+    session_destroy.disconnect();
     new_output.disconnect();
     ext_workspace_commit.disconnect();   // the manager's display_destroy handler
                                          // asserts an empty commit-listener list;
