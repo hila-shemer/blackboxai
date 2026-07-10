@@ -1,4 +1,5 @@
 #include "Server.hh"
+#include "Crash.hh"
 
 #include <cstring>
 #include <cstdio>
@@ -6,7 +7,14 @@
 #include <unistd.h>   // execvp
 #include <vector>
 
+#include <wlr/util/log.h>
+
 int main(int argc, char **argv) {
+  // Forensics first: breadcrumb on fatal signals (journald keeps it), wlroots
+  // logging on stderr at INFO so the journal has context leading up to one.
+  bbai::crash::installHandlers();
+  wlr_log_init(WLR_INFO, nullptr);
+
   bool headless = false;
   std::string rc;
   for (int i = 1; i < argc; ++i) {

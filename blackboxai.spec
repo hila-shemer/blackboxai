@@ -37,6 +37,10 @@ BuildRequires:  pkgconfig(libpng)
 # recommended external locker, hence a soft dep, not a hard Requires.
 Recommends:     swaylock
 
+# Crash forensics depend on the auto-generated -debuginfo subpackage: a
+# compositor crash takes the whole session down, and the journal breadcrumb +
+# coredumpctl backtrace are the only witnesses. Never disable debug_package.
+
 %description
 BlackboxAI is a from-scratch Wayland compositor that reproduces the classic
 Blackbox window-manager identity - texture and gradient theming, the toolbar,

@@ -14,6 +14,7 @@ unit_sources = files(
   'unit/text_boundary_test.cc',
   'unit/wlr_headers_test.cc',
   'unit/frame_geometry_test.cc',
+  'unit/crash_test.cc',
   'unit/stackinglist_test.cc',
   'unit/mru_test.cc',
   'unit/workspace_test.cc',

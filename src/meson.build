@@ -15,6 +15,7 @@ bbai_lib = static_library('bbai',
   files(
     'ClipboardImage.cc',
     'Config.cc',
+    'Crash.cc',
     'Style.cc',
     'DataBuffer.cc',
     'Screenshot.cc',
