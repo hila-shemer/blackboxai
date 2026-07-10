@@ -9,7 +9,12 @@ namespace bbai {
 
   namespace {
     // One in-flight paste: owns its own ref to the bytes + the write fd + source.
+    // display_destroy is FIRST so the wl_listener callback can cast back - the
+    // event loop frees remaining sources at display destroy WITHOUT any user
+    // callback, so a paste parked on a slow reader would leak Writer+fd+blob
+    // at shutdown unless we hook the display's own death.
     struct Writer {
+      wl_listener display_destroy = {};
       ClipboardImage::Blob png;
       size_t offset = 0;
       int fd = -1;
@@ -17,9 +22,14 @@ namespace bbai {
     };
 
     void writerFinish(Writer *w) {
+      wl_list_remove(&w->display_destroy.link);
       if (w->src) wl_event_source_remove(w->src);   // remove BEFORE close
       if (w->fd >= 0) close(w->fd);
       delete w;
+    }
+
+    void writerDisplayDestroy(wl_listener *l, void *) {
+      writerFinish(reinterpret_cast<Writer *>(l));  // display_destroy is first
     }
 
     int writerCb(int fd, uint32_t mask, void *data) {
@@ -43,10 +53,14 @@ namespace bbai {
       if (!mime || std::strcmp(mime, "image/png") != 0 || !ci->png) { close(fd); return; }
       const int flags = fcntl(fd, F_GETFL, 0);
       fcntl(fd, F_SETFL, (flags < 0 ? 0 : flags) | O_NONBLOCK);   // paste fd arrives BLOCKING
-      auto *w = new Writer{ ci->png, 0, fd, nullptr };
+      auto *w = new Writer{};
+      w->png = ci->png;
+      w->fd = fd;
       wl_event_loop *loop = wl_display_get_event_loop(ci->display);
       w->src = wl_event_loop_add_fd(loop, fd, WL_EVENT_WRITABLE, writerCb, w);
       if (!w->src) { close(fd); delete w; return; }   // add_fd OOM: don't leak fd+Writer
+      w->display_destroy.notify = writerDisplayDestroy;
+      wl_display_add_destroy_listener(ci->display, &w->display_destroy);
     }
 
     void ciDestroy(wlr_data_source *source) {
