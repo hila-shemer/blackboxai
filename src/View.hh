@@ -116,7 +116,7 @@ namespace bbai {
     bool mapped = false;
     bool draw_frame = true;   // default SSD; a CLIENT_SIDE request flips this off
     bool focused_ = false;
-    bt::Listener map_, unmap_, commit_, destroy_;
+    bt::Listener map_, unmap_, commit_;
     bt::Listener deco_request_mode_, deco_destroy_;
     bt::Listener req_maximize_, req_fullscreen_, req_minimize_, req_move_, req_resize_;
     // The xdg_toplevel role can be destroyed before the wl_surface (a client

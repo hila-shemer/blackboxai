@@ -143,6 +143,13 @@ client_exe = executable('client-test', files('system/client_test.cc'),
 test('client', client_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Role-before-surface teardown (dogfooding crash 2026-07-10): destroying the
+# xdg_toplevel must remove the View; a later bare-surface commit must be inert.
+role_teardown_exe = executable('role-teardown-test', files('system/role_teardown_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('role-teardown', role_teardown_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # M3 decoration frame: a mapped SSD client gets a pixel-accurate Blackbox frame.
 frame_exe = executable('frame-test', files('system/frame_test.cc'),
   dependencies : [harness_dep, doctest_dep])

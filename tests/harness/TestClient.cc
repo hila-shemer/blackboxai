@@ -221,6 +221,20 @@ namespace bbai::test {
     wl_display_flush(impl->display);
   }
 
+  void TestClient::destroyToplevelKeepSurface() {
+    if (!impl->display) return;
+    if (impl->decoration) { zxdg_toplevel_decoration_v1_destroy(impl->decoration); impl->decoration = nullptr; }
+    if (impl->toplevel) { xdg_toplevel_destroy(impl->toplevel); impl->toplevel = nullptr; }
+    if (impl->xdgsurf)  { xdg_surface_destroy(impl->xdgsurf);   impl->xdgsurf = nullptr; }
+    wl_display_flush(impl->display);
+  }
+
+  void TestClient::commitBareSurface() {
+    if (!impl->display || !impl->surface) return;
+    wl_surface_commit(impl->surface);
+    wl_display_flush(impl->display);
+  }
+
   void TestClient::setFullscreen(bool on) {
     if (!impl || !impl->toplevel) return;
     if (on) xdg_toplevel_set_fullscreen(impl->toplevel, nullptr);

@@ -38,6 +38,10 @@ namespace bbai::test {
     void flush();        // push queued client requests to the compositor
     void pump();         // non-blocking: read+dispatch server events, advance state
     void closeWindow();  // destroy the toplevel/surface (server should drop the View)
+    // Tear down the xdg role objects (decoration/toplevel/xdg_surface) but KEEP
+    // the wl_surface — the role-before-surface teardown some real clients do.
+    void destroyToplevelKeepSurface();
+    void commitBareSurface();   // commit the surviving role-less wl_surface
     void destroyDecorationForTest();  // destroy ONLY the decoration object (keep the toplevel)
     void setFullscreen(bool on);   // xdg_toplevel.set_fullscreen / unset_fullscreen
     void setMaximized(bool on);    // xdg_toplevel.set_maximized / unset_maximized
