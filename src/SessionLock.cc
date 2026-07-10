@@ -84,11 +84,15 @@ namespace bbai {
     // destroyOutputForTest made headless output destruction drivable).
     po->output_destroy.connect(&o->wlrOutput()->events.destroy,
                                [this, p = po.get()](void *) {
+      // The erase frees the PerOutput that SBO-stores this very closure -
+      // stack-copy the captures first, and read none after the erase (the
+      // same last-statement rule as the SurfaceEntry destroy handler).
+      SessionLock *self = this;
       if (p->blank) wlr_scene_node_destroy(&p->blank->node);
-      std::erase_if(per_output_, [p](const std::unique_ptr<PerOutput> &q) {
+      std::erase_if(self->per_output_, [p](const std::unique_ptr<PerOutput> &q) {
         return q.get() == p;
       });
-      maybeSendLocked();
+      self->maybeSendLocked();   // one fewer head to wait on - may send now
     });
     per_output_.push_back(std::move(po));
     o->scheduleFrame();   // don't wait for organic damage-driven scheduling

@@ -198,9 +198,11 @@ namespace bbai {
     deco_destroy_.connect(&d->events.destroy, [this](void *) {
       // The decoration object is going away; drop our listeners and forget it.
       // Keep the current draw_frame (don't surprise-redecorate a CSD client).
+      // Order matters: disconnecting deco_destroy_ destroys THIS closure, so
+      // it must be the last capture-reading statement (last-statement rule).
+      decoration = nullptr;
       deco_request_mode_.disconnect();
       deco_destroy_.disconnect();
-      decoration = nullptr;
     });
     chooseDecorationMode();
     if (mapped) relayout();
