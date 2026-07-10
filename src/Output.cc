@@ -93,7 +93,14 @@ namespace bbai {
     DataBuffer *buf = DataBuffer::create(w, h, std::move(px));
     bg = wlr_scene_buffer_create(server.layer_background, buf->base());
     wlr_buffer_drop(buf->base());  // scene_buffer took its own ref
-    wlr_scene_node_set_position(&bg->node, 0, 0);
+    repositionBackground();        // layer_background is layout-coordinate space
+  }
+
+  void Output::repositionBackground() {
+    if (!bg) return;
+    const wlr_box box = fullBox();
+    if (box.width == 0) return;   // leaving the layout (destroy path) - moot
+    wlr_scene_node_set_position(&bg->node, box.x, box.y);
   }
 
 } // namespace bbai

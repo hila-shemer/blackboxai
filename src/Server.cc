@@ -155,6 +155,11 @@ namespace bbai {
     scene = wlr_scene_create();
     output_layout = wlr_output_layout_create(display);
     scene_layout = wlr_scene_attach_output_layout(scene, output_layout);
+    // Auto-layout reflows sibling heads on add/remove; every background must
+    // chase its box (each Output paints its own bg during construction).
+    layout_change.connect(&output_layout->events.change, [this](void *) {
+      for (Output *o : outputs_) o->repositionBackground();
+    });
 
     layer_background = wlr_scene_tree_create(&scene->tree);
     layer_bottom     = wlr_scene_tree_create(&scene->tree);
@@ -589,6 +594,7 @@ namespace bbai {
     cursor_button.disconnect();
     cursor_frame.disconnect();
     cursor_axis.disconnect();
+    layout_change.disconnect();
     request_set_selection.disconnect();          // wlr_seat_destroy asserts both
     request_set_primary_selection.disconnect();  // request listener lists empty
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish

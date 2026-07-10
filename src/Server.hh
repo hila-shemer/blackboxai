@@ -401,6 +401,7 @@ namespace bbai {
     bt::Listener new_input;
     bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame, cursor_axis;
     bt::Listener request_set_selection, request_set_primary_selection;
+    bt::Listener layout_change;        // auto-layout reflow -> re-anchor backgrounds
     Output *active_output = nullptr;            // the primary (first) head: toolbar + work-area
     std::vector<Output *> outputs_;             // every lit head (M7); each self-deletes on its output's destroy
     std::vector<std::unique_ptr<View>> views;   // mapped client windows

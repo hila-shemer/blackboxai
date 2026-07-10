@@ -43,6 +43,19 @@ namespace bbai {
     // drops the previous buffer first - so reconfigure() can call it live.
     void renderBackground();
 
+    // Snap the (already rendered) background to the head's current layout box
+    // - the auto layout reflows sibling heads on add/remove. No-op before the
+    // first render or while this head is leaving the layout.
+    void repositionBackground();
+
+    // test-only: the background buffer's layout position + pixel size.
+    wlr_box backgroundBoxForTest() const {
+      if (!bg) return {};
+      return {bg->node.x, bg->node.y,
+              bg->buffer ? bg->buffer->width : 0,
+              bg->buffer ? bg->buffer->height : 0};
+    }
+
   private:
     Server &server;
     wlr_output *output;
