@@ -42,3 +42,38 @@ jobs:
             tests/golden/*-actual.png
             tests/golden/*-diff.png
             coverage.xml
+
+  # Sanitizer floor (lifetime-hardening spec, Phase 0): the whole suite under
+  # ASAN+UBSAN. Leak checking stays OFF - UAF is the target, wlroots-global
+  # leaks are noise. Locally: meson setup build-asan -Db_sanitize=address,undefined
+  # -Dbuildtype=debug, then ASAN_OPTIONS=detect_leaks=0 meson test -C build-asan.
+  sanitizers:
+    runs-on: ubuntu-latest
+    container: fedora:44
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: deps
+        run: >
+          dnf install -y meson ninja-build gcc-c++ pkgconf-pkg-config
+          wlroots-devel wayland-devel wayland-protocols-devel pixman-devel
+          libdrm-devel libxkbcommon-devel libpng-devel fcft-devel sed git
+          systemd-devel dbus-daemon libasan libubsan
+
+      - name: build (asan+ubsan)
+        run: >
+          meson setup build-asan -Db_sanitize=address,undefined
+          -Dbuildtype=debug && ninja -C build-asan
+
+      - name: tests under sanitizers
+        run: |
+          export XDG_RUNTIME_DIR=$(mktemp -d); chmod 700 "$XDG_RUNTIME_DIR"
+          export ASAN_OPTIONS=halt_on_error=1:abort_on_error=1:detect_leaks=0
+          WLR_BACKENDS=headless WLR_RENDERER=pixman meson test -C build-asan -v
+
+      - name: upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-failure-artifacts
+          path: build-asan/meson-logs/testlog.txt
