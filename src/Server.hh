@@ -246,6 +246,9 @@ namespace bbai {
     wlr_scene_output *activeSceneOutputForTest() const { return activeSceneOutput(); }
     const char *seatSelectionMimeForTest() const;
     wlr_data_source *seatSelectionSourceForTest() const { return seat->selection_source; }
+    wlr_primary_selection_source *primarySelectionSourceForTest() const {
+      return seat->primary_selection_source;
+    }
     const std::vector<std::unique_ptr<View>> &viewsForTest() const { return views; }
     bool viewLayerIsFullscreenForTest(View *v) const;   // frame_tree parents into layer_fullscreen?
     bool isTopmostForTest(View *v);                     // v == topmost real view on its workspace
@@ -397,6 +400,7 @@ namespace bbai {
     bt::Listener new_toplevel_decoration;
     bt::Listener new_input;
     bt::Listener cursor_motion, cursor_motion_absolute, cursor_button, cursor_frame, cursor_axis;
+    bt::Listener request_set_selection, request_set_primary_selection;
     Output *active_output = nullptr;            // the primary (first) head: toolbar + work-area
     std::vector<Output *> outputs_;             // every lit head (M7); each self-deletes on its output's destroy
     std::vector<std::unique_ptr<View>> views;   // mapped client windows

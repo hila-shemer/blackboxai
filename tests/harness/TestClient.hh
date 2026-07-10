@@ -42,6 +42,11 @@ namespace bbai::test {
     // the wl_surface — the role-before-surface teardown some real clients do.
     void destroyToplevelKeepSurface();
     void commitBareSurface();   // commit the surviving role-less wl_surface
+    // Copy "text/plain" using the last input serial the compositor gave us
+    // (pointer enter/button). False if the needed global never appeared or no
+    // serial arrived yet - callers must have clicked into the window first.
+    bool copyToClipboard();     // wl_data_device.set_selection
+    bool copyToPrimary();       // zwp_primary_selection_device_v1.set_selection
     void destroyDecorationForTest();  // destroy ONLY the decoration object (keep the toplevel)
     void setFullscreen(bool on);   // xdg_toplevel.set_fullscreen / unset_fullscreen
     void setMaximized(bool on);    // xdg_toplevel.set_maximized / unset_maximized

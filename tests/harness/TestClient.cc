@@ -4,6 +4,7 @@
 #include <wayland-client.h>
 #include "xdg-shell-client-protocol.h"
 #include "xdg-decoration-unstable-v1-client-protocol.h"
+#include "primary-selection-unstable-v1-client-protocol.h"
 
 #include <cstring>
 #include <poll.h>
@@ -26,6 +27,13 @@ namespace bbai::test {
     wl_buffer *buffer = nullptr;
     wl_seat *seat = nullptr;
     wl_pointer *pointer = nullptr;
+    wl_data_device_manager *data_device_manager = nullptr;
+    wl_data_device *data_device = nullptr;
+    wl_data_source *data_source = nullptr;
+    zwp_primary_selection_device_manager_v1 *primary_manager = nullptr;
+    zwp_primary_selection_device_v1 *primary_device = nullptr;
+    zwp_primary_selection_source_v1 *primary_source = nullptr;
+    uint32_t last_serial = 0;     // latest input serial (pointer enter/button)
     uint32_t argb = 0;
     int w = 0, h = 0;
     int pending_w = 0, pending_h = 0;  // size from the latest toplevel.configure
@@ -121,11 +129,15 @@ namespace bbai::test {
   // We only care about button events (to prove the client gets NO orphan release
   // after a modal-menu dismissal); the rest are no-ops so libwayland never calls
   // a null listener slot.
-  static void ptr_enter(void *, wl_pointer *, uint32_t, wl_surface *, wl_fixed_t, wl_fixed_t) {}
+  static void ptr_enter(void *data, wl_pointer *, uint32_t serial, wl_surface *, wl_fixed_t, wl_fixed_t) {
+    static_cast<TestClient::Impl *>(data)->last_serial = serial;
+  }
   static void ptr_leave(void *, wl_pointer *, uint32_t, wl_surface *) {}
   static void ptr_motion(void *, wl_pointer *, uint32_t, wl_fixed_t, wl_fixed_t) {}
-  static void ptr_button(void *data, wl_pointer *, uint32_t, uint32_t, uint32_t, uint32_t) {
-    static_cast<TestClient::Impl *>(data)->pointer_buttons++;
+  static void ptr_button(void *data, wl_pointer *, uint32_t serial, uint32_t, uint32_t, uint32_t) {
+    auto *c = static_cast<TestClient::Impl *>(data);
+    c->pointer_buttons++;
+    c->last_serial = serial;
   }
   static void ptr_axis(void *data, wl_pointer *, uint32_t, uint32_t, wl_fixed_t) {
     static_cast<TestClient::Impl *>(data)->pointer_axis++;
@@ -164,6 +176,12 @@ namespace bbai::test {
     } else if (std::strcmp(iface, zxdg_decoration_manager_v1_interface.name) == 0) {
       c->deco_mgr = static_cast<zxdg_decoration_manager_v1 *>(
         wl_registry_bind(reg, name, &zxdg_decoration_manager_v1_interface, 1));
+    } else if (std::strcmp(iface, wl_data_device_manager_interface.name) == 0) {
+      c->data_device_manager = static_cast<wl_data_device_manager *>(
+        wl_registry_bind(reg, name, &wl_data_device_manager_interface, 1));
+    } else if (std::strcmp(iface, zwp_primary_selection_device_manager_v1_interface.name) == 0) {
+      c->primary_manager = static_cast<zwp_primary_selection_device_manager_v1 *>(
+        wl_registry_bind(reg, name, &zwp_primary_selection_device_manager_v1_interface, 1));
     }
   }
   static void reg_global_remove(void *, wl_registry *, uint32_t) {}
@@ -186,6 +204,12 @@ namespace bbai::test {
 
   TestClient::~TestClient() {
     if (impl->display) {
+      if (impl->data_source) wl_data_source_destroy(impl->data_source);
+      if (impl->data_device) wl_data_device_destroy(impl->data_device);
+      if (impl->data_device_manager) wl_data_device_manager_destroy(impl->data_device_manager);
+      if (impl->primary_source) zwp_primary_selection_source_v1_destroy(impl->primary_source);
+      if (impl->primary_device) zwp_primary_selection_device_v1_destroy(impl->primary_device);
+      if (impl->primary_manager) zwp_primary_selection_device_manager_v1_destroy(impl->primary_manager);
       if (impl->pointer) wl_pointer_destroy(impl->pointer);
       if (impl->seat) wl_seat_destroy(impl->seat);
       if (impl->decoration) zxdg_toplevel_decoration_v1_destroy(impl->decoration);
@@ -233,6 +257,38 @@ namespace bbai::test {
     if (!impl->display || !impl->surface) return;
     wl_surface_commit(impl->surface);
     wl_display_flush(impl->display);
+  }
+
+  bool TestClient::copyToClipboard() {
+    auto *c = impl;
+    if (!c->display || !c->data_device_manager || !c->seat || !c->last_serial)
+      return false;
+    if (!c->data_device)
+      c->data_device = wl_data_device_manager_get_data_device(
+        c->data_device_manager, c->seat);
+    if (c->data_source) wl_data_source_destroy(c->data_source);
+    c->data_source = wl_data_device_manager_create_data_source(c->data_device_manager);
+    wl_data_source_offer(c->data_source, "text/plain");
+    wl_data_device_set_selection(c->data_device, c->data_source, c->last_serial);
+    wl_display_flush(c->display);
+    return true;
+  }
+
+  bool TestClient::copyToPrimary() {
+    auto *c = impl;
+    if (!c->display || !c->primary_manager || !c->seat || !c->last_serial)
+      return false;
+    if (!c->primary_device)
+      c->primary_device = zwp_primary_selection_device_manager_v1_get_device(
+        c->primary_manager, c->seat);
+    if (c->primary_source) zwp_primary_selection_source_v1_destroy(c->primary_source);
+    c->primary_source =
+      zwp_primary_selection_device_manager_v1_create_source(c->primary_manager);
+    zwp_primary_selection_source_v1_offer(c->primary_source, "text/plain");
+    zwp_primary_selection_device_v1_set_selection(c->primary_device,
+                                                  c->primary_source, c->last_serial);
+    wl_display_flush(c->display);
+    return true;
   }
 
   void TestClient::setFullscreen(bool on) {

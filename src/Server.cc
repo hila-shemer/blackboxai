@@ -136,6 +136,7 @@ namespace bbai {
     wlr_compositor_create(display, 5, renderer);
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
+    wlr_primary_selection_v1_device_manager_create(display);   // middle-click paste
     wlr_single_pixel_buffer_manager_v1_create(display);
     idle_notifier_ = wlr_idle_notifier_v1_create(display);
     // ext-workspace-v1: one manager, one all-outputs group (group caps = 0 - we
@@ -198,6 +199,20 @@ namespace bbai {
     seat = wlr_seat_create(display, "seat0");
     wlr_seat_set_capabilities(seat,
       WL_SEAT_CAPABILITY_POINTER | WL_SEAT_CAPABILITY_KEYBOARD);
+    // Client copy -> seat selection, both kinds. wlroots already validated the
+    // serial before emitting the request, so honoring it unconditionally is the
+    // whole job (tinywl does the same). A client selection replacing the
+    // screenshot ClipboardImage tears that down via impl->destroy - nothing to
+    // update here.
+    request_set_selection.connect(&seat->events.request_set_selection, [this](void *data) {
+      auto *ev = static_cast<wlr_seat_request_set_selection_event *>(data);
+      wlr_seat_set_selection(seat, ev->source, ev->serial);
+    });
+    request_set_primary_selection.connect(
+        &seat->events.request_set_primary_selection, [this](void *data) {
+      auto *ev = static_cast<wlr_seat_request_set_primary_selection_event *>(data);
+      wlr_seat_set_primary_selection(seat, ev->source, ev->serial);
+    });
     cursor = wlr_cursor_create();
     wlr_cursor_attach_output_layout(cursor, output_layout);
     xcursor_mgr = wlr_xcursor_manager_create(nullptr, 24);
@@ -574,6 +589,8 @@ namespace bbai {
     cursor_button.disconnect();
     cursor_frame.disconnect();
     cursor_axis.disconnect();
+    request_set_selection.disconnect();          // wlr_seat_destroy asserts both
+    request_set_primary_selection.disconnect();  // request listener lists empty
     keyboards_.clear();       // drops key/modifiers listeners before the backend finish
     if (sni_menu_reset_idle_) {    // drop the deferred reset before the loop dies
       wl_event_source_remove(sni_menu_reset_idle_);

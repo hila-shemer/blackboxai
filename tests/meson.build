@@ -143,6 +143,13 @@ client_exe = executable('client-test', files('system/client_test.cc'),
 test('client', client_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Client copy -> seat selection, both selection kinds (dogfooding 2026-07-10:
+# neither existed, so no paste worked anywhere).
+clipboard_copy_exe = executable('clipboard-copy-test', files('system/clipboard_copy_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('clipboard-copy', clipboard_copy_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # Role-before-surface teardown (dogfooding crash 2026-07-10): destroying the
 # xdg_toplevel must remove the View; a later bare-surface commit must be inert.
 role_teardown_exe = executable('role-teardown-test', files('system/role_teardown_test.cc'),
