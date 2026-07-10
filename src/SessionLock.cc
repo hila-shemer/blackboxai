@@ -156,18 +156,26 @@ namespace bbai {
         enterKeyboard(s);
     });
     e->destroy.connect(&ls->events.destroy, [this, raw = e.get()](void *) {
-      // Drop our record ONLY. wlroots unmaps the surface now and the
-      // subsurface tree destroys itself when the wlr_surface dies -
-      // destroying it here would double-free (subsurface_tree.c:150-154).
+      // Focus handoff FIRST, erase LAST: the erase frees the SurfaceEntry that
+      // owns this very Listener, i.e. the closure we are executing from -
+      // touching any capture after it is a use-after-free (ASAN caught it).
+      // The dying entry is still in surfaces_ here, so exclude it by hand.
       wlr_surface *dead = raw->surface->surface;
+      if (locked_ && server_.seat->keyboard_state.focused_surface == dead) {
+        wlr_seat_keyboard_notify_clear_focus(server_.seat);
+        for (const auto &p : surfaces_)     // first mapped SURVIVOR (raw is
+          if (p.get() != raw && p->surface->surface->mapped) {  // still listed)
+            enterKeyboard(p->surface->surface);
+            break;
+          }
+      }
+      // Drop our record ONLY - wlroots unmaps the surface and the subsurface
+      // tree destroys itself when the wlr_surface dies; destroying it here
+      // would double-free (subsurface_tree.c:150-154). Nothing may read a
+      // capture past this line.
       std::erase_if(surfaces_, [raw](const std::unique_ptr<SurfaceEntry> &p) {
         return p.get() == raw;
       });
-      if (locked_ && server_.seat->keyboard_state.focused_surface == dead) {
-        wlr_seat_keyboard_notify_clear_focus(server_.seat);
-        if (wlr_surface *next = focusedLockSurface())
-          enterKeyboard(next);   // hand the keyboard to a surviving lock surface
-      }
     });
     surfaces_.push_back(std::move(e));
   }
