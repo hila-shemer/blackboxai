@@ -51,6 +51,11 @@ namespace bbai {
     unmap_.connect(&surface->events.unmap, [this](void *) {
       mapped = false;
       deco->clear();
+      // Tell the Server: a NULL-buffer unmap keeps the role (and this View)
+      // alive but resets the xdg surface - every cached "who has focus / who
+      // is in the ring / what does the menu target" answer naming this View
+      // is now a configure-on-uninitialized abort waiting to fire.
+      server.onViewUnmapped(this);
     });
 
     // xdg state requests: the protocol REQUIRES a configure in response even if

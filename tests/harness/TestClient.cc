@@ -284,6 +284,13 @@ namespace bbai::test {
     wl_display_flush(c->display);
   }
 
+  void TestClient::attachNullBuffer() {
+    if (!impl->display || !impl->surface) return;
+    wl_surface_attach(impl->surface, nullptr, 0, 0);
+    wl_surface_commit(impl->surface);
+    wl_display_flush(impl->display);
+  }
+
   bool TestClient::created() const { return impl && impl->created; }
 
   bool TestClient::errored() const {

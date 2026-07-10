@@ -634,6 +634,9 @@ namespace bbai {
       autoraise_pending_ = nullptr;           // else a pending one-shot fires on a
       if (autoraise_timer_) autoraise_timer_->stop();  // dangling handle
     }
+    if (active_menu_) closeMenus();   // baked View targets: a later click on a
+                                      // dead target is a heap-reuse roulette
+    if (focus_before_lock_ == view) focus_before_lock_ = nullptr;
     std::erase(icons_, view);
     mru_.erase(view);                 // drop from last-used order (and any frozen ring)
     std::erase(cycle_ring_, view);
@@ -650,6 +653,39 @@ namespace bbai {
     // If the closed window held focus, hand it to the topmost survivor on the
     // current workspace (else clear it) — don't leave the desktop unfocused.
     if (was_focused) {
+      if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
+      else clearFocus();
+    }
+  }
+
+  // The unmapped-but-alive View (NULL-buffer commit, role kept): scrub every
+  // cached answer that names it, exactly like removeView minus the erasure -
+  // the client may legally re-map it later. Anything that survives this scrub
+  // and sends a configure hits wlroots' surface->initialized assert (audit
+  // findings 2026-07-10: five SIGABRT paths shared this one root cause).
+  void Server::onViewUnmapped(View *view) {
+    if (grabbed_view == view) {
+      cursor_mode = CursorMode::Passthrough;
+      grabbed_view = nullptr;
+      resize_edges = 0;
+    }
+    if (pressed_button_view_ == view) {
+      pressed_button_view_ = nullptr;
+      pressed_button_part_ = Part::None;
+    }
+    if (autoraise_pending_ == view) {
+      autoraise_pending_ = nullptr;
+      if (autoraise_timer_) autoraise_timer_->stop();
+    }
+    if (cycling_) {
+      std::erase(cycle_ring_, view);
+      if (cycle_start_ == view) cycle_start_ = nullptr;
+      if (cycle_ring_.size() < 2) cancelCycle();
+    }
+    if (active_menu_) closeMenus();   // menu rows bake View targets by address
+    if (focused_view == view) {
+      focused_view = nullptr;         // BEFORE the handoff: focusView's unfocus
+      view->setFocused(false);        // branch must not configure the reset surface
       if (View *top = topmostViewOnWorkspace(workspaces_.current())) focusView(top);
       else clearFocus();
     }
@@ -893,9 +929,13 @@ namespace bbai {
     // grab entirely. Unlock restores focus via handleSessionUnlocked, which
     // runs after locked_ drops.
     if (session_lock_ && session_lock_->locked()) return;
+    // Defense in depth behind onViewUnmapped's scrub: never focus (= configure)
+    // a view whose xdg surface is unmapped or reset - that's the assert-abort.
+    if (!v->isMapped() || !v->toplevel()->base->initialized) return;
     if (focused_view == v) return;   // already at the MRU front; nothing to re-order
     if (focused_view) {
-      wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
+      if (focused_view->toplevel()->base->initialized)
+        wlr_xdg_toplevel_set_activated(focused_view->toplevel(), false);
       focused_view->setFocused(false);
     }
     focused_view = v;
@@ -1453,6 +1493,7 @@ namespace bbai {
   }
 
   void Server::requestFullscreen(View *v) {
+    if (!v->toplevel()->base->initialized) return;   // reset surface: configure aborts
     const bool want = v->toplevel()->requested.fullscreen;
     // fullscreen_output can name a specific head; read it at handler time (never
     // cache it - wlroots clears it via a private destroy listener on unplug).
@@ -1463,6 +1504,7 @@ namespace bbai {
   }
 
   void Server::requestMaximize(View *v) {
+    if (!v->toplevel()->base->initialized) return;   // reset surface: configure aborts
     Output *o = outputForView(v);
     if (o) v->setMaximized(v->toplevel()->requested.maximized, o->workArea());
   }

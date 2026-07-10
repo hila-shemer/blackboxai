@@ -55,6 +55,7 @@ namespace bbai::test {
     // both kinds; illegal ones get this client zapped with a protocol error.
     enum class Obj { Decoration, Toplevel, XdgSurface, Surface, Buffer };
     void destroyOne(Obj o);     // no-op if that object is already gone
+    void attachNullBuffer();    // the xdg "hide" move: unmap, role kept alive
     bool created() const;       // the toplevel request round has been sent
     bool errored() const;       // the compositor posted a protocol error
     void destroyDecorationForTest();  // destroy ONLY the decoration object (keep the toplevel)

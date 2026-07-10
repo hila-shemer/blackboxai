@@ -144,6 +144,13 @@ client_exe = executable('client-test', files('system/client_test.cc'),
 test('client', client_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Unmap tracking (lifetime-audit findings): a NULL-buffer unmap with the role
+# kept must scrub focus/ring/menus, or the next configure aborts the session.
+unmap_tracking_exe = executable('unmap-tracking-test', files('system/unmap_tracking_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('unmap-tracking', unmap_tracking_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env)
+
 # Hostile-client teardown permutations (lifetime-hardening Phase 1): scripted
 # legal + illegal destruction orders across lifecycle stages; the server must
 # survive all of them (client eats the protocol error on the illegal ones).
