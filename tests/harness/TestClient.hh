@@ -47,6 +47,16 @@ namespace bbai::test {
     // serial arrived yet - callers must have clicked into the window first.
     bool copyToClipboard();     // wl_data_device.set_selection
     bool copyToPrimary();       // zwp_primary_selection_device_v1.set_selection
+    void forceSerialForTest(uint32_t s);   // poison the serial the next copy uses
+
+    // Hostile-teardown driver: destroy exactly one protocol object, in whatever
+    // order the test scripts - including protocol-ILLEGAL orders (wl_surface
+    // before xdg_surface, toplevel before decoration). The server must survive
+    // both kinds; illegal ones get this client zapped with a protocol error.
+    enum class Obj { Decoration, Toplevel, XdgSurface, Surface, Buffer };
+    void destroyOne(Obj o);     // no-op if that object is already gone
+    bool created() const;       // the toplevel request round has been sent
+    bool errored() const;       // the compositor posted a protocol error
     void destroyDecorationForTest();  // destroy ONLY the decoration object (keep the toplevel)
     void setFullscreen(bool on);   // xdg_toplevel.set_fullscreen / unset_fullscreen
     void setMaximized(bool on);    // xdg_toplevel.set_maximized / unset_maximized

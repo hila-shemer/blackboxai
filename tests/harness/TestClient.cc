@@ -259,6 +259,37 @@ namespace bbai::test {
     wl_display_flush(impl->display);
   }
 
+  void TestClient::forceSerialForTest(uint32_t s) { impl->last_serial = s; }
+
+  void TestClient::destroyOne(Obj o) {
+    auto *c = impl;
+    if (!c->display) return;
+    switch (o) {
+      case Obj::Decoration:
+        if (c->decoration) { zxdg_toplevel_decoration_v1_destroy(c->decoration); c->decoration = nullptr; }
+        break;
+      case Obj::Toplevel:
+        if (c->toplevel) { xdg_toplevel_destroy(c->toplevel); c->toplevel = nullptr; }
+        break;
+      case Obj::XdgSurface:
+        if (c->xdgsurf) { xdg_surface_destroy(c->xdgsurf); c->xdgsurf = nullptr; }
+        break;
+      case Obj::Surface:
+        if (c->surface) { wl_surface_destroy(c->surface); c->surface = nullptr; }
+        break;
+      case Obj::Buffer:
+        if (c->buffer) { wl_buffer_destroy(c->buffer); c->buffer = nullptr; }
+        break;
+    }
+    wl_display_flush(c->display);
+  }
+
+  bool TestClient::created() const { return impl && impl->created; }
+
+  bool TestClient::errored() const {
+    return impl && impl->display && wl_display_get_error(impl->display) != 0;
+  }
+
   bool TestClient::copyToClipboard() {
     auto *c = impl;
     if (!c->display || !c->data_device_manager || !c->seat || !c->last_serial)
@@ -312,6 +343,9 @@ namespace bbai::test {
 
   void TestClient::pump() {
     if (!impl->display) return;
+    // A zapped client (protocol error) never leaves the error state; the
+    // prepare_read/dispatch_pending loop below would spin forever on it.
+    if (wl_display_get_error(impl->display) != 0) return;
 
     // Non-blocking read+dispatch of any events the server has sent.
     while (wl_display_prepare_read(impl->display) != 0)

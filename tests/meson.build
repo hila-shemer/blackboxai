@@ -143,6 +143,14 @@ client_exe = executable('client-test', files('system/client_test.cc'),
 test('client', client_exe, suite : 'system',
   workdir : meson.project_source_root(), env : text_env)
 
+# Hostile-client teardown permutations (lifetime-hardening Phase 1): scripted
+# legal + illegal destruction orders across lifecycle stages; the server must
+# survive all of them (client eats the protocol error on the illegal ones).
+hostile_client_exe = executable('hostile-client-test', files('system/hostile_client_test.cc'),
+  dependencies : [harness_dep, doctest_dep])
+test('hostile-client', hostile_client_exe, suite : 'system',
+  workdir : meson.project_source_root(), env : text_env, timeout : 120)
+
 # Multihead desktop: every head paints its background at its own layout box
 # and tracks auto-layout reflow (dogfooding 2026-07-10: right screen was black).
 multihead_bg_exe = executable('multihead-background-test', files('system/multihead_background_test.cc'),
