@@ -114,6 +114,11 @@ namespace bbai {
     if (!lock_ || locked_sent_) return;   // wlroots asserts once-only
     wlr_session_lock_v1_send_locked(lock_);
     locked_sent_ = true;
+    // The presented-blank wait is satisfied FOR GOOD - latch it. Without this
+    // a takeover after a fallback-driven send re-checks stale committed flags
+    // and never re-sends locked (the short-circuit onNewLock promises). A head
+    // added mid-abandonment still starts false and is genuinely waited on.
+    for (auto &po : per_output_) po->committed = true;
     fallback_.stop();
   }
 

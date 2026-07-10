@@ -231,6 +231,11 @@ TEST_CASE("a window mapping under the lock must not steal the locker's keyboard"
     CHECK(server.focusedViewForTest() == nullptr);
     CHECK(server.focusedKeyboardSurfaceForTest() == locker);
 
+    // unlock_and_destroy before locked is a client protocol ERROR (wlroots
+    // zaps the client) - drive the fallback and wait like a real locker.
+    server.advanceClockForTest(2);
+    REQUIRE(pumpUntil(server, [&] { return lc.lockedReceived(); }, pumpBoth));
+
     // Unlock still lands focus on a client (the map bookkeeping survived).
     lc.unlockAndDestroy();
     REQUIRE(pumpUntil(server, [&] { return !server.sessionLockForTest()->locked(); },
@@ -317,6 +322,10 @@ TEST_CASE("destroying the focused lock surface hands the keyboard to a survivor"
     REQUIRE(survivor != nullptr);
     CHECK(survivor != first);
     CHECK(server.focusedKeyboardSurfaceForTest() == survivor);
+
+    // unlock_and_destroy before locked is a client protocol ERROR - wait for it.
+    server.advanceClockForTest(2);
+    REQUIRE(pumpUntil(server, [&] { return lc.lockedReceived(); }, pump));
 
     // Clean unlock afterwards: the surface bookkeeping dropped the dead entry.
     lc.unlockAndDestroy();
