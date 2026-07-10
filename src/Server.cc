@@ -382,8 +382,8 @@ namespace bbai {
     if (!config_.toolbar.enabled) {
       toolbar_.reset();
     } else if (!toolbar_ && active_output) {
-      wlr_output *out = active_output->wlrOutput();
-      toolbar_ = std::make_unique<Toolbar>(*this, out->width, out->height);
+      // work-area's ctor: the Toolbar owns its Output (and its Strut through it).
+      toolbar_ = std::make_unique<Toolbar>(*this, *active_output);
     }
     if (toolbar_) {
       toolbar_->setPlacement(config_.toolbar.placement);
@@ -584,8 +584,8 @@ namespace bbai {
     destroyScreenshotOverlay(); // null-guarded: frees the dim overlay if a drag was live
     views.clear();
     toolbar_.reset();         // destroys its scene tree + clock Timer (registry still alive)
-    autoraise_timer_.reset(); // deregisters before the TimerRegistry dies
     slit_.reset();            // scene tree + hide Timer (registry still alive)
+    autoraise_timer_.reset(); // deregisters before the TimerRegistry dies
     session_lock_.reset();    // its Timer deregisters + listeners drop before the registry/display die
     timer_registry_.reset();  // removes its wl_event_source before the loop dies
     sni_host_.reset();        // removes its wl_event_sources before the loop dies
@@ -681,22 +681,6 @@ namespace bbai {
     restart_requested_ = true;
     restart_argv_ = std::move(argv_or_empty);
     terminate();
-  }
-
-  // MERGE-TRAIN STUB: rc-style owns the real bodies (saveStyleFilename + live
-  // re-theme / rc+style reload). When rebasing onto a tree where rc-style has
-  // landed, DELETE both bodies here and keep the landed ones - signatures
-  // match by seam contract, and the test recorders live in activateMenuItem.
-  bool Server::applyStyleFile(const std::string &path) {
-    std::fprintf(stderr, "blackboxai: [style] %s (no-op until rc-style lands)\n",
-                 path.c_str());
-    return false;
-  }
-
-  bool Server::reconfigure(const std::string &rc_override) {
-    (void)rc_override;
-    std::fprintf(stderr, "blackboxai: [reconfig] (no-op until rc-style lands)\n");
-    return false;
   }
 
   bool Server::dispatch() {

@@ -44,13 +44,6 @@ namespace bbai {
     const std::string &windowTitleForTest(void) const { return window_title_; }
     void setPlacement(toolbar::Placement p);   // rebuilds + updates the strut
 
-    // CONTRACT setters (work-area owns the real promotion: its versions also
-    // update the registered Strut). These interim shims exist so our config
-    // application is written against the final names - DELETE both at the
-    // merge-train rebase over work-area; call sites stay.
-    void setPlacement(toolbar::Placement p) { setPlacementForTest(p); }
-    void setAutoHide(bool on) { setAutoHideForTest(on); }
-
     // Live bar geometry: style metrics + config width + current placement.
     // Work-area's Strut derives from this, never from the constexpr defaults.
     toolbar::Rect currentBarRect() const;

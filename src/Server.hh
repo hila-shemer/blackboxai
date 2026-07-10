@@ -153,11 +153,6 @@ namespace bbai {
     // rc-style's Config::menuFile lands - production wiring is one ctor line.
     void setMenuFileForTest(const std::string &path);
 
-    // rc-style seams (menu SetStyle/[reconfig] route through these). Stub
-    // bodies until rc-style lands - see the MERGE-TRAIN STUB note in Server.cc.
-    bool applyStyleFile(const std::string &path);
-    bool reconfigure(const std::string &rc_override = {});
-
     // Pin the style ladder's middle rung (empty = skip straight to builtin).
     // Headless boots it empty so an installed prefix can't leak into goldens;
     // this is how tests exercise the default-style rung at all.

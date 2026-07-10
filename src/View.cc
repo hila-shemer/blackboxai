@@ -140,6 +140,8 @@ namespace bbai {
   }
 
   void View::applyMaximizedGeometry(wlr_box work) {
+    // rc-style's FrameMetrics substitution lives here now: the sizing moved
+    // from setMaximized into this shared helper when work-area landed first.
     const frame::FrameMetrics &fm = server.currentStyle()->frameMetrics();
     const int contentW = work.width - 2 * fm.border;
     const int contentH = work.height - fm.titleHeight - fm.handleHeight;

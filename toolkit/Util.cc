@@ -4,12 +4,13 @@
 
 namespace bt {
 
-  std::string expandTilde(const std::string &path) {
-    if (path.empty() || path[0] != '~') return path;
-    if (path.size() > 1 && path[1] != '/') return path;  // "~user" unsupported, like reference
+  std::string expandTilde(const std::string &s) {
+    if (s.empty() || s[0] != '~') return s;
     const char *home = std::getenv("HOME");
-    if (!home) return path;
-    return std::string(home) + path.substr(1);
+    if (!home) return s;
+    const size_t slash = s.find('/');
+    if (slash == std::string::npos) return home;   // bare "~"
+    return std::string(home) + s.substr(slash);
   }
 
 } // namespace bt

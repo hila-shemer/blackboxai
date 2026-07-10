@@ -1,18 +1,18 @@
-// Small pure path helpers shared by the config and menu layers. rc-style owns
-// this file (it lands first on the merge train); menu-wire bootstraps an
-// identical copy when developing ahead of it - on rebase, take rc-style's.
-#ifndef BLACKBOXAI_TOOLKIT_UTIL_HH
-#define BLACKBOXAI_TOOLKIT_UTIL_HH
+// Small path helpers ported from blackboxwm lib/Util.{hh,cc}. Only what the
+// config/style/menu loaders need - not a general utility dump.
+#ifndef BLACKBOXAI_UTIL_HH
+#define BLACKBOXAI_UTIL_HH
 
 #include <string>
 
 namespace bt {
 
-  // "~" or "~/..." -> $HOME-prefixed path. Anything else (including "~user")
-  // passes through untouched, like the reference bt::expandTilde - minus its
-  // crash on a bare "~".
+  // "~/foo" -> "$HOME/foo". Ported from lib/Util.cc:134; the reference indexes
+  // s[0] on an empty string and substr's npos on a bare "~" - both fixed here.
+  // Classic semantics kept otherwise: anything from '~' to the first '/' is
+  // replaced by $HOME (so "~user/x" does NOT do per-user lookup, same as classic).
   std::string expandTilde(const std::string &path);
 
 } // namespace bt
 
-#endif // BLACKBOXAI_TOOLKIT_UTIL_HH
+#endif // BLACKBOXAI_UTIL_HH

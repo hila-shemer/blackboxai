@@ -43,11 +43,13 @@ unit_sources = files(
 )
 unit_exe = executable('unit-tests', unit_sources,
   cpp_args : ['-DBBAI_SESSION_DESKTOP="' +
-              meson.project_source_root() / 'data' / 'blackboxai.desktop' + '"'],
-  dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep],
-  # config_test.cc loads a .blackboxrc fixture by absolute path.
-  cpp_args : ['-DBBAI_TEST_FIXTURE_DIR="'
-              + meson.project_source_root() / 'tests' / 'fixtures' + '"'])
+              meson.project_source_root() / 'data' / 'blackboxai.desktop' + '"',
+              # config_test.cc loads a .blackboxrc fixture by absolute path.
+              '-DBBAI_TEST_FIXTURE_DIR="'
+              + meson.project_source_root() / 'tests' / 'fixtures' + '"',
+              '-DBBAI_MENU_FIXTURE="@0@"'.format(
+                meson.current_source_dir() / 'fixtures' / 'menu.in')],
+  dependencies : [doctest_dep, bt_dep, wlr_dep, bbai_dep, text_dep])
 test('unit', unit_exe, suite : 'unit')
 
 # Isolated fontconfig: tests that render title text point FONTCONFIG_FILE here
