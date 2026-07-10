@@ -80,5 +80,5 @@ echo "$out" | grep -v 'DesktopNames' | grep -q . && exit 1 || :
 %{_mandir}/man1/blackboxai.1*
 
 %changelog
-* Sun Jul 05 2026 Hila Shemer <nadav.shemer@gmail.com> - 0.1.0-1
+* Sun Jul 05 2026 Hila Shemer <hila-shemer@users.noreply.github.com> - 0.1.0-1
 - Initial package (productize-v1 Wave 3).
