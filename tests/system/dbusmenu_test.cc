@@ -10,6 +10,8 @@
 #include "Server.hh"
 #include "SniHost.hh"
 #include "SniMockItem.hh"
+#include "SniMenu.hh"
+#include <systemd/sd-bus.h>
 #include "Menu.hh"
 #include "Text.hh"
 
@@ -226,4 +228,23 @@ TEST_CASE("root/icon menu openers bail while an SNI dbusmenu fetch is in flight"
   CHECK_FALSE(server.menuOpenForTest());          // icon menu refused too
 
   mock.quit();
+}
+
+TEST_CASE("SniMenu on a dead bus reports failure instead of wedging") {
+    // Audit finding: open()/fetchLayout() ignored async-send failures - on a
+    // dead bus no slot is installed, no reply or timeout can ever fire, and
+    // the owning sni_menu_ wedges, permanently gating EVERY compositor menu.
+    sd_bus *bus = nullptr;
+    REQUIRE(sd_bus_open_user(&bus) >= 0);
+    sd_bus_close(bus);   // dead-but-alive object: async sends return -ENOTCONN
+
+    bool called = false, ok = true;
+    {
+        SniMenu m(bus, "org.example.nobody", "/MenuBar",
+                  [&](bool o, std::vector<MenuItem>) { called = true; ok = o; });
+        m.open();
+    }
+    sd_bus_unref(bus);
+    CHECK(called);          // failure must surface like an error reply does
+    CHECK_FALSE(ok);        // -> caller falls back / resets, nothing wedges
 }

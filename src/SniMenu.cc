@@ -38,21 +38,34 @@ namespace bbai {
 
   void SniMenu::open() {
     // Arm the update match first (before anything can emit), then AboutToShow.
+    // The match failing alone is survivable (no live updates); the CALL failing
+    // means no slot, no reply, no timeout - ever - so it must fail loudly NOW
+    // or the owning sni_menu_ wedges and gates every compositor menu forever.
     sd_bus_match_signal_async(
         bus_, &sig_slot_, service_.c_str(), path_.c_str(),
         "com.canonical.dbusmenu", "LayoutUpdated",
         reinterpret_cast<sd_bus_message_handler_t>(&SniMenu::onLayoutUpdated),
         nullptr, this);
-    sd_bus_call_method_async(
-        bus_, &about_slot_, service_.c_str(), path_.c_str(),
-        "com.canonical.dbusmenu", "AboutToShow",
-        reinterpret_cast<sd_bus_message_handler_t>(&SniMenu::onAboutToShow),
-        this, "i", 0);
+    if (sd_bus_call_method_async(
+            bus_, &about_slot_, service_.c_str(), path_.c_str(),
+            "com.canonical.dbusmenu", "AboutToShow",
+            reinterpret_cast<sd_bus_message_handler_t>(&SniMenu::onAboutToShow),
+            this, "i", 0) < 0) {
+      failNow();
+      return;
+    }
     // Force the parked async call out NOW. The Host's fd mask was last set by
     // its own drain (POLLIN-only on an idle bus), so an enqueue here would wait
     // for unrelated inbound traffic to flush - forever on a quiet bus (the same
     // hazard Host::callItem defeats with a post-send drain).
     sd_bus_flush(bus_);
+  }
+
+  void SniMenu::failNow() {
+    // Same exit as an error reply: copy the callback out first - the caller
+    // resets the owning sni_menu_ (us) from inside it (see onLayout).
+    auto cb = on_layout_;
+    cb(false, {});
   }
 
   int SniMenu::onAboutToShow(sd_bus_message *, void *userdata, void *) {
@@ -64,11 +77,14 @@ namespace bbai {
 
   void SniMenu::fetchLayout() {
     if (layout_slot_) layout_slot_ = (sd_bus_slot_unref(layout_slot_), nullptr);
-    sd_bus_call_method_async(
-        bus_, &layout_slot_, service_.c_str(), path_.c_str(),
-        "com.canonical.dbusmenu", "GetLayout",
-        reinterpret_cast<sd_bus_message_handler_t>(&SniMenu::onLayout),
-        this, "iias", 0, -1, 0);   // parent 0, recursionDepth -1, empty propNames
+    if (sd_bus_call_method_async(
+            bus_, &layout_slot_, service_.c_str(), path_.c_str(),
+            "com.canonical.dbusmenu", "GetLayout",
+            reinterpret_cast<sd_bus_message_handler_t>(&SniMenu::onLayout),
+            this, "iias", 0, -1, 0) < 0) {   // parent 0, depth -1, no propNames
+      failNow();                             // dead bus: no reply will ever come
+      return;
+    }
     sd_bus_flush(bus_);            // flush now (idle-bus hazard, see open())
   }
 

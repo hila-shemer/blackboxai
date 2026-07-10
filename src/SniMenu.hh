@@ -42,6 +42,7 @@ namespace bbai {
 
   private:
     void fetchLayout();
+    void failNow();   // async send failed: no slot armed -> report like an error reply
     static int onAboutToShow(sd_bus_message *, void *, void *);
     static int onLayout(sd_bus_message *, void *, void *);
     static int onLayoutUpdated(sd_bus_message *, void *, void *);

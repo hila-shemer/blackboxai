@@ -706,3 +706,39 @@ TEST_CASE("Host pumps itself from a wl_event_loop - no manual processForTest") {
   }                                    // ~Host removes its sources first
   wl_event_loop_destroy(loop);
 }
+
+// LAST CASE ON PURPOSE: it SIGKILLs this exe's private bus daemon, so nothing
+// bus-dependent can run after it.
+TEST_CASE("bus death drains the tray: every item leaves through itemRemoved") {
+    wl_event_loop *loop = wl_event_loop_create();
+    REQUIRE(loop != nullptr);
+    {
+        Host host(loop);
+        REQUIRE(host.ok());
+        bool added = false;
+        int removed = 0;
+        HostEvents ev;
+        ev.itemAdded   = [&](const Item &) { added = true; };
+        ev.itemRemoved = [&](const Item &) { ++removed; };
+        host.setEvents(std::move(ev));
+
+        bbai::test::SniMockChild mock;
+        REQUIRE(mock.ok());
+        for (int i = 0; i < 600 && !added; ++i) wl_event_loop_dispatch(loop, 10);
+        REQUIRE(added);
+        REQUIRE(host.items().size() == 1);
+
+        sd_bus *probe = nullptr;
+        REQUIRE(sd_bus_open_user(&probe) >= 0);
+        pid_t daemon = busDaemonPid(probe);
+        sd_bus_flush_close_unref(probe);
+        REQUIRE(daemon > 0);
+        kill(daemon, SIGKILL);
+
+        for (int i = 0; i < 600 && host.ok(); ++i) wl_event_loop_dispatch(loop, 10);
+        CHECK_FALSE(host.ok());          // the host went inert...
+        CHECK(removed == 1);             // ...and the item LEFT through the event
+        CHECK(host.items().empty());     // nothing stale for the slit to render
+    }
+    wl_event_loop_destroy(loop);
+}
